@@ -6,6 +6,11 @@ preserved, alongside the imported GUI, launchers, tests, sounds and icon.
 
 This is a local development project. No GitHub fork or release has been published.
 
+For a new user's beta setup, see [SETUP.md](release/SETUP.md). The release assets
+are a matching GUI ZIP, modified engine ZIP and full tracked source ZIP, with
+SHA-256s. The full source supplies preserved upstream ADB tools/item templates;
+recognition references are created locally and personal state stays private.
+
 The header's ⓘ button opens About & Credits, also shown on first launch for the
 selected runtime's saved GUI preferences. Continue or closing that window marks
 it seen. Show this on startup is off by default, and can be enabled there later.
@@ -129,6 +134,16 @@ The output is under ignored `dist/candidates/<VERSION>/` with a build manifest.
 Existing candidate directories are never overwritten. Python and a separately
 installed engine remain required. See [RELEASES.md](RELEASES.md) for checks and
 publication gates, and [the packaged instructions](release/README.md).
+
+To prepare all three matching downloads using the existing private engine build
+environment, choose a new output directory:
+
+```powershell
+.\build_release_assets.ps1 -BuildPython .local-state\engine-build-venv\Scripts\python.exe -OutputDirectory C:\absolute\new\candidate-directory
+```
+
+This adds no installer or service and runs no ADB/game checks. Engine runtime
+code is unchanged from rc9; rc14 improves the setup documentation and packaging.
 
 ## Ownership and licensing
 

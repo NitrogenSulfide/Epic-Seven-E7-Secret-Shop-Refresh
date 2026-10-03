@@ -43,6 +43,7 @@ $mapping = [ordered]@{
     'VERSION' = 'VERSION'
     'release/README.md' = 'README.md'
     'release/BUILDING.md' = 'BUILDING.md'
+    'release/SETUP.md' = 'SETUP.md'
     'ENGINE.md' = 'ENGINE.md'
     'docs/UPSTREAM-README.md' = 'docs/UPSTREAM-README.md'
 }
