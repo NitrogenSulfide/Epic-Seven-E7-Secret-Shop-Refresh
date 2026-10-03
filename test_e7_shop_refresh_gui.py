@@ -208,6 +208,10 @@ class GuiTests(unittest.TestCase):
         contents = '\n'.join(reader.get('1.0','end') for reader in dialog.readers)
         for credit in ('Blue Natto','NitrogenSulfide','Solunium','Robin Lamb','GNU GENERAL PUBLIC LICENSE'):
             self.assertIn(credit,contents)
+        import e7_appearance
+        if e7_appearance.Image is not None:
+            self.assertIsNotNone(dialog.avatar_image)
+            self.assertEqual(dialog.avatar_image.width(),self.app._dp(72))
         self.app.theme_button.invoke()
         self.assertEqual(dialog.readers[0].cget('foreground'),'#e2e8f0')
         dialog.close()
@@ -228,6 +232,21 @@ class GuiTests(unittest.TestCase):
         self.app.status.set('Stopping')
         self.app._handle_line(waiting)
         self.assertEqual(self.app.status.get(), 'Stopping')
+
+    def test_dismissed_home_ui_reminder_stays_hidden_without_hiding_wait_status(self):
+        self.assertEqual(self.app.home_ui_banner.winfo_manager(),'grid')
+        self.app.home_ui_dismiss.invoke()
+        self.assertEqual(self.app.home_ui_banner.winfo_manager(),'')
+        self.app.theme_button.invoke()
+        self.app.run_settings = self.app._settings()
+        self.app._handle_line('Navigation: Waiting for visible game controls. Click the game to reveal its UI.')
+        self.app._layout_dashboard()
+        self.assertEqual(self.app.home_ui_banner.winfo_manager(),'')
+        self.assertEqual(self.app.status.get(),'Waiting for game')
+        self.assertIn('no taps or spending',self.app.progress_text.get())
+        self.app._handle_line('Navigation: Opening the recognized Secret Shop menu.')
+        self.assertEqual(self.app.status.get(),'Running')
+        self.assertEqual(self.app.home_ui_banner.winfo_manager(),'')
 
     def test_stop_key_capture_and_rejection(self):
         self.app._capture_stop_key(SimpleNamespace(keysym="Escape", char="\x1b", state=0))

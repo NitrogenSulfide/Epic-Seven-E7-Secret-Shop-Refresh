@@ -49,6 +49,20 @@ def currency_icons(master, assets, size):
     return icons
 
 
+def profile_avatar(master, assets, size):
+    if Image is None:
+        return None
+    try:
+        with Image.open(assets/'blue-natto-avatar.png') as source:
+            avatar = ImageOps.fit(source.convert('RGBA'), (size,size), Image.Resampling.LANCZOS)
+        mask = Image.new('L', (size,size))
+        ImageDraw.Draw(mask).ellipse((0,0,size-1,size-1), fill=255)
+        avatar.putalpha(mask)
+        return ImageTk.PhotoImage(avatar,master=master)
+    except (OSError,tk.TclError):
+        return None
+
+
 class Scenery:
     """Align tinted image crops across otherwise opaque ttk frames and labels.
 
