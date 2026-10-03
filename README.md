@@ -41,7 +41,7 @@ single key. Tab remains navigation; unsupported keys leave the selection intact.
 **Dark mode** in the top-right header switches appearance and remembers the
 choice in `ShopRefreshGUI.ini`. It remains available during a session.
 
-The separately built [live-counter engine](release/ENGINE.md) sleeps between
+The separately built [live-counter engine](ENGINE.md) sleeps between
 stop-key checks and emits counts after each completed buy/refresh. The GUI consumes
 those reports immediately. The original engine remains supported with its older
 10% milestone updates. Build candidates from recorded source; preserve the

@@ -15,7 +15,7 @@ is retained in docs/UPSTREAM-README.md.
 For 0.1.0-rc4, the maintained ADB engine source is modified to sleep between
 stop-key checks, emit flushed per-action counters, and avoid counting interrupted
 or failed ADB tap sequences. A new engine candidate is built from this checkout
-and supplied with its exact source and [build instructions](release/ENGINE.md).
+and supplied with its exact source and [build instructions](ENGINE.md).
 It is separate from the previously installed binary described below. Both
 candidate hashes and the full source commit are recorded by their builders.
 

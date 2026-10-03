@@ -27,7 +27,7 @@ For the optional live-counter engine, use the approved private build environment
 .\build_engine_release.ps1 -BuildPython .local-state\engine-build-venv\Scripts\python.exe -OutputDirectory C:\absolute\new\engine-candidate
 ```
 
-See [engine candidate instructions](release/ENGINE.md). Record both GUI and engine
+See [engine candidate instructions](ENGINE.md). Record both GUI and engine
 ZIP/binary hashes against the same exact clean source commit. Engine-only checks
 use fake ADB calls and keyboard polling; `--verify` only verifies bundled imports.
 Keep personal runtime assets/config/history outside both ZIPs. A rebuilt engine

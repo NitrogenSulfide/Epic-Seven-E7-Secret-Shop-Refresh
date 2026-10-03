@@ -31,7 +31,7 @@ try {
 finally { Pop-Location }
 $sourceFiles = @('E7ADBShopRefresh.py', 'engine-build-requirements.txt', 'build_engine_release.ps1', 'LICENSE')
 foreach ($name in $sourceFiles) { Copy-Item -LiteralPath (Join-Path $repository $name) -Destination (Join-Path $staging $name) }
-Copy-Item -LiteralPath (Join-Path $repository 'release/ENGINE.md') -Destination (Join-Path $staging 'README.md')
+Copy-Item -LiteralPath (Join-Path $repository 'ENGINE.md') -Destination (Join-Path $staging 'README.md')
 $licences = Join-Path $staging 'third-party-licenses'
 New-Item -ItemType Directory -Path $licences | Out-Null
 foreach ($site in $environment.site) {
