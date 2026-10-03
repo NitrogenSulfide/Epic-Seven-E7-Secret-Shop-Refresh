@@ -15,8 +15,8 @@ class EngineTests(unittest.TestCase):
     def make_engine(self):
         app = engine.E7ADBShopRefresh.__new__(engine.E7ADBShopRefresh)
         app.loop_active, app.end_of_refresh = True, False
-        app.stop_refresh_key, app.refresh_count = 'esc', 0
-        app.tap_sleep, app.debug, app.budget = .3, False, 3
+        app.stop_refresh_key, app.refresh_count = '`', 0
+        app.tap_sleep, app.debug, app.budget = .3, False, 12
         app.screenwidth, app.screenheight = 1920, 1080
         app.adb_path, app.device_args = 'NEVER-RUN-ADB', []
         app.storage = engine.E7Inventory()
@@ -46,6 +46,7 @@ class EngineTests(unittest.TestCase):
 
     def test_live_stats_after_each_purchase_and_refresh(self):
         app = self.make_engine()
+        app.budget = 3  # Single-refresh boundary case; no live game actions.
         positions = iter([(10, 10), (20, 20), None, None, None, None, None, None])
         with patch.object(app, 'clickShop'), patch.object(app, 'takeScreenshot', return_value='fake'), patch.object(app, 'findItemPosition', side_effect=lambda *_: next(positions)), patch.object(app, 'clickBuy', return_value=True), patch.object(app, 'clickRefresh', return_value=True), patch.object(app, 'printResult'), patch.object(app.storage, 'writeToCSV'), patch.object(engine.subprocess, 'run'), patch.object(engine.time, 'sleep'), contextlib.redirect_stdout(io.StringIO()) as output:
             app.refreshShop()
@@ -108,10 +109,38 @@ class EngineTests(unittest.TestCase):
         app = self.make_engine()
         app.navigation.shop_visible.return_value = False
         app.navigation.menu_target.return_value = None
-        with patch.object(engine.subprocess, 'run') as adb:
+        with patch.object(engine.subprocess, 'run') as adb, patch.object(engine.time, 'monotonic', side_effect=[0, 61]):
             with self.assertRaisesRegex(RuntimeError, 'No navigation tap'):
                 app.clickShop()
         adb.assert_not_called()
+
+    def test_hidden_ui_waits_then_follows_recognized_menu(self):
+        app = self.make_engine()
+        app.navigation.shop_visible.side_effect = [False, False, True]
+        app.navigation.menu_target.side_effect = [None, (86,548)]
+        with patch.object(engine.subprocess, 'run') as adb, patch.object(engine.time, 'sleep') as sleep, contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertTrue(app.clickShop())
+        self.assertIn('Waiting for visible game controls.', output.getvalue())
+        self.assertEqual(sleep.call_args_list, [unittest.mock.call(1.0), unittest.mock.call(.25)])
+        adb.assert_called_once_with(['NEVER-RUN-ADB','shell','input','tap','86','548'],check=True)
+
+    def test_user_opens_shop_during_wait_without_navigation_tap(self):
+        app = self.make_engine()
+        app.navigation.shop_visible.side_effect = [False, True]
+        app.navigation.menu_target.return_value = None
+        with patch.object(engine.subprocess, 'run') as adb, patch.object(engine.time, 'sleep'):
+            self.assertTrue(app.clickShop())
+        adb.assert_not_called()
+
+    def test_stop_during_ui_wait_sends_no_taps_or_extra_capture(self):
+        app = self.make_engine()
+        app.navigation.shop_visible.return_value = False
+        app.navigation.menu_target.return_value = None
+        def stop(_): app.loop_active = False
+        with patch.object(engine.subprocess, 'run') as adb, patch.object(engine.time, 'sleep', side_effect=stop), patch.object(app, 'takeScreenshot', return_value='fake') as capture:
+            self.assertFalse(app.clickShop())
+        adb.assert_not_called()
+        capture.assert_called_once()
 
     def test_wrong_page_after_navigation_aborts_without_retry(self):
         app = self.make_engine()

@@ -48,6 +48,14 @@ class NavigationTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 self.nav.require_shop(image)
 
+    def test_unrelated_wallpapers_without_controls_are_never_recognized(self):
+        generator = np.random.default_rng(9)
+        for _ in range(4):
+            low_resolution = generator.integers(0,256,(54,96),dtype=np.uint8)
+            wallpaper = cv2.resize(low_resolution,FRAME_SIZE,interpolation=cv2.INTER_CUBIC)
+            self.assertIsNone(self.nav.menu_target(wallpaper))
+            self.assertFalse(self.nav.shop_visible(wallpaper))
+
     def test_menu_can_move_vertically_and_tap_follows_match(self):
         home = self.frame(['menu-secret-shop.png'])
         home = np.roll(home,70,axis=0)

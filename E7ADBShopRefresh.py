@@ -316,13 +316,28 @@ class E7ADBShopRefresh:
 
     #macro
     def clickShop(self):
+        # Hidden home controls cannot be distinguished from other pages by
+        # wallpaper. Wait for verified UI rather than guessing a wake-up tap.
+        deadline = None
+        if not self.loop_active:
+            return False
         screenshot = self.takeScreenshot()
-        if self.navigation.shop_visible(screenshot):
-            print('Navigation: Secret Shop screen verified; already open.', flush=True)
-            return self.loop_active
-        target = self.navigation.menu_target(screenshot)
-        if target is None:
-            raise RuntimeError('Secret Shop menu not recognized. No navigation tap sent. Open Secret Shop manually and try again.')
+        while self.loop_active:
+            if self.navigation.shop_visible(screenshot):
+                print('Navigation: Secret Shop screen verified; already open.', flush=True)
+                return self.loop_active
+            target = self.navigation.menu_target(screenshot)
+            if target is not None:
+                break
+            if deadline is None:
+                print('Navigation: Waiting for visible game controls. Click the game to reveal its UI, or open Secret Shop manually. No taps or spending while waiting (up to 60 seconds).', flush=True)
+                deadline = time.monotonic() + 60
+            if time.monotonic() >= deadline:
+                raise RuntimeError('Game controls remained unrecognized for 60 seconds. No navigation tap sent. Reveal the UI or open Secret Shop manually, then start again.')
+            time.sleep(1.0)
+            if not self.loop_active:
+                return False
+            screenshot = self.takeScreenshot()
         if not self.loop_active:
             return False
         x, y = target
@@ -443,7 +458,7 @@ if __name__ == '__main__':
         print('Private Secret Shop references prepared and checked offline.')
         sys.exit(0)
     if sys.argv[1:] == ['--verify']:
-        print('E7 engine: live counters v1; verified shop navigation v2; sleeping stop-key poll; imports OK')
+        print('E7 engine: live counters v1; verified shop navigation v3; visible UI startup wait; sleeping stop-key poll; imports OK')
         sys.exit(0)
 
     #intro

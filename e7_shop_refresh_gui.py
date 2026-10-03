@@ -951,7 +951,15 @@ class RefreshGui(tk.Tk):
         if not line:
             return
         if line.startswith('Navigation: '):
-            self.detail.set(line[len('Navigation: '):])
+            message = line[len('Navigation: '):]
+            self.detail.set(message)
+            if not self.stopping and not self.stop_key_pressed:
+                if message.startswith('Waiting for visible game controls.'):
+                    self.status.set('Waiting for game')
+                    self.progress_text.set('Reveal the game controls · no taps or spending while waiting')
+                elif self.status.get() == 'Waiting for game':
+                    self.status.set('Calibrating' if self.run_settings.debug else 'Running')
+                    self.progress_text.set('Waiting for the engine’s first progress update…')
             self._event(line)
             return
         if line.startswith('E7GUI_STATS '):
