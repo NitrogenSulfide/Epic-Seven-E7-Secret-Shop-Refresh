@@ -65,5 +65,19 @@
   "icon_retained_by_owner_request": true,
   "icon_owner_request_date": "2026-10-03",
   "icon_publication_preference": "Retain the supplied icon and credit its origin.",
-  "icon_rights_status": "Original image source/artist and redistribution licence not established; no ownership or permission inferred from community use."
+  "icon_rights_status": "Original image source/artist and redistribution licence not established; no ownership or permission inferred from community use.",
+  "appearance_artwork": {
+    "supplied_date": "2026-10-03",
+    "credit": "Epic Seven, Smilegate and respective rights holders; owner-supplied images",
+    "original_source_permissions": "Not independently established",
+    "source_bytes_preserved": true,
+    "ui_rendering": "In-memory cover resize, tint, blur and transparent icon fitting",
+    "assets": {
+      "background-day.png": "9b837041940183364f4c86cd6aa547ab190e2391c86fdd57cb169b0d088f1446",
+      "background-night.png": "b11c012c1d4219111fa61ed85483e1a58a0bfb97b65f159e2f3c66a9c38d7d78",
+      "mystic-medal.png": "1dbce5a3fe1b47c330c129c3d86ca8182167a66713d16105c00a776ac0775980",
+      "covenant-bookmark.png": "21cc8c566b1f22507aedde6bbdcfb0980bc4d32338d0ae1b91501048a951a5ad",
+      "skystone.png": "b3ac5781e1c590e6b448ad33f9bb129d70245617f3ed1616be8c5f48f666290b"
+    }
+  }
 }

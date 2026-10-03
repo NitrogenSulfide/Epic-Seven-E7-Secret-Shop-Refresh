@@ -6,6 +6,13 @@ preserved, alongside the imported GUI, launchers, tests, sounds and icon.
 
 This is a local development project. No GitHub fork or release has been published.
 
+The rc7 GUI adds the owner-supplied daytime/nighttime scenes, softened behind the
+controls, a sun/moon theme button and the supplied currency counter icons.
+Pillow 11.3+ enables this appearance; the plain palette remains available when
+Pillow is absent. The prepared local test launcher uses the existing private
+environment, without installing anything into system Python. The engine remains
+the rc6 build; this appearance change makes no new game actions.
+
 ## Run the imported GUI
 
 Use Python 3 with Tkinter and the separately installed upstream ADB engine:

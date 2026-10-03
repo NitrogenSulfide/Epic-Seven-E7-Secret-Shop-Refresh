@@ -18,3 +18,11 @@ Notifications), CC0. Original sounds use VCSL and VSCO 2 CE sample libraries.
 https://opengameart.org/content/ui-sound-effects-button-clicks-user-feedback-notifications
 https://creativecommons.org/publicdomain/zero/1.0/
 See e7_gui_assets/CREDITS.txt and provenance.json for source hashes and edits.
+
+Day/night scenery and Mystic Medal, Covenant Bookmark and Skystone images:
+supplied by the project owner on 2026-10-03 for the GUI appearance. Game/artwork
+credit: Epic Seven, Smilegate and the respective rights holders. Original source
+links/artists and redistribution permissions have not been independently
+established. The software GPL does not relicense this third-party artwork.
+Source PNG bytes are preserved; sizing and tinting occur in the UI renderer.
+Sun/moon button glyphs are drawn by the GUI appearance module.
