@@ -35,6 +35,9 @@ history remain inside the selected installation; GUI artwork stays beside the
 GUI. The PowerShell and CMD launchers also accept `--engine-dir`; the copied EXE
 uses the saved file or environment variable.
 
+For the Stop key setting, click its box and press Esc or another supported
+single key. Tab remains navigation; unsupported keys leave the selection intact.
+
 The copied `E7 Secret Shop Refresh.exe` launcher is available locally and remains
 ignored by Git. It requires Python's Windows launcher and the adjacent GUI source;
 it is not a self-contained application. The existing desktop shortcut still uses

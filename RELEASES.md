@@ -20,9 +20,9 @@ py -3 -m unittest test_e7_shop_refresh_gui.ProtocolTests test_e7_engine_location
 .\launch_e7_shop_refresh_gui.ps1 --help
 ```
 
-The 16 current non-GUI tests use temporary fixtures and a fake engine. They check
+The current non-GUI tests use temporary fixtures and a fake engine. They check
 prompt handling, validation, history interpretation, location precedence,
-path isolation and startup failure behavior. They do not test a real ADB
+path isolation, stop-key capture mapping and startup failure behavior. They do not test a real ADB
 connection, real engine compatibility, emulator state or purchasing.
 Record the candidate's actual command, UTC time, exit result and evidence; the
 earlier successful run does not clear a later commit/package.

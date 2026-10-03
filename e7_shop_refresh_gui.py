@@ -28,6 +28,17 @@ GUI_CONFIG_FILE = APP_DIR / "ShopRefreshGUI.ini"
 HISTORY_FILE = APP_DIR / "ShopRefreshHistory" / "ADB_History.csv"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 ASSET_DIR = PROJECT_DIR / "e7_gui_assets"
+STOP_KEY_CHARACTERS = "0123456789abcdefghijklmnopqrstuvwxyz/.,';[]`"
+
+
+def captured_stop_key(keysym, character, state=0):
+    # Control/Alt combinations are not supported by the engine's single-key setting.
+    if state & (0x4 | 0x8 | 0x20000):
+        return None
+    if keysym == "Escape":
+        return "esc"
+    key = character.lower()
+    return key if len(key) == 1 and key in STOP_KEY_CHARACTERS else None
 
 
 def resolve_engine_directory(override=None, *, environ=None, location_file=None):
@@ -99,7 +110,7 @@ def validate_settings(device, budget, delay, stop_key, random_offset, debug):
     key = stop_key.strip().lower() or "esc"
     if any(c in device for c in "\r\n"):
         raise ValueError("The device must be a single ADB address.")
-    if key != "esc" and (len(key) != 1 or key not in "0123456789abcdefghijklmnopqrstuvwxyz/.,';[]`"):
+    if key != "esc" and (len(key) != 1 or key not in STOP_KEY_CHARACTERS):
         raise ValueError("Use Esc or a single letter, number, or / . , ' ; [ ] ` as the stop key.")
     return RunSettings(device, amount, sleep, key, bool(random_offset), bool(debug))
 
@@ -474,8 +485,14 @@ class RefreshGui(tk.Tk):
         self.settings_widgets.extend([self.device_box, self.device_button])
         ttk.Label(controls, textvariable=self.device_notice, style="Muted.TLabel", wraplength=dp(350)).grid(row=3, column=0, sticky="w", pady=(dp(4), dp(10)))
         for row, label, var in ((4, "Skystone budget", self.budget), (6, "Tap delay · seconds", self.tap_sleep), (8, "Stop key", self.stop_key)):
+            if var is self.stop_key:
+                label = "Stop key · click the box, then press a key"
             ttk.Label(controls, text=label).grid(row=row, column=0, sticky="w")
             entry = ttk.Entry(controls, textvariable=var, font=self.ui_font)
+            if var is self.stop_key:
+                self.stop_key_entry = entry
+                entry.state(["readonly"])
+                entry.bind("<KeyPress>", self._capture_stop_key)
             entry.grid(row=row+1, column=0, sticky="ew", pady=(dp(4), dp(8)))
             self.settings_widgets.append(entry)
         random = ttk.Checkbutton(controls, text="Randomize tap offsets", variable=self.random_offset, style="Large.TCheckbutton")
@@ -640,6 +657,21 @@ class RefreshGui(tk.Tk):
         except (OSError, configparser.Error) as exc:
             self.setting_notice.set("Sound changed for this session; preference could not be saved.")
             self._append_log(f"Sound preference save failed: {exc}\n")
+
+    def _capture_stop_key(self, event):
+        if self.stop_key_entry.instate(["disabled"]):
+            return "break"
+        if event.keysym in ("Tab", "ISO_Left_Tab"):
+            return None  # Preserve keyboard navigation.
+        if event.keysym in ("Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R", "Caps_Lock", "Super_L", "Super_R", "Win_L", "Win_R"):
+            return "break"
+        key = captured_stop_key(event.keysym, event.char, event.state)
+        if key is None:
+            self.setting_notice.set("Choose Esc, a letter, number, or / . , ' ; [ ] `. No Ctrl/Alt combinations.")
+        else:
+            self.stop_key.set(key)
+            self.setting_notice.set(f"Stop key: {'Esc' if key == 'esc' else key}.")
+        return "break"
 
     def _settings(self):
         if len(self.connected_devices) > 1 and not self.device.get().strip():
@@ -947,7 +979,7 @@ class RefreshGui(tk.Tk):
 
     def _set_controls(self, running):
         for widget in self.settings_widgets:
-            widget.configure(state=tk.DISABLED if running else tk.NORMAL)
+            widget.state(["disabled"] if running else ["!disabled"])
         self.start_button.configure(state=tk.DISABLED if running else tk.NORMAL)
         self.stop_button.configure(state=tk.NORMAL if running else tk.DISABLED)
 

@@ -1,7 +1,7 @@
 # E7 Secret Shop Refresh GUI
 
 Windows GUI by NitrogenSulfide for Solunium's Epic Seven Secret Shop Refresh ADB
-engine. This is version **0.1.0-rc1**, a local release candidate. It has not been
+engine. This is version **0.1.0-rc2**, a local release candidate. It has not been
 published or cleared for live-game use by the release workflow.
 
 ## Requirements
@@ -41,6 +41,10 @@ Selection order is `--engine-dir`, environment variable `E7_ENGINE_DIR`, saved
 the GUI. The saved file also works with the EXE launcher. An invalid engine
 folder stops startup before device discovery. Starting the real GUI with a valid
 folder performs ADB device discovery; pressing Start runs the real refresh engine.
+
+To select a stop key, click the Stop key box and press Esc or another supported
+single key. Tab moves to the next control. Unsupported keys and Ctrl/Alt
+combinations leave the previous selection unchanged and show a message.
 
 The engine's `ADBconfig.ini`, `ShopRefreshGUI.ini` and `ShopRefreshHistory` stay
 inside the selected engine installation. Existing settings/history are reused;

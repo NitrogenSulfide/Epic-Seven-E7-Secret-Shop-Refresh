@@ -10,6 +10,7 @@ import unittest
 import ctypes
 import shutil
 import wave
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import e7_shop_refresh_gui as gui
@@ -18,6 +19,17 @@ DEVICE_SCAN = gui.RefreshGui.refresh_devices
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_physical_stop_key_mapping(self):
+        self.assertEqual(gui.captured_stop_key("Escape", "\x1b"), "esc")
+        self.assertEqual(gui.captured_stop_key("A", "A", 1), "a")
+        for key in "1/,;'[]`":
+            self.assertEqual(gui.captured_stop_key(key, key), key)
+        for keysym, char, state in (("F1", "", 0), ("space", " ", 0),
+                                   ("a", "\x01", 4), ("Escape", "\x1b", 8),
+                                   ("a", "a", 0x20000), ("exclam", "!", 1)):
+            with self.subTest(keysym=keysym):
+                self.assertIsNone(gui.captured_stop_key(keysym, char, state))
+
     def setUp(self):
         self.settings = gui.validate_settings("localhost:5555", "30", "0.3", "`", True, False)
 
@@ -137,6 +149,35 @@ class GuiTests(unittest.TestCase):
             return real_popen([sys.executable, "-u", str(self.fake), str(self.history)] + (["--stall"] if stall else []), **kwargs)
         with patch.object(gui.subprocess, "Popen", fake_popen):
             self.app.start_refresh()
+
+    def test_stop_key_capture_and_rejection(self):
+        self.app._capture_stop_key(SimpleNamespace(keysym="Escape", char="\x1b", state=0))
+        self.assertEqual(self.app.stop_key.get(), "esc")
+        self.app._capture_stop_key(SimpleNamespace(keysym="comma", char=",", state=0))
+        self.assertEqual(self.app.stop_key.get(), ",")
+        for keysym, char, state in (("F1", "", 0), ("a", "\x01", 4)):
+            self.app._capture_stop_key(SimpleNamespace(keysym=keysym, char=char, state=state))
+            self.assertEqual(self.app.stop_key.get(), ",")
+            self.assertIn("Choose Esc", self.app.setting_notice.get())
+
+    def test_stop_key_capture_preserves_navigation_and_disabled_state(self):
+        for keysym in ("Tab", "ISO_Left_Tab"):
+            self.assertIsNone(self.app._capture_stop_key(SimpleNamespace(keysym=keysym)))
+        self.app._set_controls(True)
+        self.app._capture_stop_key(SimpleNamespace(keysym="Escape", char="\x1b", state=0))
+        self.assertEqual(self.app.stop_key.get(), "`")
+        self.app._set_controls(False)
+        self.assertTrue(self.app.stop_key_entry.instate(["readonly", "!disabled"]))
+
+    def test_stop_key_entry_binds_escape_press(self):
+        self.app.deiconify()
+        self.app.update()
+        self.app.stop_key_entry.focus_force()
+        self.app.update()
+        self.app.stop_key_entry.event_generate("<KeyPress-Escape>")
+        self.app.update()
+        self.assertEqual(self.app.stop_key.get(), "esc")
+        self.assertEqual(self.app._settings().stop_key, "esc")
 
     def test_end_to_end(self):
         self.start_fake()
