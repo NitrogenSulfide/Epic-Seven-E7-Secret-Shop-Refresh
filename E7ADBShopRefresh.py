@@ -12,6 +12,7 @@ import numpy as np
 import keyboard
 import random
 import configparser
+import json
 
 class E7Item:
     def __init__(self, image=None, price=0, count=0):
@@ -114,17 +115,36 @@ class E7ADBShopRefresh:
         self.loop_active = True
         self.end_of_refresh = False
         self.keyboard_thread.start()
-        self.refreshShop()
+        try:
+            self.refreshShop()
+        finally:
+            self.end_of_refresh = True
+            self.loop_active = False
+            self.keyboard_thread.join(timeout=1)
 
     #threads
     def checkKeyPress(self):
         while(self.loop_active and not self.end_of_refresh):
-            self.loop_active = not keyboard.is_pressed(self.stop_refresh_key)
-        self.loop_active = False
-        print('Shop refresh terminated!')
+            if keyboard.is_pressed(self.stop_refresh_key):
+                self.loop_active = False
+                print('Shop refresh terminated!', flush=True)
+                return
+            # Yield the GIL/CPU so keyboard hooks and foreground typing can run.
+            time.sleep(0.02)
+
+    def reportLiveStats(self):
+        counts = {name: item.count for name, item in self.storage.inventory.items()}
+        print('E7GUI_STATS ' + json.dumps({
+            'refreshes': self.refresh_count,
+            'skystone_spent': self.refresh_count * 3,
+            'covenant': counts.get('Covenant bookmark', 0),
+            'mystic': counts.get('Mystic medal', 0),
+            'friendship': counts.get('Friendship bookmark', 0),
+        }), flush=True)
 
     def refreshShop(self):
         self.clickShop()
+        self.reportLiveStats()
         #time needed for item to drop in after refresh (0.5 second loading + drop 1 second)
         sliding_time = 1.5
         #stat track
@@ -147,9 +167,10 @@ class E7ADBShopRefresh:
             for key, value in self.storage.inventory.items():
                 pos = self.findItemPosition(screenshot, value.image)
                 if pos is not None:
-                    self.clickBuy(pos)
-                    value.count += 1
-                    brought.add(key)
+                    if self.clickBuy(pos):
+                        value.count += 1
+                        brought.add(key)
+                        self.reportLiveStats()
 
             if not self.loop_active: break
             
@@ -169,8 +190,9 @@ class E7ADBShopRefresh:
             for key, value in self.storage.inventory.items():
                 pos = self.findItemPosition(screenshot, value.image)
                 if pos is not None and key not in brought:
-                    self.clickBuy(pos)
-                    value.count += 1
+                    if self.clickBuy(pos):
+                        value.count += 1
+                        self.reportLiveStats()
 
             #print every 10% progress
             if self.budget >= 30 and self.refresh_count*3 >= milestone and not self.debug:
@@ -184,11 +206,13 @@ class E7ADBShopRefresh:
                 if self.refresh_count >= self.budget//3:
                     break
 
-            self.clickRefresh()
-            self.refresh_count += 1
+            if self.clickRefresh():
+                self.refresh_count += 1
+                self.reportLiveStats()
         
         self.end_of_refresh = True
         self.loop_active = False
+        self.reportLiveStats()
         if self.refresh_count*3 != self.budget: print('100%') 
         duration = time.time()-start_time
         self.storage.writeToCSV(duration=duration, skystone_spent=self.refresh_count*3)
@@ -306,7 +330,7 @@ class E7ADBShopRefresh:
         time.sleep(0.5)
 
     def clickBuy(self, pos):
-        if pos is None:
+        if pos is None or not self.loop_active:
             return False
         
         x, y = pos
@@ -315,7 +339,9 @@ class E7ADBShopRefresh:
         #debug
         if self.debug: self.showOffsetArea(x, y, "Please check if red rectangle is within buy button's border", "click buy area")
 
-        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x+xoff), str(y+yoff)])
+        if not self.loop_active:
+            return False
+        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x+xoff), str(y+yoff)], check=True)
         time.sleep(self.tap_sleep)
 
         #confirm
@@ -326,12 +352,17 @@ class E7ADBShopRefresh:
         #debug
         if self.debug: self.showOffsetArea(x, y, "Please check if red rectangle is within buy button's border", "click buy area")
 
-        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x+xoff), str(y+yoff)])
+        if not self.loop_active:
+            return False
+        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x+xoff), str(y+yoff)], check=True)
         time.sleep(self.tap_sleep)
         #loading sleep
         time.sleep(1)
+        return True
     
     def clickRefresh(self):
+        if not self.loop_active:
+            return False
         x = self.screenwidth * 0.1698
         y = self.screenheight * 0.9138
         xoff, yoff = self.generateOffset()
@@ -339,10 +370,12 @@ class E7ADBShopRefresh:
         #debug
         if self.debug: self.showOffsetArea(x, y, "Please check if red rectangle is within refresh button's border", 'click refresh area')
 
-        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x+xoff), str(y+yoff)])
+        if not self.loop_active:
+            return False
+        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x+xoff), str(y+yoff)], check=True)
         time.sleep(self.tap_sleep)
 
-        if not self.loop_active: return
+        if not self.loop_active: return False
         #confirm
         x = self.screenwidth * 0.5828
         y = self.screenheight * 0.6411
@@ -350,9 +383,12 @@ class E7ADBShopRefresh:
         
         #debug
         if self.debug: self.showOffsetArea(x, y, "Please check if red rectangle is within buy confirm's border", 'click confirm area')
-        
-        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x+xoff), str(y+yoff)])
+
+        if not self.loop_active:
+            return False
+        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x+xoff), str(y+yoff)], check=True)
         time.sleep(self.tap_sleep)
+        return True
 
 def getDevices(print_output):
         check_devices = subprocess.run([adb_path, 'devices'], capture_output=True, text=True)
@@ -379,6 +415,9 @@ def saveConfigFile(tap_sleep, budget, stop_refresh_key, random_offset):
     print('Setting saved')
 
 if __name__ == '__main__':
+    if sys.argv[1:] == ['--verify']:
+        print('E7 engine: live counters v1; sleeping stop-key poll; imports OK')
+        sys.exit(0)
 
     #intro
     print('Epic Seven Shop Refresh with ADB')

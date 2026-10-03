@@ -1,0 +1,12 @@
+# Windows Python 3.13 engine build. This does not replace upstream requirements.txt.
+numpy==2.2.6
+opencv-python==4.11.0.86
+Pillow==11.3.0
+keyboard==0.13.5
+pyinstaller==6.16.0
+altgraph==0.17.5
+packaging==26.3
+pefile==2023.2.7
+pyinstaller-hooks-contrib==2026.8
+pywin32-ctypes==0.2.3
+setuptools==84.0.0
