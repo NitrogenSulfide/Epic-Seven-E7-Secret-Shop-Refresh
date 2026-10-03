@@ -1,0 +1,69 @@
+{
+  "sound_archive_sha256": "8e4e23dd4ec501776dab1428c5f1e405b5065e296518feb04816f2892d163053",
+  "sound_author": "Robin Lamb",
+  "sound_license": "CC0",
+  "sounds": [
+    {
+      "source": "ui_wav/Ding.wav",
+      "output": "start.wav",
+      "duration_seconds": 0.9994331065759637,
+      "gain_db": 0.13930841223485788,
+      "peak_dbfs": -1.000151903819357,
+      "rms_dbfs": -27.12630012648838,
+      "original_sha256": "4e48a181a9b537689e7e0a5958ddfe9952f4b6eef915ab8286228241ee32658d",
+      "installed_sha256": "d2de4f858a2ff4f01b06708c930b0e70791206dbe0db010d6c2b259c42f30f06"
+    },
+    {
+      "source": "ui_wav/chimes.wav",
+      "output": "end.wav",
+      "duration_seconds": 2.0048072562358277,
+      "gain_db": 9.453088413664357,
+      "peak_dbfs": -1.000151903819357,
+      "rms_dbfs": -20.94111589484505,
+      "original_sha256": "8d2a772df3931b0b341e6f2a956becf1699a7607ad5b6919e06e33b475626083",
+      "installed_sha256": "437ad50f42e387ad7460735e764e7505674f540176570904c1526925230d47d1"
+    }
+  ],
+  "image_edit_tool": "image_gen",
+  "supplied_artwork_sha256": "1fbbd650accba6a116bf82479e446f498c91d0ddaea5ae1a518aa71d1c0239ad",
+  "generated_icon_sha256": "389e7940aa804fe735778b940854cc2bb8cde80588e0b10f467d95b6d6156356",
+  "start_sound_revision": {
+    "peak_dbfs": -1.000151903819357,
+    "rms_dbfs": -20.89101572114854,
+    "end_rms_dbfs": -20.94111589484505,
+    "gain_in_rms_db": 6.235544234595682,
+    "compressor_threshold_dbfs": -22,
+    "compressor_ratio": "4:1",
+    "compressor_release_ms": 40,
+    "sha256": "64c21f2084037187bf85805189a46d5d8a2c2d35f6729aabefffbcc16420515d"
+  },
+  "icon_revision": {
+    "source_size": [
+      1254,
+      1254
+    ],
+    "png_size": [
+      1024,
+      1024
+    ],
+    "ico_sizes": [
+      16,
+      20,
+      24,
+      32,
+      40,
+      48,
+      64,
+      72,
+      96,
+      128,
+      192,
+      256
+    ],
+    "description": "Re-encoded from the existing high resolution head artwork; same head for Windows window, executable, and desktop shortcut."
+  },
+  "icon_retained_by_owner_request": true,
+  "icon_owner_request_date": "2026-10-03",
+  "icon_publication_preference": "Retain the supplied icon and credit its origin.",
+  "icon_rights_status": "Original image source/artist and redistribution licence not established; no ownership or permission inferred from community use."
+}
