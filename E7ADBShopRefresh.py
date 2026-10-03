@@ -493,6 +493,7 @@ if __name__ == '__main__':
         user_choice = input('Device: ') or 'localhost:5555'
         if user_choice in devices:
             ip_port = user_choice
+            break
         else:
             test_connection = subprocess.run([adb_path, 'connect', user_choice], capture_output=True, text=True)
             print(test_connection.stdout)

@@ -12,9 +12,9 @@ Obtain the **GUI**, **LiveEngine** and **Source** ZIPs with the same version.
 Check their SHA-256s against the release's `SHA256SUMS.txt`:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefreshGUI-0.1.0-rc15.zip'
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7LiveEngine-0.1.0-rc15.zip'
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7Source-0.1.0-rc15.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefreshGUI-0.1.0-rc16.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7LiveEngine-0.1.0-rc16.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7Source-0.1.0-rc16.zip'
 ```
 
 1. Extract the GUI into a folder such as `Documents\E7 GUI`.
