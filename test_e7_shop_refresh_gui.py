@@ -102,7 +102,7 @@ prompt("Launch in debug mode? leave bank for no (yes/no): ", "no")
 prompt("Key: ", "`")
 prompt("Enable randomize click (yes/no): ", "yes")
 prompt("Tap sleep(in seconds) Recommend - leave blank for 0.3 sec : ", "0.3")
-prompt("Amount of skystone that you want to spend: ", "30.0")
+prompt("Amount of skystone that you want to spend: ", "12.0")
 print("Press enter to start!", flush=True)
 assert input() == ""
 print("Progress:", flush=True)
@@ -110,8 +110,8 @@ print("50% Cove: 1 Myst: 0", end="\\r", flush=True)
 if "--stall" in sys.argv:
     time.sleep(30)
 print("100% Cove: 1 Myst: 1", flush=True)
-Path(sys.argv[1]).write_text("Duration,Skystone spent,Gold spent,Covenant bookmark,Mystic medal\\n10.3,30,464000,1,1\\n")
-print("---Result---\\nCovenant bookmark:1\\nMystic medal:1\\nSkystone spent:30", flush=True)
+Path(sys.argv[1]).write_text("Duration,Skystone spent,Gold spent,Covenant bookmark,Mystic medal\\n10.3,12,464000,1,1\\n")
+print("---Result---\\nCovenant bookmark:1\\nMystic medal:1\\nSkystone spent:12", flush=True)
 prompt("press enter to exit...", "")
 '''
 
@@ -136,10 +136,6 @@ class GuiTests(unittest.TestCase):
         self.sound_mock = winsound.PlaySound
         self.app = gui.RefreshGui()
         self.app.withdraw()
-        self.app.budget.set("30")
-        self.app.tap_sleep.set("0.3")
-        self.app.stop_key.set("`")
-        self.app.random_offset.set(True)
 
     def tearDown(self):
         if self.app.process and self.app.process.poll() is None:
@@ -164,7 +160,12 @@ class GuiTests(unittest.TestCase):
         def fake_popen(*args, **kwargs):
             return real_popen([sys.executable, "-u", str(self.fake), str(self.history)] + (["--stall"] if stall else []), **kwargs)
         with patch.object(gui.subprocess, "Popen", fake_popen):
-            self.app.start_refresh()
+            self.app.start_button.invoke()
+
+    def test_fresh_defaults_match_owner_test_settings(self):
+        settings = self.app._settings()
+        self.assertEqual((settings.budget, settings.tap_sleep, settings.stop_key, settings.random_offset),
+                         (12.0, 0.3, "`", True))
 
     def test_stop_key_capture_and_rejection(self):
         self.app._capture_stop_key(SimpleNamespace(keysym="Escape", char="\x1b", state=0))
@@ -273,7 +274,7 @@ class GuiTests(unittest.TestCase):
         self.start_fake()
         self.pump_until(lambda: self.app.status.get() == "Finished")
         self.assertEqual(self.app.process.returncode, 0)
-        self.assertEqual(self.app.spent.get(), "30")
+        self.assertEqual(self.app.spent.get(), "12")
         self.assertEqual(self.app.covenant.get(), "1")
         self.assertEqual(self.app.mystic.get(), "1")
         self.assertEqual(len(self.app.history.get_children()), 1)

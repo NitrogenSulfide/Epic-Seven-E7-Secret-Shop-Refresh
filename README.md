@@ -6,8 +6,13 @@ preserved, alongside the imported GUI, launchers, tests, sounds and icon.
 
 This is a local development project. No GitHub fork or release has been published.
 
-The rc7 GUI adds the owner-supplied daytime/nighttime scenes, softened behind the
-controls, a sun/moon theme button and the supplied currency counter icons.
+The rc8 GUI fixes Start and live counter captions after the rc7 card redesign.
+It sharpens the day/night scenes with AI restoration and uses lighter image
+opacity (23% dark / 20% light), retaining the sun/moon button and currency icons.
+Fresh settings and prepared offline/manual tests use a 12-skystone budget,
+0.3-second tap delay, backtick stop key, and randomized tap offsets.
+Existing saved settings still take precedence; calibration retains its engine
+defaults and requires its existing confirmation.
 Pillow 11.3+ enables this appearance; the plain palette remains available when
 Pillow is absent. The prepared local test launcher uses the existing private
 environment, without installing anything into system Python. The engine remains
