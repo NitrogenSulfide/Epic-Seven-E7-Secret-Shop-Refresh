@@ -1,15 +1,16 @@
 # E7 Secret Shop Refresh GUI
 
-Windows GUI maintained by Blue Natto (GitHub: NitrogenSulfide), using Solunium's Epic Seven Secret
+Windows GUI maintained by NitrogenSulfide (Blue Natto), using Solunium's Epic Seven Secret
 Shop Refresh ADB engine. The original upstream source and Git history are
 preserved, alongside the imported GUI, launchers, tests, sounds and icon.
 
 This is a local development project. No GitHub fork or release has been published.
 
-For a new user's beta setup, see [SETUP.md](release/SETUP.md). The release assets
-are a matching GUI ZIP, modified engine ZIP and full tracked source ZIP, with
-SHA-256s. The full source supplies preserved upstream ADB tools/item templates;
-recognition references are created locally and personal state stays private.
+For a new user's beta setup, see [SETUP.md](release/SETUP.md). Players need only the combined player ZIP, with the GUI, matching engine,
+upstream ADB tools/item templates and a portable runtime configuration. A separate
+full source ZIP is available for developers; players do not need it. SHA-256s
+identify both downloads. Recognition references are created locally and personal
+state stays private.
 
 The header's ⓘ button opens About & Credits, also shown on first launch for the
 selected runtime's saved GUI preferences. Continue or closing that window marks
@@ -17,7 +18,7 @@ it seen. Show this on startup is off by default, and can be enabled there later.
 It remembers the choice in ShopRefreshGUI.ini alongside sound/theme/device
 preferences; keep this file when updating. Full credits and the software licence
 are readable offline. The modeless window also remains available during sessions.
-The credits header includes a small Blue Natto cozy portrait.
+The credits header includes a small NitrogenSulfide (Blue Natto) cozy portrait.
 
 The rc8 GUI fixes Start and live counter captions after the rc7 card redesign.
 It sharpens the day/night scenes with AI restoration and uses lighter image
@@ -125,19 +126,19 @@ for Solunium's original setup and build instructions.
 
 ## Local release candidate
 
-The maintained builder creates a GUI-only ZIP with source, assets, user
-instructions and a launcher compiled from the same clean commit:
+The component builder creates a GUI-only ZIP for private build evidence, with
+source, assets and a launcher compiled from the same clean commit:
 
 ```powershell
 .\build_release.ps1
 ```
 
 The output is under ignored `dist/candidates/<VERSION>/` with a build manifest.
-Existing candidate directories are never overwritten. Python and a separately
-installed engine remain required. See [RELEASES.md](RELEASES.md) for checks and
+Existing candidate directories are never overwritten. Use the combined builder
+below for the player download. See [RELEASES.md](RELEASES.md) for checks and
 publication gates, and [the packaged instructions](release/README.md).
 
-To prepare all three matching downloads using the existing private engine build
+To prepare the player ZIP and separate source ZIP using the existing private engine build
 environment, choose a new output directory:
 
 ```powershell
@@ -146,6 +147,8 @@ environment, choose a new output directory:
 
 This adds no installer or service and runs no ADB/game checks. rc14/rc15 improve
 setup documentation and packaging; rc16 fixes the multiple-device startup loop.
+rc17 combines player files in one ZIP and uses NitrogenSulfide (Blue Natto) as the
+maintainer name. Component GUI/engine ZIPs remain private build outputs.
 
 ## Ownership and licensing
 

@@ -1,5 +1,4 @@
-GUI, enhancements and Windows launcher: Blue Natto.
-GitHub identity: NitrogenSulfide.
+GUI, enhancements and Windows launcher: NitrogenSulfide (Blue Natto).
 
 Original refresh engine: Solunium.
 https://github.com/Solunium/Epic-Seven-E7-Secret-Shop-Refresh

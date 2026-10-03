@@ -1,58 +1,54 @@
-# Set up the Blue Natto beta
+# Set up E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-This is a Windows GUI for Solunium's ADB refresh engine. Setup currently requires
+This is a Windows GUI for Solunium's ADB refresh engine. Setup requires
 Python and locally prepared recognition images. It is not a one-click installer.
 Use Google Play Games on PC **Developer Emulator**, English Epic Seven and a
 1920 x 1080 Android display. Native STOVE is unsupported; other emulators are
 unverified. Different home-screen artwork is fine: recognition uses UI text.
 
-## Downloads and folders
+## Download and extract
 
-Obtain the **GUI**, **LiveEngine** and **Source** ZIPs with the same version.
-Check their SHA-256s against the release's `SHA256SUMS.txt`:
+Download **E7ShopRefresh-0.1.0-rc17.zip** and extract the whole ZIP into a new
+folder such as `Documents\E7 Shop Refresh`. Players need only this download.
+The separate **E7Source** ZIP is for developers and is not needed to run the app.
+Check the player ZIP against the release's `SHA256SUMS.txt` if desired:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefreshGUI-0.1.0-rc16.zip'
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7LiveEngine-0.1.0-rc16.zip'
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7Source-0.1.0-rc16.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc17.zip'
 ```
 
-1. Extract the GUI into a folder such as `Documents\E7 GUI`.
-2. Extract LiveEngine into a **new** folder such as `Documents\E7 Runtime`.
-   Do not replace an existing engine installation or copy personal settings yet.
-3. Extract Source separately. Copy its entire `adb-assets` folder into
-   `E7 Runtime`. These are preserved upstream tools/templates, not anyone's
-   account data. Do not launch the original engine or mouse automation from
-   the source folder. Keep the extracted source for licence/build information.
-4. Install Python **3.13** from [Python's Windows downloads](https://www.python.org/downloads/windows/)
-   if needed, including Tcl/Tk. For the EXE shortcut, use the Python 3.13 full
-   installer with its **legacy Windows launcher** option. The checks used Python
-   3.13.5. The compiled LiveEngine includes its Python; the GUI still needs it.
-   To enable the backgrounds, avatar and counter artwork, run this optional step:
+The GUI, engine, ADB tools and item templates are already arranged together.
+`engine-location.ini` points to the included `runtime` folder using a relative
+path, so you do not need to copy files or edit an installation path. Keep the
+whole extracted folder together. Use a new folder when trying a candidate;
+do not overwrite an existing app or copy personal settings yet.
 
-   ```powershell
-   py -3.13 -m pip install --user "Pillow==11.3.0"
-   ```
+Install Python **3.13** from [Python's Windows downloads](https://www.python.org/downloads/windows/)
+if needed, including Tcl/Tk. For the EXE shortcut, use the Python 3.13 full
+installer with its **legacy Windows launcher** option. The checks used Python
+3.13.5. The compiled engine includes its Python; the GUI still needs it.
+To enable the backgrounds, avatar and counter artwork, run this optional step:
 
-   This installs Pillow into your user Python environment. If you skip it, the
-   app uses a plain light/dark appearance. We do not run this installation for you.
-5. In `E7 GUI`, copy `engine-location.example.ini` to `engine-location.ini`.
-   Change `directory` to the full path of `E7 Runtime`, without quotes:
+```powershell
+py -3.13 -m pip install --user "Pillow==11.3.0"
+```
 
-   ```ini
-   [engine]
-   directory = C:\Users\YOUR_NAME\Documents\E7 Runtime
-   ```
-
-The runtime must contain:
+This installs Pillow into your user Python environment. If you skip it, the
+app uses a plain light/dark appearance. We do not run this installation for you.
 
 ```text
-E7 Runtime/
-  E7ADBShopRefresh.exe                 (from matching LiveEngine ZIP)
-  adb-assets/
-    cov.png, mys.png, fb.png           (from Source ZIP)
-    platform-tools/                   (entire folder from Source ZIP)
-    gui-navigation/                   (created in the next step)
+E7 Shop Refresh/
+  E7 Secret Shop Refresh.exe          (GUI launcher)
+  e7_shop_refresh_gui.py              (GUI source)
+  engine-location.ini                (already points to runtime)
+  e7_gui_assets/
+  START-HERE.md
+  runtime/
+    E7ADBShopRefresh.exe              (matching compiled engine)
+    adb-assets/
+      cov.png, mys.png, fb.png        (item templates)
+      platform-tools/                (ADB tools and notices)
+      gui-navigation/                (created in the next step)
 ```
 
 ## Prepare recognition once
@@ -64,7 +60,7 @@ Open Epic Seven and close news/dispatch/popups. If the home controls are hidden,
 click once inside the game to reveal them.
 
 The following commands read screenshots; they do not tap, refresh or purchase.
-Run PowerShell **inside `E7 Runtime`**. Google's documented developer-emulator
+Run PowerShell **inside the extracted `runtime` folder**. Google's documented developer-emulator
 endpoint is `localhost:6520`; see its [connection guide](https://developer.android.com/games/playgames/pg-emulator#installing-a-game).
 Use that endpoint first, then the actual connected identifier shown by `devices`:
 
@@ -101,7 +97,7 @@ before creating the replacement. A failed check means setup is incomplete.
 
 ## Open and try it
 
-Double-click `E7 Secret Shop Refresh.exe` **inside `E7 GUI`**. Alternatively:
+Double-click `E7 Secret Shop Refresh.exe` **in the extracted app folder**. Alternatively:
 
 ```powershell
 py -3.13 .\e7_shop_refresh_gui.py
@@ -140,16 +136,18 @@ guessing a navigation tap. Stop remains available.
   and unobstructed title/Refresh button. Do not disable recognition to continue.
 - **No scenery:** check `py -3.13 -c "import PIL; print(PIL.__version__)"`.
 
-Settings and CSV history stay in `E7 Runtime`. Keep that folder when updating;
-stop/close the old app first and preserve the old runtime before any engine
-replacement. To remove the GUI, delete only its extracted folder after stopping
-it. Source and runtime remain separate; no updater or automatic migration exists.
+Settings and CSV history stay in the included `runtime` folder. Before updating,
+stop/close the old app and preserve its runtime settings, history and locally
+prepared references. Extract updates into a new folder; no updater or automatic
+migration exists. Before deleting the extracted app folder, back up any settings
+and history you want to keep.
 
 ## Credits and source
 
-GUI/enhancements: Blue Natto (GitHub: NitrogenSulfide). Original engine: Solunium,
-GNU GPL-3.0. Each engine ZIP includes matching engine source/build instructions;
-the Source ZIP contains the full tracked checkout, GUI builders and original
-upstream notices. ADB notices remain in `adb-assets/platform-tools/NOTICE.txt`.
+GUI/enhancements: NitrogenSulfide (Blue Natto). Original engine: Solunium,
+GNU GPL-3.0. The player ZIP includes matching engine source/build instructions under
+`runtime`, executable GUI source and original notices. The optional Source ZIP
+contains the full tracked checkout, builders and tests. ADB notices remain in
+`runtime/adb-assets/platform-tools/NOTICE.txt`.
 Epic Seven artwork retains its own rights holders; the GPL does not relicense
 it. Full GUI credits and licence are readable offline in About & Credits.

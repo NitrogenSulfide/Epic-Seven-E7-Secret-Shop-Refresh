@@ -1,7 +1,7 @@
 # Purpose
 
 This is the Windows E7 Secret Shop Refresh GUI project. It preserves Solunium's
-upstream source history and adds NitrogenSulfide's GUI and release work. It is
+upstream source history and adds NitrogenSulfide (Blue Natto)'s GUI and release work. It is
 separate from the native OldUnreal UT2004 workspace.
 
 # Working boundaries

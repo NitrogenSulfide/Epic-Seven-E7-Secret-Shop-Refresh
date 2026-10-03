@@ -1,7 +1,8 @@
 # E7 GUI release checks
 
-The first practical release is a GUI-only package requiring Python with Tkinter
-and a separately installed supported ADB engine. Keep the Solunium source history,
+The player release is one ZIP containing the GUI, matching rebuilt ADB engine,
+tracked upstream ADB tools/templates and a portable runtime configuration.
+Python with Tkinter and emulator setup remain external requirements. Keep the Solunium source history,
 GPL-3.0 licence and credits. Follow [AGENTS.md](AGENTS.md), [UPSTREAM.md](UPSTREAM.md)
 and the current [runtime instructions](README.md).
 
@@ -74,26 +75,26 @@ Use an explicit allowlist. The proposed GUI-only package contains:
 - `E7ShopLauncher.cs` and `docs/UPSTREAM-README.md` as source/documentation;
 - a launcher EXE only if rebuilt from this candidate's C# source and checked.
 
-The Python GUI and C# launcher source supply the corresponding source for this
-GUI-only scope. An engine-bundled release is a different package specification:
-first establish/build the exact engine source version and its corresponding
-source/build instructions per UPSTREAM.md. Do not imply the previously installed
-engine binary came from the cloned source base.
+The combined player builder uses the component GUI allowlist above and the
+matching engine builder's staging allowlist under `runtime/`, including engine
+source, build instructions and dependency notices. It copies only **Git-tracked**
+`adb-assets` into `runtime/adb-assets`; untracked/private calibration crops are
+never included. It generates `engine-location.ini` with exactly `[engine]` and
+`directory = runtime`, instead of copying any installed configuration, and adds
+`START-HERE.md`. Verify this relative location after moving the extracted folder.
 
-For the enhanced beta, `build_release_assets.ps1` prepares the matching GUI ZIP,
-engine ZIP and full tracked Source ZIP from one clean commit, with SHA256SUMS.
-The Source ZIP intentionally includes tracked upstream `adb-assets` (including
-ADB and its NOTICE) for setup; this is a separate source/runtime input, not an
-exception that adds personal files to the GUI/engine ZIPs. Inspect **all tracked
-members** for private data before review. It contains no Git history, ignored
-files or local navigation references. Keep each reviewed ZIP byte-for-byte.
+`build_release_assets.ps1` produces **E7ShopRefresh-<version>.zip** for players
+and **E7Source-<version>.zip** for developers, plus SHA256SUMS. Only these two
+ZIPs are proposed release downloads. GUI/engine component ZIPs and build manifests
+stay in private evidence subfolders. The source archive contains all tracked
+files with notices and no Git history. Inspect all members for private data.
 
-Exclude installed engine binaries, `adb-assets/`, upstream engine assets,
-`.git/`, caches, virtual environments, `.local-state/`, scratch files, private
-evidence, personal `engine-location.ini`, `ADBconfig.ini`, `ShopRefreshGUI.ini`,
-device identifiers, logs, history, `.env*`, backups and shortcuts. Include the
-safe example file; personal runtime settings remain with the selected engine.
-Retain the supplied icon and its credit/provenance record as requested.
+Exclude installed binary copies, `.git/`, caches, virtual environments,
+`.local-state/`, scratch/evidence, personal INIs, device identifiers, logs,
+history, private screenshots/navigation references, `.env*`, backups and shortcuts.
+The only packaged `engine-location.ini` is the portable generated file above.
+Retain icon/artwork/audio provenance and upstream ADB notices. Never use a
+reviewed earlier hash/verdict for a newly combined ZIP.
 
 Freeze package copies under ignored `dist/candidates/<version>-rcN/` and record
 all SHA-256s. The copied ignored EXE is recovery input, not proof of a build from
@@ -172,5 +173,5 @@ list and automated/visual/live evidence to a fresh reviewer using the General
 workflow prompt. The reviewer reports blockers and incomplete checks; it cannot
 edit, deploy or publish. Publication requires separate approval naming package
 hashes and destination. Creating a GitHub fork/origin and pushing are later
-authorized publication actions. Use Blue Natto publicly and retain
-NitrogenSulfide as the GitHub identity, alongside Solunium's upstream attribution.
+authorized publication actions. Use **NitrogenSulfide (Blue Natto)** as the maintainer name and NitrogenSulfide
+as the GitHub account, alongside Solunium's upstream attribution.

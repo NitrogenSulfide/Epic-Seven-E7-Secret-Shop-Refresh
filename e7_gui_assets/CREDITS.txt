@@ -27,7 +27,7 @@ Original supplied PNGs are retained alongside background-day-hd.png and
 background-night-hd.png; underlying artwork credits remain unchanged.
 Restoration prompt and output hashes are recorded in provenance.json.
 
-Blue Natto credits avatar: owner-supplied persona artwork, generated using imagegen.
+NitrogenSulfide (Blue Natto) credits avatar: owner-supplied persona artwork, generated using imagegen.
 Selected blue-natto-anime-cozy.png from the October 3, 2026 PFP set.
 Original PNG retained; circular sizing occurs in the UI renderer.
 Source prompt and hashes are recorded in provenance.json.
