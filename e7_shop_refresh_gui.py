@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from tkinter import font as tkfont, messagebox, ttk
 from e7_process import launch_engine
+from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon
 
 PROJECT_DIR = Path(__file__).resolve().parent
 DEFAULT_ENGINE_DIR = Path.home() / "Downloads" / "E7 Secret Shop Refresh"
@@ -241,6 +242,7 @@ class RefreshGui(tk.Tk):
         self.ev = tk.StringVar()
         self._load_config()
         self._build_ui()
+        self.scenery = Scenery(self, ASSET_DIR)
         self._apply_theme()
         self._load_icon()
         self._fit_initial_window()
@@ -401,8 +403,14 @@ class RefreshGui(tk.Tk):
             self.option_add('*TCombobox*Listbox.' + option, color)
         self._build_checkbox_style(style)
         style.configure('Large.TCheckbutton', background=bg, foreground=fg)
+        target = 'Switch to light mode' if dark else 'Switch to dark mode'
+        self.theme_image = theme_icon(self, self._dp(25), dark)
+        self.theme_button.configure(text=target if self.theme_image else ('☀' if dark else '☾'), image=self.theme_image or '', compound='none')
+        if hasattr(self, 'scenery'):
+            self.scenery.schedule()
 
     def _toggle_dark_mode(self):
+        self.dark_mode.set(not self.dark_mode.get())
         self._apply_theme()
         try:
             self._write_sound_preference()
@@ -413,7 +421,7 @@ class RefreshGui(tk.Tk):
     def _schedule_layout(self, _event=None):
         if self._layout_job is not None:
             self.after_cancel(self._layout_job)
-        self._layout_job = self.after_idle(self._layout_dashboard)
+        self._layout_job = self.after(35, self._layout_dashboard)
 
     def _layout_dashboard(self):
         self._layout_job = None
@@ -422,7 +430,7 @@ class RefreshGui(tk.Tk):
         self.diagnostics_label.configure(wraplength=max(self._dp(250), width-self._dp(60)))
         self.history_label.configure(wraplength=max(self._dp(250), width-self._dp(12)))
         # Four cards on wide windows, two per row when the viewport is narrower.
-        minimum_card = max(self.heading_font.measure("Skystone spent ≈"), self.value_font.measure("12h 59m 59s")) + self._dp(32)
+        minimum_card = max(self.heading_font.measure("Skystone spent ≈") + self._dp(38), self.value_font.measure("12h 59m 59s")) + self._dp(32)
         columns = 4 if width >= minimum_card*4 + self._dp(18) else 2
         for i in range(4):
             self.metrics.columnconfigure(i, weight=1 if i < columns else 0, minsize=0, uniform="metrics" if i < columns else "")
@@ -514,8 +522,9 @@ class RefreshGui(tk.Tk):
         ttk.Label(header, text="Secret Shop", style="Title.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(header, text="Refresh sessions · Epic Seven", style="Muted.TLabel").grid(row=1, column=0, sticky="w")
         ttk.Label(header, textvariable=self.status, font=("Segoe UI", 12, "bold"), style='Status.TLabel').grid(row=0, column=1, sticky="e")
-        self.theme_button = ttk.Checkbutton(header, text='Dark mode', variable=self.dark_mode, command=self._toggle_dark_mode, style='Large.TCheckbutton')
+        self.theme_button = ttk.Button(header, command=self._toggle_dark_mode, width=3, padding=dp(8), cursor='hand2', takefocus=True)
         self.theme_button.grid(row=1, column=1, sticky='e')
+        self.theme_hint = ThemeHint(self.theme_button, lambda: 'Switch to light mode' if self.dark_mode.get() else 'Switch to dark mode')
         body = ttk.Frame(self, padding=(dp(24), 0, dp(24), dp(20)))
         body.grid(row=1, column=0, sticky="nsew")
         body.columnconfigure(1, weight=1)
@@ -586,6 +595,8 @@ class RefreshGui(tk.Tk):
         def bind_wheel(widget):
             def scroll_settings(event):
                 settings_canvas.yview_scroll(-int(event.delta / 120), "units")
+                if hasattr(self, 'scenery'):
+                    self.scenery.schedule()
                 return "break"
             widget.bind("<MouseWheel>", scroll_settings)
             for child in widget.winfo_children():
@@ -605,11 +616,20 @@ class RefreshGui(tk.Tk):
         metrics.bind("<Configure>", self._schedule_layout)
         metrics.grid(row=2, column=0, sticky="ew")
         self.metric_cards = []
-        for i, (label, var) in enumerate((("Elapsed", self.elapsed), ("Skystone spent ≈", self.spent), ("Covenant buys", self.covenant), ("Mystic buys", self.mystic))):
+        self.currency_images = currency_icons(self, ASSET_DIR, dp(34))
+        self.currency_labels = {}
+        for i, (label, var, key) in enumerate((("Elapsed", self.elapsed, None), ("Skystone spent ≈", self.spent, 'spent'), ("Covenant buys", self.covenant, 'covenant'), ("Mystic buys", self.mystic, 'mystic'))):
             metrics.columnconfigure(i, weight=1, uniform="metrics")
-            card = ttk.LabelFrame(metrics, text=label, padding=dp(10))
+            card = ttk.Frame(metrics, padding=dp(10))
             card.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 6, 0))
-            ttk.Label(card, textvariable=var, style="Value.TLabel").grid(sticky="w")
+            column = 0
+            if key in self.currency_images:
+                icon = ttk.Label(card, image=self.currency_images[key])
+                icon.grid(row=0, column=0, rowspan=2, sticky='w', padx=(0,dp(8)))
+                self.currency_labels[key] = icon
+                column = 1
+            ttk.Label(card, text=label, font=self.heading_font).grid(row=0,column=column,sticky='w')
+            ttk.Label(card, textvariable=var, style="Value.TLabel").grid(row=1,column=column,sticky="w",pady=(dp(3),0))
             self.metric_cards.append(card)
         self.progress_frame = progress = ttk.Frame(right)
         progress.grid(row=3, column=0, sticky="ew", pady=(12, 12))

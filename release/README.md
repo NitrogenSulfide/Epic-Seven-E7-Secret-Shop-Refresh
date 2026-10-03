@@ -1,12 +1,15 @@
 # E7 Secret Shop Refresh GUI
 
 Windows GUI by NitrogenSulfide for Solunium's Epic Seven Secret Shop Refresh ADB
-engine. This is version **0.1.0-rc6**, a local release candidate. It has not been
+engine. This is version **0.1.0-rc7**, a local release candidate. It has not been
 published or cleared for live-game use by the release workflow.
 
 ## Requirements
 
 - Windows with Python 3 and Tkinter, plus Python's Windows launcher (`py`/`pyw`).
+  Pillow 11.3 or newer enables the scenery and currency artwork. Without Pillow
+  the GUI uses its plain light/dark palette. The prepared owner test launcher uses
+  the existing private environment with Pillow; system Python is unchanged.
   Automated candidate checks use Python 3.13; other versions are not yet verified.
 - A separately installed Solunium ADB engine folder containing
   `E7ADBShopRefresh.exe` and `adb-assets\platform-tools\adb.exe`.

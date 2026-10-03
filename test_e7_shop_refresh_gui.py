@@ -248,11 +248,17 @@ class GuiTests(unittest.TestCase):
         self.assertFalse(self.app.dark_mode.get())
         self.assertTrue(self.app.stop_key_entry.instate(['readonly', 'disabled']))
         self.app._set_controls(False)
-        self.app.dark_mode.set(True)
-        self.app._toggle_dark_mode()
+        self.app.theme_button.invoke()
         self.app.dark_mode.set(False)
         self.app._load_config()
         self.assertTrue(self.app.dark_mode.get())
+
+    def test_currency_art_preserves_transparency_and_fits_counter_size(self):
+        from e7_appearance import currency_icons
+        images = currency_icons(self.app, PACKAGED_ASSETS, 40)
+        self.assertEqual(set(images), {'spent', 'covenant', 'mystic'})
+        for image in images.values():
+            self.assertEqual((image.width(),image.height()), (40,40))
 
     def test_output_queue_batches_diagnostics_but_preserves_counter_order(self):
         self.app.run_settings = gui.validate_settings('localhost:5555', '30', '.3', 'esc', False, False)
