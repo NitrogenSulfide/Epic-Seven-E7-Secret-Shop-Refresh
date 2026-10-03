@@ -56,16 +56,23 @@ class ShopNavigator:
                 raise RuntimeError(f'Navigation reference has too little detail: {name}')
             self.references[name] = reference
 
-    def match(self, screenshot, name):
+    def inspect_match(self, screenshot, name):
         if not isinstance(screenshot, np.ndarray) or screenshot.ndim != 2 or screenshot.shape != (1080,1920):
             raise RuntimeError('Navigation needs a valid 1920 x 1080 ADB screenshot.')
         x1,y1,x2,y2 = SEARCH_BOXES[name]
-        search = cv2.Canny(screenshot[y1:y2,x1:x2], 45, 110)
+        # Desktop screenshots have been resampled, unlike raw ADB frames.
+        # Thin binary edges differ after resampling even when text is identical.
+        # Preserve edge matching for the menu over animated artwork, but compare
+        # shop text using brightness-normalized grayscale correlation.
+        menu = name == 'menu-secret-shop.png'
+        region = screenshot[y1:y2,x1:x2]
+        search = cv2.Canny(region, 45, 110) if menu else region
         reference = self.references[name]
         best = None
-        for scale in (.94, .97, 1., 1.03, 1.06):
+        scales = (.94, .97, 1., 1.03, 1.06) if menu else (.94, .97, .98, .99, 1., 1.01, 1.02, 1.03, 1.06)
+        for scale in scales:
             resized = cv2.resize(reference, None, fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
-            template = cv2.Canny(resized, 45, 110)
+            template = cv2.Canny(resized, 45, 110) if menu else resized
             if template.shape[0] > search.shape[0] or template.shape[1] > search.shape[1]:
                 continue
             scores = cv2.matchTemplate(search, template, cv2.TM_CCOEFF_NORMED)
@@ -79,9 +86,20 @@ class ShopNavigator:
                 second = float(other.max())
                 best = dict(score=float(score), second=second,
                             point=(x1+tx+w//2, y1+ty+h//2))
-        if best is None or best['score'] < .72 or best['second'] >= best['score']-.10:
-            return None
+        if best is not None:
+            best['accepted'] = best['score'] >= (.72 if menu else .90) and best['second'] < best['score']-.10
         return best
+
+    def match(self, screenshot, name):
+        best = self.inspect_match(screenshot, name)
+        return best if best and best['accepted'] else None
+
+    def verification_details(self, screenshot):
+        results = []
+        for label, name in (('title', 'shop-title.png'), ('refresh', 'refresh-label.png')):
+            match = self.inspect_match(screenshot, name)
+            results.append(f"{label}={match['score']:.3f} ({'OK' if match['accepted'] else 'unverified'})" if match else f'{label}=unverified')
+        return '; '.join(results)
 
     def shop_visible(self, screenshot):
         return bool(self.match(screenshot, 'shop-title.png') and self.match(screenshot, 'refresh-label.png'))
@@ -92,4 +110,4 @@ class ShopNavigator:
 
     def require_shop(self, screenshot):
         if not self.shop_visible(screenshot):
-            raise RuntimeError('Secret Shop screen not verified. Stopped before further shop actions; open Secret Shop and try again.')
+            raise RuntimeError('Secret Shop screen could not be verified (' + self.verification_details(screenshot) + '). Stopped before further shop actions.')

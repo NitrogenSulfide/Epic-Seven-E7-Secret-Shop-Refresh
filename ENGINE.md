@@ -21,6 +21,13 @@ English UI and 1920x1080 ADB screenshots are required. User interaction, popups,
 other layouts/languages or stale references can cause recognition to fail;
 failure stops the run rather than falling back to old menu coordinates.
 
+In rc6, shop text uses brightness-normalized grayscale correlation with a 0.90
+minimum, rather than thin binary edges. This fixes rejection of the owner's
+raw ADB shop frame when references came from resized desktop screenshots.
+Both title and Refresh are still required; ambiguous matches are rejected.
+Menu matching retains the rc5 edge detector. Failed verification reports marker
+scores and says the shop may already be open, rather than claiming entry failed.
+
 Use this engine with the matching GUI candidate for live counters. The GUI also
 accepts the original engine, whose totals still arrive at 10% milestones.
 This ZIP contains no ADB executables, game templates, device settings or history.
@@ -30,7 +37,7 @@ This ZIP contains no ADB executables, game templates, device settings or history
 Keep references in the selected runtime's `adb-assets/gui-navigation` folder.
 The three files are `menu-secret-shop.png`, `shop-title.png`, `refresh-label.png`.
 They are private runtime assets and are excluded from release ZIPs. On this
-owner's prepared rc5 test runtime, they are already derived from the supplied
+owner's prepared test runtime, they are already derived from the supplied
 home/shop screenshots; the full screenshots remain private.
 
 To prepare another runtime, use uncropped 16:9 English home/shop screenshots

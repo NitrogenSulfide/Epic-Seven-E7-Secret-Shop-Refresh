@@ -330,16 +330,18 @@ class E7ADBShopRefresh:
         # Navigation is deterministic: no randomized offset or legacy fallback.
         subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x), str(y)], check=True)
         deadline = time.monotonic() + 8
+        last_screenshot = screenshot
         while self.loop_active and time.monotonic() < deadline:
             time.sleep(.25)
             if not self.loop_active:
                 return False
-            if self.navigation.shop_visible(self.takeScreenshot()):
+            last_screenshot = self.takeScreenshot()
+            if self.navigation.shop_visible(last_screenshot):
                 print('Navigation: Secret Shop screen verified.', flush=True)
                 return True
         if not self.loop_active:
             return False
-        raise RuntimeError('Secret Shop did not open after the navigation tap. Stopped before purchasing or refreshing.')
+        raise RuntimeError('Secret Shop could not be verified after the navigation tap (' + self.navigation.verification_details(last_screenshot) + '). It may already be open. Stopped before purchasing or refreshing.')
 
     def clickBuy(self, pos):
         if pos is None or not self.loop_active:
@@ -441,7 +443,7 @@ if __name__ == '__main__':
         print('Private Secret Shop references prepared and checked offline.')
         sys.exit(0)
     if sys.argv[1:] == ['--verify']:
-        print('E7 engine: live counters v1; verified shop navigation v1; sleeping stop-key poll; imports OK')
+        print('E7 engine: live counters v1; verified shop navigation v2; sleeping stop-key poll; imports OK')
         sys.exit(0)
 
     #intro
