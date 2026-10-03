@@ -1,13 +1,13 @@
 # E7 Secret Shop Refresh GUI
 
 Windows GUI by NitrogenSulfide (Blue Natto) for Solunium's Epic Seven Secret Shop Refresh ADB
-engine. This is version **0.1.0-rc17**, a local release candidate. It has not been
+engine. This is version **0.1.0-rc18**, a local release candidate. It has not been
 published or cleared for live-game use by the release workflow.
 
 ## Requirements
 
 **Start with [START-HERE.md](START-HERE.md)** (also supplied as [SETUP.md](SETUP.md)).
-Players need only **E7ShopRefresh-0.1.0-rc17.zip**. It includes the GUI, matching
+Players need only **E7ShopRefresh-0.1.0-rc18.zip**. It includes the GUI, matching
 compiled engine, ADB tools and item templates, with the engine path configured.
 Recognition images must still be prepared locally from your game. The separate
 Source ZIP is available for developers; it is not a player dependency.

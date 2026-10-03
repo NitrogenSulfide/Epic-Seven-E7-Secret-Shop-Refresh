@@ -147,7 +147,7 @@ environment, choose a new output directory:
 
 This adds no installer or service and runs no ADB/game checks. rc14/rc15 improve
 setup documentation and packaging; rc16 fixes the multiple-device startup loop.
-rc17 combines player files in one ZIP and uses NitrogenSulfide (Blue Natto) as the
+rc18 combines player files in one ZIP and uses NitrogenSulfide (Blue Natto) as the
 maintainer name. Component GUI/engine ZIPs remain private build outputs.
 
 ## Ownership and licensing

@@ -8,13 +8,13 @@ unverified. Different home-screen artwork is fine: recognition uses UI text.
 
 ## Download and extract
 
-Download **E7ShopRefresh-0.1.0-rc17.zip** and extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc18.zip** and extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Players need only this download.
 The separate **E7Source** ZIP is for developers and is not needed to run the app.
 Check the player ZIP against the release's `SHA256SUMS.txt` if desired:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc17.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc18.zip'
 ```
 
 The GUI, engine, ADB tools and item templates are already arranged together.
