@@ -11,9 +11,40 @@ Counts describe engine-completed actions, not an independent reading of game
 balances. Purchase labels count buys, not individual bookmarks/medals awarded.
 ADB tap failures abort rather than incrementing the affected counter.
 
+In rc5, `e7_shop_navigation.py` replaces the original three fixed menu taps with
+recognition of a private Secret Shop text reference. It sends at most one
+navigation tap, waits up to eight seconds for the shop title and Refresh label,
+and stops on unknown or ambiguous screens. Starting inside the verified shop
+sends no menu tap. Shop-page scans and the beginning of buy/refresh sequences
+also require shop verification. This is template matching, not a trained model.
+English UI and 1920x1080 ADB screenshots are required. User interaction, popups,
+other layouts/languages or stale references can cause recognition to fail;
+failure stops the run rather than falling back to old menu coordinates.
+
 Use this engine with the matching GUI candidate for live counters. The GUI also
 accepts the original engine, whose totals still arrive at 10% milestones.
 This ZIP contains no ADB executables, game templates, device settings or history.
+
+## Private navigation references
+
+Keep references in the selected runtime's `adb-assets/gui-navigation` folder.
+The three files are `menu-secret-shop.png`, `shop-title.png`, `refresh-label.png`.
+They are private runtime assets and are excluded from release ZIPs. On this
+owner's prepared rc5 test runtime, they are already derived from the supplied
+home/shop screenshots; the full screenshots remain private.
+
+To prepare another runtime, use uncropped 16:9 English home/shop screenshots
+showing the current left-hand menu, shop title and Refresh button. Use the
+rebuilt engine's offline utility, which requires no separately installed Python:
+
+```powershell
+.\E7ADBShopRefresh.exe --prepare-navigation-references --home C:\path\home.png --shop C:\path\shop.png --output C:\path\test-engine\adb-assets\gui-navigation
+```
+
+Use a new destination; existing calibration is preserved. The utility reads
+images, normalizes reference crops and checks them against those same images.
+It makes no ADB/game calls. This calibration check is not independent live
+verification; a human must still test the corresponding game layout.
 
 ## Safe test preparation
 
@@ -37,6 +68,7 @@ an explicit setup step, not performed by the builder. The original upstream
 py -3 -m venv .local-state\engine-build-venv
 .\.local-state\engine-build-venv\Scripts\python.exe -m pip install -r engine-build-requirements.txt
 .\.local-state\engine-build-venv\Scripts\python.exe -m unittest test_e7_live_engine -v
+.\.local-state\engine-build-venv\Scripts\python.exe -m unittest test_e7_shop_navigation -v
 .\build_engine_release.ps1 -BuildPython .local-state\engine-build-venv\Scripts\python.exe -OutputDirectory C:\absolute\new\engine-candidate
 ```
 

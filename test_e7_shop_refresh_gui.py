@@ -19,6 +19,13 @@ DEVICE_SCAN = gui.RefreshGui.refresh_devices
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_navigation_evidence_is_shown_without_starting_a_gui(self):
+        details, events = [], []
+        app = SimpleNamespace(detail=SimpleNamespace(set=details.append), _event=events.append)
+        gui.RefreshGui._handle_line(app, 'Navigation: Secret Shop screen verified.')
+        self.assertEqual(details, ['Secret Shop screen verified.'])
+        self.assertEqual(events, ['Navigation: Secret Shop screen verified.'])
+
     def test_physical_stop_key_mapping(self):
         self.assertEqual(gui.captured_stop_key("Escape", "\x1b"), "esc")
         self.assertEqual(gui.captured_stop_key("A", "A", 1), "a")

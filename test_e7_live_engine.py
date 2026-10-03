@@ -6,7 +6,7 @@ import threading
 import time
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import E7ADBShopRefresh as engine
 
@@ -22,6 +22,8 @@ class EngineTests(unittest.TestCase):
         app.storage = engine.E7Inventory()
         app.storage.inventory = {'Covenant bookmark': engine.E7Item(count=0), 'Mystic medal': engine.E7Item(count=0)}
         app.generateOffset = lambda: (0, 0)
+        app.navigation = Mock()
+        app.takeScreenshot = lambda: 'fake'
         return app
 
     def test_key_poll_yields_and_detects_stop(self):
@@ -85,6 +87,49 @@ class EngineTests(unittest.TestCase):
                 app.start()
         self.assertTrue(app.end_of_refresh)
         self.assertFalse(app.keyboard_thread.is_alive())
+
+    def test_shop_already_open_sends_no_navigation_tap(self):
+        app = self.make_engine()
+        app.navigation.shop_visible.return_value = True
+        with patch.object(engine.subprocess, 'run') as adb:
+            self.assertTrue(app.clickShop())
+        adb.assert_not_called()
+
+    def test_home_navigation_taps_matched_target_once_then_verifies(self):
+        app = self.make_engine()
+        app.navigation.shop_visible.side_effect = [False, False, True]
+        app.navigation.menu_target.return_value = (86, 548)
+        with patch.object(engine.subprocess, 'run') as adb, patch.object(engine.time, 'sleep'):
+            self.assertTrue(app.clickShop())
+        adb.assert_called_once_with(['NEVER-RUN-ADB','shell','input','tap','86','548'],check=True)
+
+    def test_unknown_home_never_taps(self):
+        app = self.make_engine()
+        app.navigation.shop_visible.return_value = False
+        app.navigation.menu_target.return_value = None
+        with patch.object(engine.subprocess, 'run') as adb:
+            with self.assertRaisesRegex(RuntimeError, 'No navigation tap'):
+                app.clickShop()
+        adb.assert_not_called()
+
+    def test_wrong_page_after_navigation_aborts_without_retry(self):
+        app = self.make_engine()
+        app.navigation.shop_visible.return_value = False
+        app.navigation.menu_target.return_value = (86, 548)
+        with patch.object(engine.subprocess, 'run') as adb, patch.object(engine.time, 'sleep'), patch.object(engine.time, 'monotonic', side_effect=[0,0,9]):
+            with self.assertRaisesRegex(RuntimeError, 'Stopped before purchasing'):
+                app.clickShop()
+        self.assertEqual(adb.call_count, 1)
+
+    def test_buy_and_refresh_reject_wrong_screen_before_tap(self):
+        app = self.make_engine()
+        app.navigation.require_shop.side_effect = RuntimeError('Wrong screen')
+        with patch.object(engine.subprocess, 'run') as adb:
+            with self.assertRaisesRegex(RuntimeError, 'Wrong screen'):
+                app.clickBuy((10,10))
+            with self.assertRaisesRegex(RuntimeError, 'Wrong screen'):
+                app.clickRefresh()
+        adb.assert_not_called()
 
 
 if __name__ == '__main__':

@@ -47,6 +47,11 @@ those reports immediately. The original engine remains supported with its older
 10% milestone updates. Build candidates from recorded source; preserve the
 installed binary and test a separate runtime folder first.
 
+The rc5 engine recognizes the Secret Shop menu and checks the shop title and
+Refresh button before shop actions. It requires private navigation references;
+the supplied local test setup already has them. The old installed engine does
+not gain these checks just by using a newer GUI.
+
 The copied `E7 Secret Shop Refresh.exe` launcher is available locally and remains
 ignored by Git. It requires Python's Windows launcher and the adjacent GUI source;
 it is not a self-contained application. The existing desktop shortcut still uses

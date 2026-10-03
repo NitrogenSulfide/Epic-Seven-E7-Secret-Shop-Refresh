@@ -927,6 +927,10 @@ class RefreshGui(tk.Tk):
     def _handle_line(self, line):
         if not line:
             return
+        if line.startswith('Navigation: '):
+            self.detail.set(line[len('Navigation: '):])
+            self._event(line)
+            return
         if line.startswith('E7GUI_STATS '):
             try:
                 stats = json.loads(line[len('E7GUI_STATS '):])

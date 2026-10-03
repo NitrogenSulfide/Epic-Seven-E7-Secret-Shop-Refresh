@@ -1,7 +1,7 @@
 # E7 Secret Shop Refresh GUI
 
 Windows GUI by NitrogenSulfide for Solunium's Epic Seven Secret Shop Refresh ADB
-engine. This is version **0.1.0-rc4**, a local release candidate. It has not been
+engine. This is version **0.1.0-rc5**, a local release candidate. It has not been
 published or cleared for live-game use by the release workflow.
 
 ## Requirements
@@ -57,6 +57,13 @@ verification. The original installed engine remains supported but only reports
 totals at 10% budget milestones. The GUI alone cannot make that engine emit more
 frequent reports. The rebuilt engine sleeps between stop-key checks to reduce
 CPU/GIL contention with foreground typing.
+
+The matching rc5 engine uses private visual references to locate Secret Shop
+on the home screen and verify its title plus Refresh button. It removes the
+old three fixed menu taps. Unknown, missing or ambiguous references stop the
+engine rather than guessing. See [reference preparation](ENGINE.md). These
+checks are only supplied by the matching engine; an old external engine retains
+its own original navigation behavior.
 
 The engine's `ADBconfig.ini`, `ShopRefreshGUI.ini` and `ShopRefreshHistory` stay
 inside the selected engine installation. Existing settings/history are reused;

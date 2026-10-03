@@ -13,6 +13,7 @@ import keyboard
 import random
 import configparser
 import json
+from e7_shop_navigation import ShopNavigator, prepare_references
 
 class E7Item:
     def __init__(self, image=None, price=0, count=0):
@@ -105,6 +106,7 @@ class E7ADBShopRefresh:
         self.screenwidth = 1920
         self.screenheight = 1080
         self.checkScreenDimension()
+        self.navigation = ShopNavigator(os.path.join('adb-assets', 'gui-navigation'))
 
         self.storage.addItem('cov.png', 'Covenant bookmark', 184000)
         self.storage.addItem('mys.png', 'Mystic medal', 280000)
@@ -143,7 +145,8 @@ class E7ADBShopRefresh:
         }), flush=True)
 
     def refreshShop(self):
-        self.clickShop()
+        if not self.clickShop():
+            return
         self.reportLiveStats()
         #time needed for item to drop in after refresh (0.5 second loading + drop 1 second)
         sliding_time = 1.5
@@ -163,6 +166,7 @@ class E7ADBShopRefresh:
             if not self.loop_active: break
             #look at shop (page 1)
             screenshot = self.takeScreenshot()
+            self.navigation.require_shop(screenshot)
             #print(len(self.storage.inventory.items()))
             for key, value in self.storage.inventory.items():
                 pos = self.findItemPosition(screenshot, value.image)
@@ -187,6 +191,7 @@ class E7ADBShopRefresh:
             if not self.loop_active: break
             #look at shop (page 2)
             screenshot = self.takeScreenshot()
+            self.navigation.require_shop(screenshot)
             for key, value in self.storage.inventory.items():
                 pos = self.findItemPosition(screenshot, value.image)
                 if pos is not None and key not in brought:
@@ -311,27 +316,35 @@ class E7ADBShopRefresh:
 
     #macro
     def clickShop(self):
-        #newshop
-        x = self.screenwidth * 0.0411
-        y = self.screenheight * 0.3835
-        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x), str(y)])
-        time.sleep(0.5)
-
-        #oldshop
-        x = self.screenwidth * 0.4406
-        y = self.screenheight * 0.2462
-        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x), str(y)])
-        time.sleep(0.5)
-
-        #newshop
-        x = self.screenwidth * 0.0411
-        y = self.screenheight * 0.3835
-        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x), str(y)])
-        time.sleep(0.5)
+        screenshot = self.takeScreenshot()
+        if self.navigation.shop_visible(screenshot):
+            print('Navigation: Secret Shop screen verified; already open.', flush=True)
+            return self.loop_active
+        target = self.navigation.menu_target(screenshot)
+        if target is None:
+            raise RuntimeError('Secret Shop menu not recognized. No navigation tap sent. Open Secret Shop manually and try again.')
+        if not self.loop_active:
+            return False
+        x, y = target
+        print('Navigation: Opening the recognized Secret Shop menu.', flush=True)
+        # Navigation is deterministic: no randomized offset or legacy fallback.
+        subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x), str(y)], check=True)
+        deadline = time.monotonic() + 8
+        while self.loop_active and time.monotonic() < deadline:
+            time.sleep(.25)
+            if not self.loop_active:
+                return False
+            if self.navigation.shop_visible(self.takeScreenshot()):
+                print('Navigation: Secret Shop screen verified.', flush=True)
+                return True
+        if not self.loop_active:
+            return False
+        raise RuntimeError('Secret Shop did not open after the navigation tap. Stopped before purchasing or refreshing.')
 
     def clickBuy(self, pos):
         if pos is None or not self.loop_active:
             return False
+        self.navigation.require_shop(self.takeScreenshot())
         
         x, y = pos
         xoff, yoff = self.generateOffset() 
@@ -363,6 +376,7 @@ class E7ADBShopRefresh:
     def clickRefresh(self):
         if not self.loop_active:
             return False
+        self.navigation.require_shop(self.takeScreenshot())
         x = self.screenwidth * 0.1698
         y = self.screenheight * 0.9138
         xoff, yoff = self.generateOffset()
@@ -415,8 +429,19 @@ def saveConfigFile(tap_sleep, budget, stop_refresh_key, random_offset):
     print('Setting saved')
 
 if __name__ == '__main__':
+    if sys.argv[1:2] == ['--prepare-navigation-references']:
+        import argparse
+        parser = argparse.ArgumentParser(description='Prepare private navigation references offline; no ADB or game actions.')
+        parser.add_argument('--prepare-navigation-references', action='store_true')
+        parser.add_argument('--home', required=True)
+        parser.add_argument('--shop', required=True)
+        parser.add_argument('--output', required=True)
+        args = parser.parse_args()
+        prepare_references(args.home, args.shop, args.output)
+        print('Private Secret Shop references prepared and checked offline.')
+        sys.exit(0)
     if sys.argv[1:] == ['--verify']:
-        print('E7 engine: live counters v1; sleeping stop-key poll; imports OK')
+        print('E7 engine: live counters v1; verified shop navigation v1; sleeping stop-key poll; imports OK')
         sys.exit(0)
 
     #intro
