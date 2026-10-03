@@ -29,7 +29,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Engine build failed; inspect compiler.log.' }
 }
 finally { Pop-Location }
-$sourceFiles = @('E7ADBShopRefresh.py', 'e7_shop_navigation.py', 'prepare_navigation_references.py', 'test_e7_shop_navigation.py', 'test_e7_live_engine.py', 'engine-build-requirements.txt', 'build_engine_release.ps1', 'VERSION', 'LICENSE')
+$sourceFiles = @('E7ADBShopRefresh.py', 'e7_shop_navigation.py', 'prepare_navigation_references.py', 'test_e7_shop_navigation.py', 'test_e7_live_engine.py', 'engine-build-requirements.txt', 'build_engine_release.ps1', 'ENGINE.md', 'VERSION', 'LICENSE')
 foreach ($name in $sourceFiles) { Copy-Item -LiteralPath (Join-Path $repository $name) -Destination (Join-Path $staging $name) }
 Copy-Item -LiteralPath (Join-Path $repository 'ENGINE.md') -Destination (Join-Path $staging 'README.md')
 Copy-Item -LiteralPath (Join-Path $repository 'release/SETUP.md') -Destination (Join-Path $staging 'SETUP.md')

@@ -108,9 +108,9 @@ licence files are included under `third-party-licenses/`.
 
 ### Rebuild from a downloaded source archive
 
-The Source ZIP and engine ZIP do not contain Git metadata. The maintained builder
-requires Git evidence, so use this direct compilation recipe from the extracted
-engine source directory instead. It needs Python 3.13 and installs build tools
+The Source ZIP and player ZIP do not contain Git metadata. The maintained builder
+requires Git evidence, so use this direct compilation recipe from the player's
+`runtime` directory or the full extracted source instead. It needs Python 3.13 and installs build tools
 only into the new private environment you choose; it does not run the game.
 
 ```powershell
@@ -124,5 +124,5 @@ py -3.13 -m venv .venv
 Use new environment/output directories to preserve any previous builds. `--verify`
 checks bundled imports only. A locally rebuilt binary will have a different hash
 and is not covered by the downloaded candidate's review or approval. GUI source
-and its launcher rebuild instructions are supplied in the matching GUI ZIP;
+and its launcher rebuild instructions are supplied at the player ZIP's root;
 the full Source ZIP also includes the maintained builders and tests.

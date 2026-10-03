@@ -39,7 +39,7 @@ the binary's corresponding source without verifying it.
 The local enhanced candidates use a separately built matching engine and do not
 replace that installed executable. rc16 fixes the inherited multiple-device
 startup selection loop; the corresponding source/test is supplied with the
-engine ZIP and full Source ZIP. Every new build has its own recorded hashes.
+player ZIP's `runtime` folder and full Source ZIP. Every new build has its own recorded hashes.
 
 Before distributing a bundled engine, identify/build the exact source version,
 retain licence and copyright notices, record modifications and provide its
