@@ -48,10 +48,11 @@ Shop navigation, purchase/refresh logic and polling behavior are unchanged.
 
 Use this engine with the matching GUI candidate for live counters. The GUI also
 accepts the original engine, whose totals still arrive at 10% milestones.
-This ZIP contains no ADB executables, game templates, device settings or history.
-The matching GUI and full Source ZIPs are separate release downloads. The Source
-ZIP contains tracked upstream ADB tools/item templates. Follow `release/SETUP.md`
-in the source checkout, or `SETUP.md` inside the GUI/engine ZIP, for fresh setup.
+The combined player ZIP includes this engine under `runtime`, alongside tracked
+upstream ADB tools/item templates and their notices. It contains no personal
+device settings, game screenshots or history. The full Source ZIP is a separate
+developer download; players do not need it. Follow `START-HERE.md` at the player
+ZIP's root (or `release/SETUP.md` in the source checkout) for fresh setup.
 
 ## Private navigation references
 
