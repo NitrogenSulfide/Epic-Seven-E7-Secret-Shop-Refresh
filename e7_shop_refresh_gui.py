@@ -18,6 +18,7 @@ from pathlib import Path
 from tkinter import font as tkfont, messagebox, ttk
 from e7_process import launch_engine
 from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon
+from e7_about import AboutDialog
 
 PROJECT_DIR = Path(__file__).resolve().parent
 DEFAULT_ENGINE_DIR = Path.home() / "Downloads" / "E7 Secret Shop Refresh"
@@ -206,6 +207,9 @@ class RefreshGui(tk.Tk):
         self.stop_key_pressed = False
         self.sound_enabled = tk.BooleanVar(value=True)
         self.dark_mode = tk.BooleanVar(value=False)
+        self.credits_seen = tk.BooleanVar(value=False)
+        self.credits_on_startup = tk.BooleanVar(value=False)
+        self.about_window = None
         self._live_stats_seen = False
         self.process = None
         self.process_tree = None
@@ -253,6 +257,7 @@ class RefreshGui(tk.Tk):
         self.refresh_history()
         self.protocol("WM_DELETE_WINDOW", self._close)
         self.after(100, self._drain_log_queue)
+        self.after(300, self._maybe_show_credits)
 
     def _configure_scaling(self):
         self.ui_scale = self.winfo_fpixels("1i") / 96.0
@@ -410,6 +415,25 @@ class RefreshGui(tk.Tk):
         self.theme_button.configure(text=target if self.theme_image else ('☀' if dark else '☾'), image=self.theme_image or '', compound='none')
         if hasattr(self, 'scenery'):
             self.scenery.schedule()
+        if self.about_window is not None and self.about_window.winfo_exists():
+            self.about_window.apply_theme(dark)
+
+    def _maybe_show_credits(self):
+        if self.winfo_viewable() and (not self.credits_seen.get() or self.credits_on_startup.get()):
+            self._show_about()
+
+    def _show_about(self):
+        if self.about_window is not None and self.about_window.winfo_exists():
+            self.about_window.lift()
+            return
+        self.about_window = AboutDialog(self, PROJECT_DIR, first_time=not self.credits_seen.get())
+
+    def _save_credits_preference(self):
+        try:
+            self._write_sound_preference()
+        except (OSError,configparser.Error) as exc:
+            self.setting_notice.set('Credits preference changed for this session; it could not be saved.')
+            self._append_log(f'Credits preference save failed: {exc}\n')
 
     def _toggle_dark_mode(self):
         self.dark_mode.set(not self.dark_mode.get())
@@ -533,10 +557,15 @@ class RefreshGui(tk.Tk):
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(0, weight=1)
         ttk.Label(header, text="Secret Shop", style="Title.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(header, text="Refresh sessions · Epic Seven", style="Muted.TLabel").grid(row=1, column=0, sticky="w")
+        ttk.Label(header, text="Refresh sessions · Epic Seven · Blue Natto", style="Muted.TLabel").grid(row=1, column=0, sticky="w")
         ttk.Label(header, textvariable=self.status, font=("Segoe UI", 12, "bold"), style='Status.TLabel').grid(row=0, column=1, sticky="e")
-        self.theme_button = ttk.Button(header, command=self._toggle_dark_mode, width=3, padding=dp(8), cursor='hand2', takefocus=True)
-        self.theme_button.grid(row=1, column=1, sticky='e')
+        header_actions = ttk.Frame(header)
+        header_actions.grid(row=1,column=1,sticky='e')
+        self.about_button = ttk.Button(header_actions, text='ⓘ', command=self._show_about, width=3, padding=dp(8), cursor='hand2', takefocus=True)
+        self.about_button.pack(side='left',padx=(0,dp(6)))
+        self.about_hint = ThemeHint(self.about_button, lambda: 'About & Credits')
+        self.theme_button = ttk.Button(header_actions, command=self._toggle_dark_mode, width=3, padding=dp(8), cursor='hand2', takefocus=True)
+        self.theme_button.pack(side='left')
         self.theme_hint = ThemeHint(self.theme_button, lambda: 'Switch to light mode' if self.dark_mode.get() else 'Switch to dark mode')
         body = ttk.Frame(self, padding=(dp(24), 0, dp(24), dp(20)))
         body.grid(row=1, column=0, sticky="nsew")
@@ -744,6 +773,8 @@ class RefreshGui(tk.Tk):
             parser.read(GUI_CONFIG_FILE)
             self.sound_enabled.set(parser.getboolean("GUI", "sound_enabled", fallback=True))
             self.dark_mode.set(parser.getboolean("GUI", "dark_mode", fallback=False))
+            self.credits_seen.set(parser.getboolean("GUI", "credits_seen", fallback=False))
+            self.credits_on_startup.set(parser.getboolean("GUI", "show_credits_on_startup", fallback=False))
             self.device.set(parser.get("GUI", "device", fallback=self.device.get()))
         except (OSError, ValueError, configparser.Error) as exc:
             self.setting_notice.set(f"Sound preference could not be read: {exc}")
@@ -757,6 +788,8 @@ class RefreshGui(tk.Tk):
             parser.add_section("GUI")
         parser["GUI"]["sound_enabled"] = str(self.sound_enabled.get())
         parser["GUI"]["dark_mode"] = str(self.dark_mode.get())
+        parser["GUI"]["credits_seen"] = str(self.credits_seen.get())
+        parser["GUI"]["show_credits_on_startup"] = str(self.credits_on_startup.get())
         parser["GUI"]["device"] = self._device_address()
         temp = GUI_CONFIG_FILE.with_suffix(".ini.tmp")
         with temp.open("w", encoding="utf-8") as fh:
