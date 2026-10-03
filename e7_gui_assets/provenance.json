@@ -89,5 +89,15 @@
         "background-day-hd.png": "9cdad7d7dd92d898a0882802024dea726c58aac793113b40e01a37b2ca56c72c"
       }
     }
+  },
+  "blue_natto_avatar": {
+    "source": "output/blue-natto/pfps-2026-10-03/blue-natto-anime-cozy.png",
+    "supplied_date": "2026-10-03",
+    "creation_tool": "imagegen (per supplied prompts.txt)",
+    "source_sha256": "ffdf7cee985e88175d8346fe387cc2850184e58b55051257e9d9e0d6f35fa758",
+    "packaged_file": "blue-natto-avatar.png",
+    "packaged_sha256": "ffdf7cee985e88175d8346fe387cc2850184e58b55051257e9d9e0d6f35fa758",
+    "source_prompt": "Use case: identity-preserve. Make ONE standalone square social-media profile picture, at least 1024 pixels square, using reference image 1 as the exact approved identity/style source. This is a faithful extraction and careful reframing of the selected panel, not a redesign. Preserve the character's soft cute anime rendering, cobalt-blue short bob, glossy blue eyes, ivory hair streak, ivory/navy hoodie, peach blush, and distinctive cobalt bean hairpiece wrapped in an ivory S-shaped strand at the viewer's RIGHT. Preserve the chosen expression, pose and small quirks. Keep the exact palette. Plain full-bleed deep navy background; no gutters, ivory sheet border, other panels, labels, text or watermark. Zoom out modestly relative to the panel so the whole head including the curved ahoge has breathing room, and keep the eyes, face and entire hairpiece safely inside a centered circular profile crop. Head and shoulders centered, face still prominent and readable at small size. Approximately 10-12 percent top breathing room and comfortable side margins, with the face near image center. Match the source drawing rather than generating a new person. Clean hand anatomy and unchanged clothing. Select ONLY the TOP-LEFT panel of reference image 1: cozy cheek-rest portrait, head gently tilted, fond closed-mouth smile, cheek nestled into sleeve-covered palm. Retain that relaxed, warm expression, exact face proportions, and visible hair ornament.",
+    "ui_render": "72 logical pixel circular avatar; original PNG preserved"
   }
 }

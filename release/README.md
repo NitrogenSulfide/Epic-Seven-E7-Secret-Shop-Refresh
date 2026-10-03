@@ -1,7 +1,7 @@
 # E7 Secret Shop Refresh GUI
 
 Windows GUI by Blue Natto (GitHub: NitrogenSulfide) for Solunium's Epic Seven Secret Shop Refresh ADB
-engine. This is version **0.1.0-rc12**, a local release candidate. It has not been
+engine. This is version **0.1.0-rc13**, a local release candidate. It has not been
 published or cleared for live-game use by the release workflow.
 
 ## Requirements

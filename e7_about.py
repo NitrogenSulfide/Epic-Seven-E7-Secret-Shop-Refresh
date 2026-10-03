@@ -3,6 +3,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
 import webbrowser
+from e7_appearance import profile_avatar
 
 
 class AboutDialog(tk.Toplevel):
@@ -21,11 +22,18 @@ class AboutDialog(tk.Toplevel):
         header = tk.Frame(self, padx=dp(20), pady=dp(16))
         header.grid(row=0, column=0, sticky='ew')
         self.colored.append(header)
-        for text, font in (('E7 Secret Shop Refresh', ('Segoe UI',18,'bold')),
+        self.avatar_image = profile_avatar(self,project/'e7_gui_assets',dp(72))
+        text_column = 1 if self.avatar_image else 0
+        header.columnconfigure(text_column,weight=1)
+        if self.avatar_image:
+            avatar = tk.Label(header,image=self.avatar_image,borderwidth=0)
+            avatar.grid(row=0,column=0,rowspan=3,padx=(0,dp(16)),sticky='n')
+            self.colored.append(avatar)
+        for row, (text, font) in enumerate((('E7 Secret Shop Refresh', ('Segoe UI',18,'bold')),
                            ('by Blue Natto', app.heading_font),
-                           (f'{read_document(project / "VERSION").strip()} · Windows', app.ui_font)):
+                           (f'{read_document(project / "VERSION").strip()} · Windows', app.ui_font))):
             label = tk.Label(header, text=text, font=font, anchor='w')
-            label.pack(fill='x', pady=(0,dp(3)))
+            label.grid(row=row,column=text_column,sticky='ew',pady=(0,dp(3)))
             self.colored.append(label)
         notebook = ttk.Notebook(self)
         notebook.grid(row=1, column=0, sticky='nsew', padx=dp(20))

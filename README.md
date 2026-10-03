@@ -12,6 +12,7 @@ it seen. Show this on startup is off by default, and can be enabled there later.
 It remembers the choice in ShopRefreshGUI.ini alongside sound/theme/device
 preferences; keep this file when updating. Full credits and the software licence
 are readable offline. The modeless window also remains available during sessions.
+The credits header includes a small Blue Natto cozy portrait.
 
 The rc8 GUI fixes Start and live counter captions after the rc7 card redesign.
 It sharpens the day/night scenes with AI restoration and uses lighter image
@@ -35,7 +36,9 @@ controls remain unknown, the session ends with a clear explanation.
 The rc10 GUI adds an amber notice above the counters: if hidden home UI is
 enabled, click once inside the game before starting. While waiting, the notice
 explains that the session continues automatically after the controls return.
-Both the notice and waiting status use amber in light and dark mode. The engine
+Both the notice and waiting status use amber in light and dark mode. The
+reminder's × button dismisses the banner until the app restarts; waiting status
+and session messages remain available even when the banner is hidden. The engine
 is unchanged from rc9. Live insufficient-currency checks are deferred at the
 owner's request; no automatic-stop guarantee has been established for that case.
 

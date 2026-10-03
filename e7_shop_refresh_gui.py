@@ -234,7 +234,8 @@ class RefreshGui(tk.Tk):
         self.random_offset = tk.BooleanVar(value=True)
         self.status = tk.StringVar(value="Ready")
         self.detail = tk.StringVar(value="Open Epic Seven’s Secret Shop, then start a session.")
-        self.home_ui_hint = tk.StringVar(value="Hidden home UI? Click the game once before Start.")
+        self.home_ui_hint = tk.StringVar(value="Hidden UI? Click the game once before Start.")
+        self.home_ui_hint_dismissed = False
         self.setting_notice = tk.StringVar(value="")
         self.device_notice = tk.StringVar(value="Checking ADB devices…")
         self.history_notice = tk.StringVar(value="")
@@ -384,7 +385,14 @@ class RefreshGui(tk.Tk):
             style.configure(name, background=bg, foreground=fg, bordercolor=border)
         style.configure('Muted.TLabel', foreground=muted)
         style.configure('Status.TLabel', foreground=('#fbbf24' if dark else '#92400e') if self.status.get() == 'Waiting for game' else ('#60a5fa' if dark else '#2563eb'))
-        self.home_ui_notice.configure(bg='#422006' if dark else '#fff4d6', fg='#fbbf24' if dark else '#92400e', highlightbackground='#b45309' if dark else '#f59e0b')
+        hint_bg, hint_fg = ('#422006', '#fbbf24') if dark else ('#fff4d6', '#92400e')
+        self.home_ui_banner.configure(bg=hint_bg, highlightbackground='#b45309' if dark else '#f59e0b')
+        self.home_ui_notice.configure(bg=hint_bg, fg=hint_fg)
+        style.configure('Dismiss.TButton', background=hint_bg, foreground=hint_fg,
+                        bordercolor=hint_bg, lightcolor=hint_bg, darkcolor=hint_bg,
+                        borderwidth=0, padding=0, font=self.heading_font)
+        style.map('Dismiss.TButton', background=[('active','#78350f' if dark else '#fde68a')],
+                  foreground=[('active',hint_fg)])
         for name in ('TEntry', 'TCombobox'):
             style.configure(name, background=field, fieldbackground=field, foreground=fg, insertcolor=fg, bordercolor=border, lightcolor=border, darkcolor=border, arrowcolor=fg)
             style.map(name, background=[('disabled', bg), ('readonly', field)], fieldbackground=[('disabled', bg), ('readonly', field)], foreground=[('disabled', muted), ('readonly', fg)], arrowcolor=[('disabled', muted), ('!disabled', fg)])
@@ -447,9 +455,14 @@ class RefreshGui(tk.Tk):
     def _update_home_ui_hint(self, *_):
         waiting = self.status.get() == 'Waiting for game'
         self.home_ui_hint.set('Click the game once to reveal controls and continue.' if waiting else
-                              'Hidden home UI? Click the game once before Start.')
+                              'Hidden UI? Click the game once before Start.')
         dark = self.dark_mode.get()
         ttk.Style(self).configure('Status.TLabel', foreground=('#fbbf24' if dark else '#92400e') if waiting else ('#60a5fa' if dark else '#2563eb'))
+
+    def _dismiss_home_ui_hint(self):
+        self.home_ui_hint_dismissed = True
+        self.home_ui_banner.grid_remove()
+        self._schedule_layout()
 
     def _schedule_layout(self, _event=None):
         if self._layout_job is not None:
@@ -459,7 +472,7 @@ class RefreshGui(tk.Tk):
     def _layout_dashboard(self):
         self._layout_job = None
         width = self.right_panel.winfo_width()
-        self.home_ui_notice.configure(wraplength=max(self._dp(250), width-self._dp(30)))
+        self.home_ui_notice.configure(wraplength=max(self._dp(200), width-self._dp(75)))
         self.detail_label.configure(wraplength=max(self._dp(250), width-self._dp(12)))
         self.diagnostics_label.configure(wraplength=max(self._dp(250), width-self._dp(60)))
         self.history_label.configure(wraplength=max(self._dp(250), width-self._dp(12)))
@@ -472,7 +485,8 @@ class RefreshGui(tk.Tk):
             card.grid(row=i//columns, column=i%columns, sticky="nsew", padx=(0 if i%columns == 0 else self._dp(6), 0), pady=(0, self._dp(6) if columns == 2 else 0))
         # Measure both messages even when detail is hidden in a short window,
         # so hiding it cannot flip the layout back and forth on the next pass.
-        messages_height = self.home_ui_notice.winfo_reqheight() + self.detail_label.winfo_reqheight() + self._dp(6)
+        banner_height = 0 if self.home_ui_hint_dismissed else self.home_ui_banner.winfo_reqheight() + self._dp(6)
+        messages_height = banner_height + self.detail_label.winfo_reqheight()
         required_height = sum(widget.winfo_reqheight() for widget in (self.session_title, self.metrics, self.progress_frame, self.history_header, self.history_label)) + messages_height + self.table_rowheight*6 + self._dp(160)
         compact = self.right_panel.winfo_height() < required_height
         if compact != self.compact_history:
@@ -655,11 +669,19 @@ class RefreshGui(tk.Tk):
         self.session_messages = ttk.Frame(right)
         self.session_messages.grid(row=1, column=0, sticky="ew", pady=(dp(4), dp(12)))
         self.session_messages.columnconfigure(0, weight=1)
-        self.home_ui_notice = tk.Label(self.session_messages, textvariable=self.home_ui_hint,
+        self.home_ui_banner = tk.Frame(self.session_messages, borderwidth=0, highlightthickness=dp(1))
+        self.home_ui_banner.grid(row=0, column=0, sticky='ew', pady=(0,dp(6)))
+        self.home_ui_banner.columnconfigure(0, weight=1)
+        self.home_ui_notice = tk.Label(self.home_ui_banner, textvariable=self.home_ui_hint,
                                       font=self.heading_font, anchor='w', justify='left',
-                                      wraplength=dp(620), padx=dp(10), pady=dp(8),
-                                      borderwidth=0, highlightthickness=dp(1))
-        self.home_ui_notice.grid(row=0, column=0, sticky='ew', pady=(0,dp(6)))
+                                      wraplength=dp(620), padx=dp(10), pady=dp(6),
+                                      borderwidth=0, highlightthickness=0)
+        self.home_ui_notice.grid(row=0, column=0, sticky='ew')
+        self.home_ui_dismiss = ttk.Button(self.home_ui_banner, text='×', style='Dismiss.TButton',
+                                        width=2, padding=0,
+                                        cursor='hand2', command=self._dismiss_home_ui_hint)
+        self.home_ui_dismiss.grid(row=0, column=1, sticky='ne', padx=(0,dp(4)), pady=dp(4))
+        ThemeHint(self.home_ui_dismiss, lambda: 'Dismiss reminder until the app restarts')
         self.status.trace_add('write', self._update_home_ui_hint)
         self.detail_label = ttk.Label(self.session_messages, textvariable=self.detail, style="Muted.TLabel", wraplength=dp(620))
         self.detail_label.grid(row=1, column=0, sticky="w")
