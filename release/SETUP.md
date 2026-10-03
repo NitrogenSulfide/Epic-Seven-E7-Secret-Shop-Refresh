@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc19.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc20.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -13,7 +13,7 @@ engine, ADB tools, item templates and licences. It contains no personal settings
 game screenshots or recognition images. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc19.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc20.zip'
 ```
 
 ## Emulator setup
@@ -23,6 +23,8 @@ English Epic Seven and a **1920 × 1080 Android display**. Native STOVE is unsup
 other emulators are unverified. Different home-screen artwork is fine.
 Enable/authorize ADB debugging in the emulator. ADB is the connection that lets
 the tool interact with the game while leaving your PC mouse free.
+The main screen shows an amber reminder until you dismiss it with ×; that ADB
+acknowledgement is saved. The hidden-UI reminder returns when the app restarts.
 
 Select the connected emulator in the app. Google's documented endpoint is
 `localhost:6520`; see the [official connection guide](https://developer.android.com/games/playgames/pg-emulator#installing-a-game).

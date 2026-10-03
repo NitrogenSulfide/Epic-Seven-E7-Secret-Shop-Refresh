@@ -1,7 +1,7 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.1.0-rc19** is a local candidate; nothing has been published.
-Players need only **E7ShopRefresh-0.1.0-rc19.zip**.
+Version **0.1.0-rc20** is a local candidate; nothing has been published.
+Players need only **E7ShopRefresh-0.1.0-rc20.zip**.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
 Pillow are included in this EXE. Artwork, the matching compiled engine, ADB tools

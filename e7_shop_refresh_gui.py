@@ -210,6 +210,7 @@ class RefreshGui(tk.Tk):
         self.dark_mode = tk.BooleanVar(value=False)
         self.credits_seen = tk.BooleanVar(value=False)
         self.credits_on_startup = tk.BooleanVar(value=False)
+        self.adb_hint_dismissed = tk.BooleanVar(value=False)
         self.about_window = None
         self._live_stats_seen = False
         self.process = None
@@ -252,6 +253,7 @@ class RefreshGui(tk.Tk):
         self._build_ui()
         self.scenery = Scenery(self, ASSET_DIR)
         self._apply_theme()
+        self._update_home_ui_hint()
         self._load_icon()
         self._fit_initial_window()
         self.bind('<Map>', self._schedule_native_icon, add='+')
@@ -456,12 +458,22 @@ class RefreshGui(tk.Tk):
 
     def _update_home_ui_hint(self, *_):
         waiting = self.status.get() == 'Waiting for game'
-        self.home_ui_hint.set('Click the game once to reveal controls and continue.' if waiting else
-                              'Hidden UI? Click the game once before Start.')
+        reminder = ('Click the game once to reveal controls and continue.' if waiting else
+                    'Hidden UI? Click the game once before Start.')
+        if not self.adb_hint_dismissed.get() and not waiting:
+            reminder = 'Use an emulator with ADB enabled.'
+        self.home_ui_hint.set(reminder)
         dark = self.dark_mode.get()
         ttk.Style(self).configure('Status.TLabel', foreground=('#fbbf24' if dark else '#92400e') if waiting else ('#60a5fa' if dark else '#2563eb'))
 
     def _dismiss_home_ui_hint(self):
+        if not self.adb_hint_dismissed.get() and self.status.get() != 'Waiting for game':
+            self.adb_hint_dismissed.set(True)
+            try:
+                self._write_sound_preference()
+            except (OSError, configparser.Error) as exc:
+                self.setting_notice.set('Reminder dismissed for this session; preference could not be saved.')
+                self._append_log(f'ADB reminder preference save failed: {exc}\n')
         self.home_ui_hint_dismissed = True
         self.home_ui_banner.grid_remove()
         self._schedule_layout()
@@ -683,7 +695,7 @@ class RefreshGui(tk.Tk):
                                         width=2, padding=0,
                                         cursor='hand2', command=self._dismiss_home_ui_hint)
         self.home_ui_dismiss.grid(row=0, column=1, sticky='ne', padx=(0,dp(4)), pady=dp(4))
-        ThemeHint(self.home_ui_dismiss, lambda: 'Dismiss reminder until the app restarts')
+        ThemeHint(self.home_ui_dismiss, lambda: 'Dismiss reminders; remember ADB setup acknowledgement')
         self.status.trace_add('write', self._update_home_ui_hint)
         self.detail_label = ttk.Label(self.session_messages, textvariable=self.detail, style="Muted.TLabel", wraplength=dp(620))
         self.detail_label.grid(row=1, column=0, sticky="w")
@@ -799,6 +811,7 @@ class RefreshGui(tk.Tk):
             self.dark_mode.set(parser.getboolean("GUI", "dark_mode", fallback=False))
             self.credits_seen.set(parser.getboolean("GUI", "credits_seen", fallback=False))
             self.credits_on_startup.set(parser.getboolean("GUI", "show_credits_on_startup", fallback=False))
+            self.adb_hint_dismissed.set(parser.getboolean("GUI", "adb_hint_dismissed", fallback=False))
             self.device.set(parser.get("GUI", "device", fallback=self.device.get()))
         except (OSError, ValueError, configparser.Error) as exc:
             self.setting_notice.set(f"Sound preference could not be read: {exc}")
@@ -814,6 +827,7 @@ class RefreshGui(tk.Tk):
         parser["GUI"]["dark_mode"] = str(self.dark_mode.get())
         parser["GUI"]["credits_seen"] = str(self.credits_seen.get())
         parser["GUI"]["show_credits_on_startup"] = str(self.credits_on_startup.get())
+        parser["GUI"]["adb_hint_dismissed"] = str(self.adb_hint_dismissed.get())
         parser["GUI"]["device"] = self._device_address()
         temp = GUI_CONFIG_FILE.with_suffix(".ini.tmp")
         with temp.open("w", encoding="utf-8") as fh:

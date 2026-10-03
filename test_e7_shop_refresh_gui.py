@@ -273,7 +273,7 @@ class GuiTests(unittest.TestCase):
 
     def test_hidden_ui_wait_state_resumes_and_does_not_override_stop(self):
         self.app.run_settings = self.app._settings()
-        self.assertIn('before Start', self.app.home_ui_hint.get())
+        self.assertIn('ADB enabled', self.app.home_ui_hint.get())
         waiting = 'Navigation: Waiting for visible game controls. Click the game to reveal its UI.'
         self.app._handle_line(waiting)
         self.assertEqual(self.app.status.get(), 'Waiting for game')
@@ -281,7 +281,7 @@ class GuiTests(unittest.TestCase):
         self.assertIn('no taps or spending', self.app.progress_text.get())
         self.app._handle_line('Navigation: Opening the recognized Secret Shop menu.')
         self.assertEqual(self.app.status.get(), 'Running')
-        self.assertIn('before Start', self.app.home_ui_hint.get())
+        self.assertIn('ADB enabled', self.app.home_ui_hint.get())
         self.app.stopping = True
         self.app.status.set('Stopping')
         self.app._handle_line(waiting)
@@ -289,7 +289,14 @@ class GuiTests(unittest.TestCase):
 
     def test_dismissed_home_ui_reminder_stays_hidden_without_hiding_wait_status(self):
         self.assertEqual(self.app.home_ui_banner.winfo_manager(),'grid')
+        self.assertIn('Use an emulator with ADB enabled', self.app.home_ui_hint.get())
         self.app.home_ui_dismiss.invoke()
+        self.app.adb_hint_dismissed.set(False)
+        self.app._load_config()
+        self.assertTrue(self.app.adb_hint_dismissed.get())
+        self.app._update_home_ui_hint()
+        self.assertNotIn('ADB enabled', self.app.home_ui_hint.get())
+        self.assertIn('before Start', self.app.home_ui_hint.get())
         self.assertEqual(self.app.home_ui_banner.winfo_manager(),'')
         self.app.theme_button.invoke()
         self.app.run_settings = self.app._settings()

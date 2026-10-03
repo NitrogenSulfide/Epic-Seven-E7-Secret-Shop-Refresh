@@ -179,3 +179,7 @@ before launching the engine. It uses the exact bundled setup engine, verified
 against its package checksum, and preserves previous calibration as a backup.
 Setup never sends game taps or starts a refresh. A separate explicit Start is
 required after successful setup. Private captures remain in the selected runtime.
+
+rc20 adds an amber first-use reminder to use an emulator with ADB enabled.
+Dismissing it remembers that acknowledgement in local GUI preferences. The
+hidden-UI click reminder still appears while waiting for visible controls.
