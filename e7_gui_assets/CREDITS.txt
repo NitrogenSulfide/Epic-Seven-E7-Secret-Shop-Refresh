@@ -15,3 +15,9 @@ center on a square transparent canvas, remove body, retain original design and e
 Start sound revision: compressed bell transients (4:1, 40 ms release), then normalized to -1 dBFS.
 Start RMS now matches the unchanged finish chime within 1 dB.
 Icon revision: original high resolution generated head, PNG 1024; ICO 16–256 at twelve native sizes.
+
+Day/night backgrounds and Mystic Medal, Covenant Bookmark and Skystone icons:
+owner-supplied on 2026-10-03. Epic Seven / Smilegate and respective rights holders.
+Original image source links/artists and redistribution permission are not independently
+established. PNG bytes are preserved; appearance resizing/tinting happens in memory.
+See appearance_artwork in provenance.json and the root CREDITS.txt.
