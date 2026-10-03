@@ -5,4 +5,5 @@ if (-not (Test-Path -LiteralPath $script)) {
     throw "Missing GUI script: $script"
 }
 
-py -3 $script
+py -3 $script @args
+exit $LASTEXITCODE

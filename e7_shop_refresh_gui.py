@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import configparser
 import csv
 import math
@@ -7,6 +8,7 @@ import os
 import queue
 import re
 import subprocess
+import sys
 import threading
 import time
 import tkinter as tk
@@ -15,14 +17,63 @@ from pathlib import Path
 from tkinter import font as tkfont, messagebox, ttk
 from e7_process import launch_engine
 
-APP_DIR = Path.home() / "Downloads" / "E7 Secret Shop Refresh"
+PROJECT_DIR = Path(__file__).resolve().parent
+DEFAULT_ENGINE_DIR = Path.home() / "Downloads" / "E7 Secret Shop Refresh"
+ENGINE_LOCATION_FILE = PROJECT_DIR / "engine-location.ini"
+APP_DIR = DEFAULT_ENGINE_DIR
 ENGINE_EXE = APP_DIR / "E7ADBShopRefresh.exe"
 ADB_EXE = APP_DIR / "adb-assets" / "platform-tools" / "adb.exe"
 CONFIG_FILE = APP_DIR / "ADBconfig.ini"
 GUI_CONFIG_FILE = APP_DIR / "ShopRefreshGUI.ini"
 HISTORY_FILE = APP_DIR / "ShopRefreshHistory" / "ADB_History.csv"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-ASSET_DIR = Path(__file__).resolve().parent / "e7_gui_assets"
+ASSET_DIR = PROJECT_DIR / "e7_gui_assets"
+
+
+def resolve_engine_directory(override=None, *, environ=None, location_file=None):
+    """Choose CLI, environment, saved location, then the existing default."""
+    environment = os.environ if environ is None else environ
+    location_file = ENGINE_LOCATION_FILE if location_file is None else Path(location_file)
+    selected = override if override is not None else environment.get("E7_ENGINE_DIR")
+    if selected is None or (override is None and not selected.strip()):
+        selected = None
+        if location_file.exists():
+            config = configparser.ConfigParser(interpolation=None)
+            try:
+                with location_file.open(encoding="utf-8-sig") as stream:
+                    config.read_file(stream)
+                selected = config.get("engine", "directory")
+            except (OSError, configparser.Error) as error:
+                raise ValueError(f"Cannot read engine folder from {location_file}: {error}") from error
+    if selected is None:
+        return DEFAULT_ENGINE_DIR
+    selected = selected.strip()
+    if not selected:
+        raise ValueError("The selected engine folder is empty. Set directory to the installed engine folder.")
+    directory = Path(os.path.expandvars(selected)).expanduser()
+    if not directory.is_absolute():
+        directory = location_file.parent / directory
+    return directory.resolve()
+
+
+def configure_engine_directory(directory):
+    """Validate before redirecting any device scans, settings or history."""
+    global APP_DIR, ENGINE_EXE, ADB_EXE, CONFIG_FILE, GUI_CONFIG_FILE, HISTORY_FILE
+    directory = Path(directory)
+    engine = directory / "E7ADBShopRefresh.exe"
+    adb = directory / "adb-assets" / "platform-tools" / "adb.exe"
+    missing = [str(path.relative_to(directory)) for path in (engine, adb) if not path.is_file()]
+    if missing:
+        raise ValueError(
+            f"Engine folder: {directory}\nMissing: {', '.join(missing)}\n"
+            "Select the installed engine folder with --engine-dir, E7_ENGINE_DIR, "
+            "or engine-location.ini."
+        )
+    APP_DIR = directory
+    ENGINE_EXE, ADB_EXE = engine, adb
+    CONFIG_FILE = directory / "ADBconfig.ini"
+    GUI_CONFIG_FILE = directory / "ShopRefreshGUI.ini"
+    HISTORY_FILE = directory / "ShopRefreshHistory" / "ADB_History.csv"
 
 
 @dataclass(frozen=True)
@@ -1019,5 +1070,26 @@ def enable_dpi_awareness():
             pass
 
 
-if __name__ == "__main__":
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="E7 Secret Shop Refresh GUI")
+    parser.add_argument("--engine-dir", metavar="FOLDER", help="installed ADB engine folder")
+    args = parser.parse_args(argv)
+    try:
+        configure_engine_directory(resolve_engine_directory(args.engine_dir))
+    except ValueError as error:
+        # Windowed Python launchers have no stderr; keep their errors visible.
+        if sys.stderr is None:
+            root = tk.Tk()
+            root.withdraw()
+            try:
+                messagebox.showerror("Engine folder unavailable", str(error), parent=root)
+            finally:
+                root.destroy()
+            return 2
+        parser.error(str(error))
     RefreshGui().mainloop()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

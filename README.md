@@ -14,10 +14,27 @@ Use Python 3 with Tkinter and the separately installed upstream ADB engine:
 py -3 .\e7_shop_refresh_gui.py
 ```
 
-The current GUI expects the installed engine under
-`%USERPROFILE%\Downloads\E7 Secret Shop Refresh`. It reads and writes settings
-and history in that existing installation. Configurable engine paths and a
-portable release package are follow-up work.
+The default engine folder is `%USERPROFILE%\Downloads\E7 Secret Shop Refresh`.
+To use another existing installation, choose its folder:
+
+```powershell
+py -3 .\e7_shop_refresh_gui.py --engine-dir "D:\Games\E7 Secret Shop Refresh"
+```
+
+To save the choice for double-click launches, copy `engine-location.example.ini`
+to `engine-location.ini` beside the GUI and edit its `directory` value. Use the
+folder containing `E7ADBShopRefresh.exe` and `adb-assets\platform-tools\adb.exe`,
+without surrounding quotes. The saved file is ignored by Git. Relative paths
+are resolved beside the GUI; Windows environment variables such as
+`%USERPROFILE%` can be used. The GUI does not move or copy an installation.
+
+Selection order is `--engine-dir`, the `E7_ENGINE_DIR` environment variable,
+`engine-location.ini`, then the Downloads default. An invalid selection stops
+startup with an error before scanning devices or writing settings. Settings and
+history remain inside the selected installation; GUI artwork stays beside the
+GUI. The PowerShell and CMD launchers also accept `--engine-dir`; the copied EXE
+uses the saved file or environment variable. A portable release package remains
+follow-up work.
 
 The copied `E7 Secret Shop Refresh.exe` launcher is available locally and remains
 ignored by Git. It requires Python's Windows launcher and the adjacent GUI source;
@@ -29,7 +46,7 @@ the original General/scripts copy. No shortcut or installed engine was changed.
 Non-GUI protocol and validation checks:
 
 ```powershell
-py -3 -m unittest test_e7_shop_refresh_gui.ProtocolTests -v
+py -3 -m unittest test_e7_shop_refresh_gui.ProtocolTests test_e7_engine_location -v
 ```
 
 The following tests create GUI windows and should run in a suitable coordinated

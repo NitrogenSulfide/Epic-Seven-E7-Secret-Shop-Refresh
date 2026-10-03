@@ -25,6 +25,7 @@ scratch/
 .env.*
 !.env.example
 ShopRefreshGUI.ini
+engine-location.ini
 *.log
 *.bak
 *.tmp
