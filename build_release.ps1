@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string] $OutputDirectory,
-    [string] $CompilerPath = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+    [Parameter(Mandatory=$true)][string] $BuildPython
 )
 
 Set-StrictMode -Version Latest
@@ -18,7 +18,9 @@ $worktreeStatus = @(& git -c "safe.directory=$safeRepository" -C $repository sta
 if ($LASTEXITCODE -ne 0 -or $worktreeStatus.Count -ne 0) {
     throw 'Build from a clean committed checkout; preserve/stage unrelated work separately.'
 }
-$compiler = (Resolve-Path -LiteralPath $CompilerPath).Path
+$python = (Resolve-Path -LiteralPath $BuildPython).Path
+& $python -c 'import PIL, tkinter, PyInstaller'
+if ($LASTEXITCODE -ne 0) { throw 'The private build environment must include Pillow, Tkinter and PyInstaller.' }
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $repository "dist\candidates\$version"
 }
@@ -32,10 +34,8 @@ $mapping = [ordered]@{
     'e7_process.py' = 'e7_process.py'
     'e7_appearance.py' = 'e7_appearance.py'
     'e7_about.py' = 'e7_about.py'
+    'e7_setup.py' = 'e7_setup.py'
     'e7_windows_icon.py' = 'e7_windows_icon.py'
-    'launch_e7_shop_refresh_gui.ps1' = 'launch_e7_shop_refresh_gui.ps1'
-    'E7 Secret Shop Refresh GUI.cmd' = 'E7 Secret Shop Refresh GUI.cmd'
-    'E7ShopLauncher.cs' = 'E7ShopLauncher.cs'
     'engine-location.example.ini' = 'engine-location.example.ini'
     'LICENSE' = 'LICENSE'
     'CREDITS.txt' = 'CREDITS.txt'
@@ -63,13 +63,14 @@ foreach ($sourceName in $mapping.Keys) {
 $launcher = Join-Path $staging 'E7 Secret Shop Refresh.exe'
 Push-Location $staging
 try {
-    & $compiler /nologo /target:winexe /reference:System.Windows.Forms.dll `
-        /win32icon:e7_gui_assets\shopkeeper-v2.ico "/out:$launcher" .\E7ShopLauncher.cs
-    if ($LASTEXITCODE -ne 0) { throw 'Launcher compilation failed.' }
+    & $python -m PyInstaller --noconfirm --clean --onefile --windowed --name 'E7 Secret Shop Refresh' `
+        --icon e7_gui_assets\shopkeeper-v2.ico --distpath $staging --workpath (Join-Path $output 'work') `
+        --specpath $output .\e7_shop_refresh_gui.py *> (Join-Path $output 'compiler.log')
+    if ($LASTEXITCODE -ne 0) { throw 'GUI compilation failed; inspect compiler.log.' }
 }
 finally { Pop-Location }
 $files['E7 Secret Shop Refresh.exe'] = [ordered]@{
-    source = 'E7ShopLauncher.cs + e7_gui_assets/shopkeeper-v2.ico'
+    source = 'e7_shop_refresh_gui.py and adjacent Python modules + e7_gui_assets/shopkeeper-v2.ico'
     sha256 = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
@@ -89,12 +90,9 @@ $manifest = [ordered]@{
     candidate_commit = $candidateCommit.Trim()
     created_utc = [DateTime]::UtcNow.ToString('o')
     build_host = 'Windows'
-    compiler = [ordered]@{
-        path = $compiler
-        version = (Get-Item -LiteralPath $compiler).VersionInfo.FileVersion
-        sha256 = (Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash.ToLowerInvariant()
-        options = '/nologo /target:winexe /reference:System.Windows.Forms.dll /win32icon:e7_gui_assets\shopkeeper-v2.ico'
-    }
+    build_python = $python
+    dependencies = @(& $python -m pip freeze)
+    options = '--onefile --windowed; external tracked artwork beside EXE; Python/Tk/Pillow embedded'
     archive = [ordered]@{
         name = [IO.Path]::GetFileName($archivePath)
         bytes = (Get-Item -LiteralPath $archivePath).Length

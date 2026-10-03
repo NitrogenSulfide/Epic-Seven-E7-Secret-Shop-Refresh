@@ -1,153 +1,97 @@
-# Set up E7 Shop Refresh — NitrogenSulfide (Blue Natto)
+# E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-This is a Windows GUI for Solunium's ADB refresh engine. Setup requires
-Python and locally prepared recognition images. It is not a one-click installer.
-Use Google Play Games on PC **Developer Emulator**, English Epic Seven and a
-1920 x 1080 Android display. Native STOVE is unsupported; other emulators are
-unverified. Different home-screen artwork is fine: recognition uses UI text.
+## Download and open
 
-## Download and extract
+Download **E7ShopRefresh-0.1.0-rc19.zip**, then extract the whole ZIP into a new
+folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
+The EXE includes Python, Tk and Pillow: players do not install Python or an image
+library. Keep the entire folder together, including artwork and `runtime`.
+The separate Source ZIP is optional for developers.
 
-Download **E7ShopRefresh-0.1.0-rc18.zip** and extract the whole ZIP into a new
-folder such as `Documents\E7 Shop Refresh`. Players need only this download.
-The separate **E7Source** ZIP is for developers and is not needed to run the app.
-Check the player ZIP against the release's `SHA256SUMS.txt` if desired:
-
-```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc18.zip'
-```
-
-The GUI, engine, ADB tools and item templates are already arranged together.
-`engine-location.ini` points to the included `runtime` folder using a relative
-path, so you do not need to copy files or edit an installation path. Keep the
-whole extracted folder together. Use a new folder when trying a candidate;
-do not overwrite an existing app or copy personal settings yet.
-
-Install Python **3.13** from [Python's Windows downloads](https://www.python.org/downloads/windows/)
-if needed, including Tcl/Tk. For the EXE shortcut, use the Python 3.13 full
-installer with its **legacy Windows launcher** option. The checks used Python
-3.13.5. The compiled engine includes its Python; the GUI still needs it.
-To enable the backgrounds, avatar and counter artwork, run this optional step:
+The relative engine path is already configured. The package includes the matching
+engine, ADB tools, item templates and licences. It contains no personal settings,
+game screenshots or recognition images. Check the optional release checksum:
 
 ```powershell
-py -3.13 -m pip install --user "Pillow==11.3.0"
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc19.zip'
 ```
 
-This installs Pillow into your user Python environment. If you skip it, the
-app uses a plain light/dark appearance. We do not run this installation for you.
+## Emulator setup
 
-```text
-E7 Shop Refresh/
-  E7 Secret Shop Refresh.exe          (GUI launcher)
-  e7_shop_refresh_gui.py              (GUI source)
-  engine-location.ini                (already points to runtime)
-  e7_gui_assets/
-  START-HERE.md
-  runtime/
-    E7ADBShopRefresh.exe              (matching compiled engine)
-    adb-assets/
-      cov.png, mys.png, fb.png        (item templates)
-      platform-tools/                (ADB tools and notices)
-      gui-navigation/                (created in the next step)
-```
+Use [Google Play Games on PC Developer Emulator](https://developer.android.com/games/playgames/emulator),
+English Epic Seven and a **1920 × 1080 Android display**. Native STOVE is unsupported;
+other emulators are unverified. Different home-screen artwork is fine.
+Enable/authorize ADB debugging in the emulator. ADB is the connection that lets
+the tool interact with the game while leaving your PC mouse free.
 
-## Prepare recognition once
-
-Install/configure the [Google developer emulator](https://developer.android.com/games/playgames/emulator),
-enable ADB debugging, and set its Android display to 1920 x 1080. The preserved
-upstream instructions are background context; this beta uses the setup here.
-Open Epic Seven and close news/dispatch/popups. If the home controls are hidden,
-click once inside the game to reveal them.
-
-The following commands read screenshots; they do not tap, refresh or purchase.
-Run PowerShell **inside the extracted `runtime` folder**. Google's documented developer-emulator
-endpoint is `localhost:6520`; see its [connection guide](https://developer.android.com/games/playgames/pg-emulator#installing-a-game).
-Use that endpoint first, then the actual connected identifier shown by `devices`:
+Select the connected emulator in the app. Google's documented endpoint is
+`localhost:6520`; see the [official connection guide](https://developer.android.com/games/playgames/pg-emulator#installing-a-game).
+If it is missing from Scan, run PowerShell inside the included `runtime` folder:
 
 ```powershell
 .\adb-assets\platform-tools\adb.exe connect localhost:6520
 .\adb-assets\platform-tools\adb.exe devices
 ```
 
-If your emulator uses another port, replace `localhost:6520` below with the
-connected device identifier shown by `devices`. Continue only when it is listed
-as `device`, not `offline` or `unauthorized`.
+Continue only when its actual identifier is listed as `device`, rather than
+`offline` or `unauthorized`. Choose that identifier in the app.
 
-While the **home menu** is visible:
+## Prepare recognition once
 
-```powershell
-.\adb-assets\platform-tools\adb.exe -s localhost:6520 shell screencap -p /sdcard/e7-home.png
-.\adb-assets\platform-tools\adb.exe -s localhost:6520 pull /sdcard/e7-home.png .\home.png
-```
+On a fresh runtime, **Start refresh** opens recognition setup instead of starting
+the engine. Follow the two capture buttons:
 
-Open **Secret Shop manually**, then capture its normal list screen:
+1. Open the game's home screen and close popups. Click once inside the game if
+   its home controls have faded. Choose **Capture home menu**.
+2. Open **Secret Shop manually** and leave its normal item list visible.
+   Choose **Capture shop & finish**.
+3. After the recognition checks pass, close setup. Check the budget and stop key,
+   then press **Start refresh** again when you are ready.
 
-```powershell
-.\adb-assets\platform-tools\adb.exe -s localhost:6520 shell screencap -p /sdcard/e7-shop.png
-.\adb-assets\platform-tools\adb.exe -s localhost:6520 pull /sdcard/e7-shop.png .\shop.png
-.\E7ADBShopRefresh.exe --prepare-navigation-references --home .\home.png --shop .\shop.png --output .\adb-assets\gui-navigation
-```
+Setup reads two ADB screenshots and runs the matching engine's offline image
+utility. It sends no taps, refreshes or purchases. Screenshots stay private under
+`runtime/setup-captures`; recognition images stay in `runtime/adb-assets/gui-navigation`.
+Any replaced calibration folder is preserved as a backup. Keep these files private.
+Recognition checks must pass before the engine is started.
 
-The last command works offline. It crops just the menu/title/Refresh text and
-checks those crops against the supplied images. It needs no separate Python.
-Use raw game PNGs, with visible English controls and no desktop window borders.
-Keep screenshots/references private. Existing reference directories are never
-overwritten; if recalibrating, preserve the old directory under another name
-before creating the replacement. A failed check means setup is incomplete.
+## First supervised run
 
-## Open and try it
+Normal defaults are **12 skystones**, **0.3 seconds**, **backtick** as the stop key,
+and randomized tap offsets. Saved settings take precedence. Leave Debug / calibration
+unchecked: it uses a separate 100-skystone test budget after confirmation.
+Verify shop entry, one refresh and its counter update, Stop Session and the chosen
+stop key. Observe a Covenant/Mystic buy when one naturally appears; the counters
+count buys, not the number of medals/bookmarks awarded. You do not need to empty
+your account. Insufficient-currency automatic stopping remains unverified.
 
-Double-click `E7 Secret Shop Refresh.exe` **in the extracted app folder**. Alternatively:
+If home controls fade, click the game once or open the shop. The app waits up to
+60 seconds without guessing a navigation tap; Stop remains available.
+Theme backgrounds and currency artwork are included in the EXE's image support;
+the sun/moon button switches between the supplied day/night artwork.
 
-```powershell
-py -3.13 .\e7_shop_refresh_gui.py
-```
+## Updates and troubleshooting
 
-The EXE currently recognizes only the legacy launcher's standard installation
-paths. With the newer Python install manager, use the command above or the
-included `E7 Secret Shop Refresh GUI.cmd` instead; that CMD uses `pyw` on PATH.
-The EXE/CMD select the latest installed Python. If several versions are installed,
-use the `py -3.13` command above to match the documented Pillow installation.
+Stop/close the old app before updating. Extract the new ZIP into a new folder and
+preserve your old runtime settings, CSV history and locally prepared recognition
+images. No updater or automatic migration exists. Back up anything you want to
+keep before deleting an extracted app folder.
 
-Opening the GUI discovers ADB devices. Spending begins only after **Start
-refresh**. Select the connected device (normally `localhost:6520` for Google's
-developer emulator); do not retain an unrelated manual address. Leave
-**Debug / calibration mode** unchecked for this normal test: it uses a separate
-100-skystone budget after confirmation and is not the offline image-preparation
-utility. Check the settings first. New normal defaults are a
-12-skystone budget, 0.3-second delay, backtick stop key and randomized offsets.
-Counters count Covenant/Mystic **buys**, not individual bookmarks/medals awarded.
+- **Missing recognition:** press Start to open the guided setup; the engine is
+  not launched until all three reference files are present.
+- **Setup cannot verify the screen:** check English UI, 1920 × 1080 Android
+  resolution, visible home controls and a normal unobstructed shop list.
+- **No backgrounds:** use the included **EXE** with the complete extracted folder.
+  Older shortcuts and source launches can use a different Python installation.
+- **Engine unavailable:** keep `runtime` beside the GUI, with its engine and ADB
+  files. Do not replace the bundled engine with a different EXE.
+- **No device:** use Scan and the connection commands above.
 
-For your first small supervised run, verify shop entry, a refresh/count update,
-the Stop button and the selected stop key. Observe a Covenant/Mystic purchase
-when one naturally appears. You do not need to empty your balances to test this
-beta. Insufficient-currency stopping remains unverified. If the home UI fades,
-click the game once or open the shop; the app waits up to 60 seconds without
-guessing a navigation tap. Stop remains available.
+## Source and credits
 
-## If something is missing
-
-- **Nothing opens:** run the Python command above in PowerShell to see the error.
-  Check `py -3.13 --version` and `py -3.13 -c "import tkinter"`.
-- **Engine folder unavailable:** check the saved path and presence of both
-  `E7ADBShopRefresh.exe` and `adb-assets\platform-tools\adb.exe`.
-- **Navigation reference missing:** complete the screenshot preparation step.
-- **Shop unverified:** check English UI, Android display size, visible controls
-  and unobstructed title/Refresh button. Do not disable recognition to continue.
-- **No scenery:** check `py -3.13 -c "import PIL; print(PIL.__version__)"`.
-
-Settings and CSV history stay in the included `runtime` folder. Before updating,
-stop/close the old app and preserve its runtime settings, history and locally
-prepared references. Extract updates into a new folder; no updater or automatic
-migration exists. Before deleting the extracted app folder, back up any settings
-and history you want to keep.
-
-## Credits and source
-
-GUI/enhancements: NitrogenSulfide (Blue Natto). Original engine: Solunium,
-GNU GPL-3.0. The player ZIP includes matching engine source/build instructions under
-`runtime`, executable GUI source and original notices. The optional Source ZIP
-contains the full tracked checkout, builders and tests. ADB notices remain in
-`runtime/adb-assets/platform-tools/NOTICE.txt`.
-Epic Seven artwork retains its own rights holders; the GPL does not relicense
-it. Full GUI credits and licence are readable offline in About & Credits.
+GUI/enhancements: **NitrogenSulfide (Blue Natto)**. Original engine: **Solunium**,
+GNU GPL-3.0. GUI Python source and engine source/build instructions are included.
+The optional full Source ZIP also includes builders and tests. Dependency notices
+are under `runtime/third-party-licenses`; ADB notices are in
+`runtime/adb-assets/platform-tools/NOTICE.txt`. About & Credits remains available
+through the app's information button. Game/artwork and audio credits remain
+preserved; the software GPL does not relicense third-party artwork.

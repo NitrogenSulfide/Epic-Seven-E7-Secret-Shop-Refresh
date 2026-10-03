@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import math
 import os
 from pathlib import Path
@@ -125,6 +126,11 @@ class GuiTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.fake = self.root / "fake_engine.py"
         self.fake.write_text(FAKE)
+        self.fake.with_suffix('.sha256').write_text(hashlib.sha256(self.fake.read_bytes()).hexdigest())
+        references = self.root / 'adb-assets/gui-navigation'
+        references.mkdir(parents=True)
+        for name in ('menu-secret-shop.png', 'shop-title.png', 'refresh-label.png'):
+            (references/name).write_bytes(b'Fake-engine fixture; not a game reference')
         self.config = self.root / "ADBconfig.ini"
         self.gui_config = self.root / "ShopRefreshGUI.ini"
         self.assets = self.root / 'assets'
@@ -160,6 +166,54 @@ class GuiTests(unittest.TestCase):
                 return
             time.sleep(0.01)
         self.fail(f"Timed out: {self.app.status.get()}\n{self.app.raw_output}")
+
+    def test_missing_references_opens_setup_without_launching_engine(self):
+        (self.root/'adb-assets/gui-navigation/menu-secret-shop.png').unlink()
+        with patch.object(gui, 'launch_engine') as launch:
+            self.app.start_button.invoke()
+        launch.assert_not_called()
+        self.assertIsNone(self.app.process)
+        self.assertEqual(self.app.status.get(), 'Setup required')
+        self.assertIsNotNone(self.app.setup_window)
+        self.assertIn('Screenshots stay private', self.app.setup_window.notice.get())
+        self.app.setup_window.close()
+
+    def test_supplied_backgrounds_render_in_both_themes(self):
+        import e7_appearance
+        if e7_appearance.Image is None:
+            self.skipTest('Source launch has no Pillow; packaged EXE must include it')
+        self.app.destroy()
+        with patch.object(gui, 'ASSET_DIR', PACKAGED_ASSETS):
+            self.app = gui.RefreshGui()
+        self.app.deiconify()
+        self.app.update()
+        self.assertEqual(set(self.app.scenery.sources), {False, True})
+        for dark in (False, True):
+            self.app.dark_mode.set(dark)
+            self.app._apply_theme()
+            self.app.update()
+            self.app.scenery.render()
+            self.assertTrue(self.app.scenery.layer.cget('image'))
+            self.assertTrue(any(high > low for low, high in self.app.scenery.backdrop.getextrema()))
+
+    def test_setup_completion_requires_another_explicit_start(self):
+        (self.root/'adb-assets/gui-navigation/menu-secret-shop.png').unlink()
+        self.app.start_button.invoke()
+        wizard = self.app.setup_window
+        def capture(adb, device, path):
+            path.write_bytes(b'Fixture screenshot; not a real game frame')
+        def prepare(engine, runtime, captures):
+            (runtime/'adb-assets/gui-navigation/menu-secret-shop.png').write_bytes(b'Fixture reference')
+        with patch('e7_setup.capture_frame', capture), patch('e7_setup.prepare_captured_references', prepare), patch.object(gui, 'launch_engine') as launch:
+            wizard.home_button.invoke()
+            self.pump_until(lambda: not wizard.busy)
+            self.assertFalse(wizard.shop_button.instate(['disabled']))
+            wizard.shop_button.invoke()
+            self.pump_until(lambda: not wizard.busy)
+        launch.assert_not_called()
+        self.assertIsNone(self.app.process)
+        self.assertEqual(self.app.status.get(), 'Ready')
+        wizard.close()
 
     def start_fake(self, stall=False):
         real_popen = subprocess.Popen

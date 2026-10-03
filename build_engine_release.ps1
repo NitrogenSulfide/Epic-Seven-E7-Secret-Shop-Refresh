@@ -49,6 +49,14 @@ foreach ($site in $environment.site) {
 }
 $pythonLicence = Join-Path $environment.base 'LICENSE.txt'
 if (Test-Path -LiteralPath $pythonLicence) { Copy-Item -LiteralPath $pythonLicence -Destination (Join-Path $licences 'Python-LICENSE.txt') }
+$tclDirectory = Join-Path $environment.base 'tcl'
+if (Test-Path -LiteralPath $tclDirectory) {
+    Get-ChildItem -LiteralPath $tclDirectory -Recurse -File -Filter 'license.terms' | ForEach-Object {
+        $target = Join-Path $licences (Join-Path 'tcl-tk' ([IO.Path]::GetRelativePath($tclDirectory, $_.FullName)))
+        New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+        Copy-Item -LiteralPath $_.FullName -Destination $target
+    }
+}
 $files = [ordered]@{}
 Get-ChildItem -LiteralPath $staging -Recurse -File | ForEach-Object {
     $member = [IO.Path]::GetRelativePath($staging, $_.FullName).Replace('\', '/')

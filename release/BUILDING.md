@@ -1,29 +1,33 @@
-# Rebuild the E7 GUI launcher
+# Rebuild the player GUI
 
-The Python modules are supplied as executable source and need no compilation.
-The EXE launches the adjacent GUI through Python's Windows launcher. It does not
-embed Python or the engine. Keep all Python modules and artwork beside it.
+The player EXE is compiled from `e7_shop_refresh_gui.py` and the adjacent modules
+with PyInstaller. Python, Tk and Pillow are bundled; artwork remains beside the
+EXE. It is different from the preserved legacy C# Python launcher.
 
-From an extracted package on Windows, use the .NET Framework C# compiler if
-available. Choose a new output directory to preserve the supplied launcher:
+From an extracted player folder on Windows, use Python 3.13 with Tk to create a
+new private build environment. The pins are supplied with the engine source:
 
 ```powershell
-$launcherBuild = Join-Path $PWD 'launcher-rebuild'
-if (Test-Path -LiteralPath $launcherBuild) { throw 'Choose a new build directory.' }
-New-Item -ItemType Directory -Path $launcherBuild | Out-Null
-& "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe" `
-  /nologo /target:winexe /reference:System.Windows.Forms.dll `
-  /win32icon:e7_gui_assets\shopkeeper-v2.ico `
-  "/out:$launcherBuild\E7 Secret Shop Refresh.exe" .\E7ShopLauncher.cs
-if ($LASTEXITCODE -ne 0) { throw 'Launcher compilation failed.' }
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r runtime\engine-build-requirements.txt
+.\.venv\Scripts\python.exe -m PyInstaller --clean --onefile --windowed --name "E7 Secret Shop Refresh" --icon e7_gui_assets\shopkeeper-v2.ico --distpath rebuilt-gui --workpath rebuild-work --specpath rebuild-work .\e7_shop_refresh_gui.py
 ```
 
-To use the rebuilt EXE, stage a separate copy of the package with that EXE beside
-the Python modules. Do not overwrite the reviewed candidate or retain its old
-hash/verdict after changing it. Check launcher prerequisites without starting
-the GUI using `--verify`; this check does not establish runtime correctness.
+Use new output directories. Stage the rebuilt EXE in a separate copy of the
+complete player folder, preserving artwork and its runtime. Check it offline:
 
-The maintained source checkout contains `build_release.ps1`, the version file,
-release documentation and fixture tests. Its builder requires a clean exact
-commit, compiles the launcher, packages an explicit file list, and records hashes
-in an adjacent private build manifest. It never bundles a personal engine/config.
+```powershell
+& ".\rebuilt-gui\E7 Secret Shop Refresh.exe" --verify --engine-dir .\runtime --verification-report .\gui-verification.json
+```
+
+The check creates no GUI window or ADB connection. It verifies bundled image/Tcl
+support and required artwork/runtime paths; missing recognition is reported as
+setup needed, not cleared for live use. A rebuilt EXE has a different hash and
+needs its own review. Engine build instructions are in [ENGINE.md](ENGINE.md).
+
+The full source checkout has `build_release_assets.ps1`, `build_release.ps1`,
+`build_engine_release.ps1` and fixture tests. These require a clean committed
+checkout and an explicit private BuildPython environment. They build matching
+GUI/engine components, then assemble the player ZIP and optional source archive
+with checksums and private build manifests. No installed runtime or private
+screenshots/settings are packaged.
