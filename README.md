@@ -33,8 +33,7 @@ Selection order is `--engine-dir`, the `E7_ENGINE_DIR` environment variable,
 startup with an error before scanning devices or writing settings. Settings and
 history remain inside the selected installation; GUI artwork stays beside the
 GUI. The PowerShell and CMD launchers also accept `--engine-dir`; the copied EXE
-uses the saved file or environment variable. A portable release package remains
-follow-up work.
+uses the saved file or environment variable.
 
 The copied `E7 Secret Shop Refresh.exe` launcher is available locally and remains
 ignored by Git. It requires Python's Windows launcher and the adjacent GUI source;
@@ -63,6 +62,20 @@ No dependencies were installed and the upstream engine source was not rebuilt
 during project extraction. Read [UPSTREAM.md](UPSTREAM.md) for the source and
 installed-engine distinction, and [the preserved upstream README](docs/UPSTREAM-README.md)
 for Solunium's original setup and build instructions.
+
+## Local release candidate
+
+The maintained builder creates a GUI-only ZIP with source, assets, user
+instructions and a launcher compiled from the same clean commit:
+
+```powershell
+.\build_release.ps1
+```
+
+The output is under ignored `dist/candidates/<VERSION>/` with a build manifest.
+Existing candidate directories are never overwritten. Python and a separately
+installed engine remain required. See [RELEASES.md](RELEASES.md) for checks and
+publication gates, and [the packaged instructions](release/README.md).
 
 ## Ownership and licensing
 
