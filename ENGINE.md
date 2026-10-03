@@ -1,7 +1,7 @@
 # E7 live-counter engine candidate
 
-Modified from Solunium's GPL-3.0 E7 ADB engine, maintained by Blue Natto
-(GitHub: NitrogenSulfide).
+Modified from Solunium's GPL-3.0 E7 ADB engine, maintained by
+NitrogenSulfide (Blue Natto).
 Source: `E7ADBShopRefresh.py`. The upstream history remains in the maintained
 repository; upstream base `49313d14b24f1b8efbeb49f9a6b2126f9bbd0849`.
 This local candidate has not been published. Automated checks and the owner's

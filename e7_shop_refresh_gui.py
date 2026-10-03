@@ -571,7 +571,7 @@ class RefreshGui(tk.Tk):
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(0, weight=1)
         ttk.Label(header, text="Secret Shop", style="Title.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(header, text="Refresh sessions · Epic Seven · Blue Natto", style="Muted.TLabel").grid(row=1, column=0, sticky="w")
+        ttk.Label(header, text="Refresh sessions · Epic Seven · NitrogenSulfide (Blue Natto)", style="Muted.TLabel").grid(row=1, column=0, sticky="w")
         ttk.Label(header, textvariable=self.status, font=("Segoe UI", 12, "bold"), style='Status.TLabel').grid(row=0, column=1, sticky="e")
         header_actions = ttk.Frame(header)
         header_actions.grid(row=1,column=1,sticky='e')

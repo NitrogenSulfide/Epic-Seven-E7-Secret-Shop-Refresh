@@ -1,16 +1,16 @@
 # E7 Secret Shop Refresh GUI
 
-Windows GUI by Blue Natto (GitHub: NitrogenSulfide) for Solunium's Epic Seven Secret Shop Refresh ADB
-engine. This is version **0.1.0-rc16**, a local release candidate. It has not been
+Windows GUI by NitrogenSulfide (Blue Natto) for Solunium's Epic Seven Secret Shop Refresh ADB
+engine. This is version **0.1.0-rc17**, a local release candidate. It has not been
 published or cleared for live-game use by the release workflow.
 
 ## Requirements
 
-**Start with [SETUP.md](SETUP.md).** For the enhanced version, obtain all three
-matching downloads: GUI, LiveEngine and Source. The source download supplies the
-preserved upstream ADB tools and item templates; the engine download supplies
-the modified EXE. Recognition images must be prepared locally from your game.
-The GUI ZIP by itself does not reproduce the enhanced version.
+**Start with [START-HERE.md](START-HERE.md)** (also supplied as [SETUP.md](SETUP.md)).
+Players need only **E7ShopRefresh-0.1.0-rc17.zip**. It includes the GUI, matching
+compiled engine, ADB tools and item templates, with the engine path configured.
+Recognition images must still be prepared locally from your game. The separate
+Source ZIP is available for developers; it is not a player dependency.
 
 - Windows with Python 3 and Tkinter, plus Python's Windows launcher (`py`/`pyw`).
   The EXE requires the legacy launcher's standard installation path. With the
@@ -19,15 +19,15 @@ The GUI ZIP by itself does not reproduce the enhanced version.
   the GUI uses its plain light/dark palette. The prepared owner test launcher uses
   the existing private environment with Pillow; system Python is unchanged.
   Automated candidate checks use Python 3.13; other versions are not yet verified.
-- A separately installed Solunium ADB engine folder containing
-  `E7ADBShopRefresh.exe` and `adb-assets\platform-tools\adb.exe`.
+- The included `runtime` folder, containing the matching engine and ADB tools.
+  Keep it beside the GUI; no separate engine download is needed.
 - Google Play Games on PC Developer Emulator, with ADB debugging enabled,
   English game UI and a 1920 x 1080 Android display. Other emulators are unverified;
   the native STOVE client is not supported by this ADB version.
 
-This package contains the GUI source and a small launcher. Python, the engine,
-ADB and emulator are separate dependencies. The launcher is not a self-contained
-application, and this package does not install them or configure the emulator.
+This package includes the GUI source, launcher, compiled engine and ADB tools.
+Python and the emulator are external requirements. The GUI launcher does not
+embed Python; the package does not install Python or configure the emulator.
 
 ## Start
 
@@ -38,14 +38,13 @@ Extract the whole ZIP into its own folder. Keep the launcher, Python files and
 py -3 .\e7_shop_refresh_gui.py
 ```
 
-The default engine folder is `%USERPROFILE%\Downloads\E7 Secret Shop Refresh`.
-To choose another folder, copy `engine-location.example.ini` to
-`engine-location.ini` beside the GUI and edit `directory`, without surrounding
-quotes. Use the folder containing the engine EXE and `adb-assets` directory.
-For a one-time override:
+The supplied `engine-location.ini` selects the included `runtime` folder.
+It uses a relative path, so moving the whole app folder preserves that choice.
+To select a separate existing installation, edit `directory` without quotes or
+use a one-time override:
 
 ```powershell
-py -3 .\e7_shop_refresh_gui.py --engine-dir "D:\Games\E7 Secret Shop Refresh"
+py -3.13 .\e7_shop_refresh_gui.py --engine-dir "D:\Games\E7 Secret Shop Refresh"
 ```
 
 Selection order is `--engine-dir`, environment variable `E7_ENGINE_DIR`, saved
@@ -92,17 +91,18 @@ stopping in those cases is unverified. Counters report completed engine actions,
 not confirmed game balances. First-use defaults are 12 skystones, 0.3-second tap
 delay, backtick stop key and randomized offsets; saved settings take precedence.
 
-To remove the GUI, close it after stopping any active session and remove only
-its extracted folder. The separately installed engine and its settings/history
-remain. Do not delete the engine folder when removing the GUI.
+To remove the app, stop/close it first. Back up any settings, recognition images
+and CSV history you want to keep from `runtime`, then remove the extracted app
+folder. A separately selected external engine folder is not removed with it.
 
 ## Source and credits
 
 GUI Python modules and `E7ShopLauncher.cs` are included as source. See
 [BUILDING.md](BUILDING.md) to rebuild the launcher. Development tests remain in
 the maintained source checkout; they are not included in this player package.
-The full engine is not bundled; [UPSTREAM.md](UPSTREAM.md) records its relationship
-to Solunium's source and the previously installed binary.
+The matching engine, corresponding source and build instructions are in
+`runtime`; [UPSTREAM.md](UPSTREAM.md) records its relationship to Solunium's source.
+The optional full Source ZIP includes the maintained checkout, builders and tests.
 
 Software is GPL-3.0; see [LICENSE](LICENSE) and [CREDITS.txt](CREDITS.txt).
 Artwork and sounds retain their own rights and credits under `e7_gui_assets`.

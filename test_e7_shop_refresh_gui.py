@@ -206,7 +206,7 @@ class GuiTests(unittest.TestCase):
         self.app.about_button.invoke()
         self.assertIs(self.app.about_window,dialog)
         contents = '\n'.join(reader.get('1.0','end') for reader in dialog.readers)
-        for credit in ('Blue Natto','NitrogenSulfide','Solunium','Robin Lamb','GNU GENERAL PUBLIC LICENSE'):
+        for credit in ('NitrogenSulfide (Blue Natto)','Solunium','Robin Lamb','GNU GENERAL PUBLIC LICENSE'):
             self.assertIn(credit,contents)
         import e7_appearance
         if e7_appearance.Image is not None:

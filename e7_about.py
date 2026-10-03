@@ -30,7 +30,7 @@ class AboutDialog(tk.Toplevel):
             avatar.grid(row=0,column=0,rowspan=3,padx=(0,dp(16)),sticky='n')
             self.colored.append(avatar)
         for row, (text, font) in enumerate((('E7 Secret Shop Refresh', ('Segoe UI',18,'bold')),
-                           ('by Blue Natto', app.heading_font),
+                           ('by NitrogenSulfide (Blue Natto)', app.heading_font),
                            (f'{read_document(project / "VERSION").strip()} · Windows', app.ui_font))):
             label = tk.Label(header, text=text, font=font, anchor='w')
             label.grid(row=row,column=text_column,sticky='ew',pady=(0,dp(3)))
@@ -41,8 +41,7 @@ class AboutDialog(tk.Toplevel):
         overview = (
             'Welcome! Open Epic Seven’s Secret Shop, select your device, '
             'and check the budget and stop key before starting.\n\n'
-            'GUI and enhancements: Blue Natto\n'
-            'GitHub identity: NitrogenSulfide\n'
+            'GUI and enhancements: NitrogenSulfide (Blue Natto)\n'
             'Original refresh engine: Solunium\n'
             'Epic Seven artwork: Smilegate and respective rights holders\n'
             'Start/end sounds: Robin Lamb · CC0\n\n'
