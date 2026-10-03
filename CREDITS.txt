@@ -1,0 +1,20 @@
+GUI, process management and Windows launcher: NitrogenSulfide.
+
+Original refresh engine and upstream project: Solunium.
+https://github.com/Solunium/Epic-Seven-E7-Secret-Shop-Refresh
+Software licence: GNU GPL version 3; see LICENSE and preserved upstream notices.
+
+Epic Seven game credit: Smilegate and the respective game/artwork rights holders.
+Official game website: https://epic7.onstove.com/en/brand
+This project is an independent community tool and does not claim endorsement.
+
+Icon: adapted from character artwork supplied by the project owner, edited with
+image_gen and encoded for Windows. The owner requested retention on 2026-10-03.
+The exact original image source/artist has not been established. Credit here is
+not a claim of original authorship or a redistribution licence.
+
+Start/end audio: Robin Lamb, UI Sound Effects (Button Clicks, User Feedback,
+Notifications), CC0. Original sounds use VCSL and VSCO 2 CE sample libraries.
+https://opengameart.org/content/ui-sound-effects-button-clicks-user-feedback-notifications
+https://creativecommons.org/publicdomain/zero/1.0/
+See e7_gui_assets/CREDITS.txt and provenance.json for source hashes and edits.

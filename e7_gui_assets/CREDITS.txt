@@ -1,0 +1,17 @@
+Start/end sounds: Robin Lamb, UI Sound Effects (Button Clicks, User Feedback, Notifications).
+Source: https://opengameart.org/content/ui-sound-effects-button-clicks-user-feedback-notifications
+License: Creative Commons Zero (CC0), https://creativecommons.org/publicdomain/zero/1.0/
+Original sounds use the public-domain VCSL and VSCO 2 CE sample libraries.
+Start: Ding.wav. End (manual or automatic): chimes.wav.
+Changes: removed DC offset and normalized PCM peaks to -1 dBFS; no clipping.
+
+Icon: derived from character artwork supplied by the user, edited with image_gen.
+Retained in this project at the owner's request on 2026-10-03.
+The exact original image source/artist and redistribution licence have not been established.
+Underlying artwork remains credited to its respective rights holders; this is not original project character artwork.
+Icon edit prompt: Crop the supplied character's head, including hair, horn, glasses, face and chin;
+center on a square transparent canvas, remove body, retain original design and expression.
+
+Start sound revision: compressed bell transients (4:1, 40 ms release), then normalized to -1 dBFS.
+Start RMS now matches the unchanged finish chime within 1 dB.
+Icon revision: original high resolution generated head, PNG 1024; ICO 16–256 at twelve native sizes.

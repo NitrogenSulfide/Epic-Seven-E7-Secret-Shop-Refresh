@@ -1,179 +1,64 @@
-# Epic Seven Secret Shop Refresh with GUI
-## Showcase
-![](https://github.com/sya1999/Epic-Seven-Secret-Shop-Refresh/blob/main/assets/E7.gif)
-## Getting Started
-### MOUSE vs ADB
-There are two different ways to run auto shop refresh, either through **controlling host mouse** or **send in debug command** to emulator
+# E7 Secret Shop Refresh GUI
 
-<br>
+Windows GUI maintained by NitrogenSulfide, using Solunium's Epic Seven Secret
+Shop Refresh ADB engine. The original upstream source and Git history are
+preserved, alongside the imported GUI, launchers, tests, sounds and icon.
 
-### Special Note (MUST READ!!!)
-1. If you are using the program with the **new PC Client**, then you need to **run the shop refresh program with administrator privileges**
+This is a local development project. No GitHub fork or release has been published.
 
-(This is not necessary when you are using an emulator.)
+## Run the imported GUI
 
-<br>
+Use Python 3 with Tkinter and the separately installed upstream ADB engine:
 
-2. If the **button is grey-out**, that means you typed or selected the wrong window title, the name has to be exact down to the spacing
-
-<br>
-
-3. Make sure the monitor is **TURNED ON AT ALL TIMES**, the program relies on the display to be active to take screenshot
-
-(By default, the mouse movement should keep the screen on, just don't power off the display maunally)
-
-<br>
-
-4. Make sure that the **program recognize the covenant/mystic bookmark before letting it run unsupervised**
-
-(you can manual refresh faster, so refresh till a bookmark show up, then start the program to see if it purchased)
-
-<br>
-
-5. Use the **friendship bookmark option** to find out what mouse speed suit your pc. Feel free to increase mouse speed if it's running too fast.
-
-(If you have a good PC, You can set the **mouse speed to 0 and Screenshot speed to 0.3**) 
-
-### Refresh Options
-**Mouse**
-
-Pros:
-
-- Compatible with all emulator
-
-- Fastest way to refresh shop 
-
-Cons:
-
-- Can't use mouse while the application is running
-
-- Emulator needs to stay on screen
-
-- Google Play Beta user might need to change desktop display setting to 1920 x 1080
-
-[Click Here to jump to Mouse section](https://github.com/Solunium/Epic-Seven-E7-Secret-Shop-Refresh/tree/main?tab=readme-ov-file#quick-start-mouse)
-
-<br>
-
-**ADB**
-
-Pros:
-
-- Mouse is free to do whatever
-
-- you can minimize the emulator window 
-
-Cons:
-
-- Requires emulator to have ADB 
-
-- need to set ingame resolution to be 1920 x 1080
-
-[Click Here to jump to ADB section](https://github.com/Solunium/Epic-Seven-E7-Secret-Shop-Refresh/tree/main?tab=readme-ov-file#quick-start-android-debug-bridge)
-
-<br>
-
-### Quick Start (Mouse):
-
-<br>
-
-**Step 1.** Download the [latest release](https://github.com/sya1999/Epic-Seven-Secret-Shop-Refresh/releases) make sure to download (**E7 Secret Shop Refresh.zip**)
-
-**Step 2.** Extract the zip file to any directory
-
-**Step 3.** Launch Epic Seven on your emulator, make sure to close dispatch mission and news
-
-**Step 4.** Launch **E7SecretShopRefresh** in the folder that you just extracted
-
-**Step 5.** Select your emulator from the drop down box	
-  - If you can't find it, you need to type in the window name of your emulator and press enter
-  - you can see the name of you emulator by hovering over the taskbar icon of your emulator
-
-**Step 6.** (Optional) you can change the setting, refer to [Setting section](https://github.com/sya1999/Epic-Seven-Secret-Shop-Refresh/tree/main?tab=readme-ov-file#settings)
-
-**Step 6.5:** **EXTRA STEP FOR GOOGLE PLAY BETA USER**
-
-If you are using **GOOGLE PLAY BETA**, make sure **Desktop display resolution setting is 1920 x 1080**, so that it resize properly  
-
-**Step 7.** Press the "start refresh" button
-
-**PRESS ESC KEY TO STOP THE PROGRAM**
-
-**Always make sure that the program recognize the covenant/mystic bookmark before letting it run unsupervised**
-
-**If you encounter a problem, feel free to open a issue on github!**
-	
-You can check your refreshing history in the folder called **ShopRefreshHistory**
-
-<br>
-
-### Quick Start (Android Debug Bridge):
-
-<br>
-
-**Step 1.** Download the [latest release](https://github.com/sya1999/Epic-Seven-Secret-Shop-Refresh/releases) make sure to download (**E7 Secret Shop Refresh.zip**)
-
-**Step 2.** Extract the zip file to any directory
-
-**Step 3.** Launch Epic Seven on your emulator, make sure to close dispatch mission and news
-
-**step 4.** Turn on **ADB** (Android Debug bridge) on your emulator
-
-Google play beta user needs to download **Google Play Games on PC Developer Emulator**, then allow debug when prompted in home screen. 
-Unfortunately, **Epic Seven needs to be redownloaded**. Go with the mouse option, if you don't want to go through the trouble
-
-**step 5.** Change emulator's resolution to **1920 x 1080**
-
-**step 6.** Launch **E7ADBShopRefresh** in the folder that you just extracted
-
-**step 7.** Follow the instruction show in the command line, and press enter to start
-
-**PRESS ESC KEY TO STOP THE PROGRAM**
-
-**Always make sure that the program recognize the covenant/mystic bookmark before letting it run unsupervised**
-
-**One way to test the program is to manual refresh till covenant/mystic bookmark show up, then run the program to see if it brought**
-
-You can check your refreshing history in the folder called **ShopRefreshHistory**
-
-<br>
-
-### Compile it yourself:
-**Step 1.** Install python version 3.11.9
-
-**Step 2.** Git clone this repository to your directory
-
-If you don't want to deal with git, then download the code as zip file using the green "code" button on top
-
-**Step 3.** (Optional) Setup and activate a virtual environment with venv or conda
-
-**Step 4.** Install the dependencies
-```
-pip install -r requirements.txt
-```
-**Step 5.** Open and run E7SecretShopRefresh.py or main.ipynb, go to the main function or app config class to make edit
-
-**Step 6.** (Optional) Use pyinstaller to create an executable
-```
-python -m PyInstaller -F --noconsole -i assets/icon.ico E7SecretShopRefresh.py
-```
-```
-python -m PyInstaller -F -i adb-assets/icon.ico E7ADBShopRefresh.py
+```powershell
+py -3 .\e7_shop_refresh_gui.py
 ```
 
-<br>
+The current GUI expects the installed engine under
+`%USERPROFILE%\Downloads\E7 Secret Shop Refresh`. It reads and writes settings
+and history in that existing installation. Configurable engine paths and a
+portable release package are follow-up work.
 
-## Settings
-It can be helpful to select the friendship bookmark to check if the program is detecting items correctly	
+The copied `E7 Secret Shop Refresh.exe` launcher is available locally and remains
+ignored by Git. It requires Python's Windows launcher and the adjacent GUI source;
+it is not a self-contained application. The existing desktop shortcut still uses
+the original General/scripts copy. No shortcut or installed engine was changed.
 
-Increase mouse speed, if the mouse is moving faster than ui animation
+## Checks
 
-Increase screenshot speed, if you have a longer loading time after each purchase/refresh action
+Non-GUI protocol and validation checks:
 
-You can stay with the default speed setting in most cases
+```powershell
+py -3 -m unittest test_e7_shop_refresh_gui.ProtocolTests -v
+```
 
-By not setting a skystone budget, the program will run till ESC is pressed
+The following tests create GUI windows and should run in a suitable coordinated
+desktop session. They use fixtures; passing them does not establish live-engine
+or emulator correctness:
 
-You can toggle on and off hint which is a live counter of the items purchased
+```powershell
+py -3 test_e7_shop_refresh_gui.py
+py -3 test_e7_shop_refresh_layout.py
+py -3 test_e7_shop_refresh_icons.py
+```
 
-by turning off auto placement, you can move the emulator to another monitor (After turning this off, make sure the entire emulator window stays on-screen)
+No dependencies were installed and the upstream engine source was not rebuilt
+during project extraction. Read [UPSTREAM.md](UPSTREAM.md) for the source and
+installed-engine distinction, and [the preserved upstream README](docs/UPSTREAM-README.md)
+for Solunium's original setup and build instructions.
+
+## Ownership and licensing
+
+The new project directory is the maintained source workspace. The previous
+General/scripts files and their backups are retained as recovery copies.
+
+Software in this project is released under GPL-3.0; retain the upstream notices
+and [LICENSE](LICENSE). Artwork and sounds retain their respective rights and
+licences; see [CREDITS.txt](CREDITS.txt) and [asset provenance](e7_gui_assets/provenance.json).
+The supplied icon is retained at the owner's request and is not asserted to be
+original project artwork or covered by the software licence.
+
+For a future GitHub fork, create the fork under NitrogenSulfide and add it as
+`origin`. The existing `upstream` fetch remote points to Solunium. This checkout
+has upstream ancestry, so the GUI work can be pushed to the fork without
+rewriting Solunium's history. Public hosting is a separate approval step.

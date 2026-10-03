@@ -16,3 +16,17 @@ dist/
 ShopRefreshHistory/
 ADBconfig.ini
 test/
+
+# Local development and release state added for the maintained Windows GUI.
+.local-state/
+scratch/
+.codex/
+.env
+.env.*
+!.env.example
+ShopRefreshGUI.ini
+*.log
+*.bak
+*.tmp
+*.exe
+*.lnk
