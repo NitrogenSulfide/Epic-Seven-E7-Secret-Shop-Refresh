@@ -19,6 +19,12 @@ and supplied with its exact source and [build instructions](ENGINE.md).
 It is separate from the previously installed binary described below. Both
 candidate hashes and the full source commit are recorded by their builders.
 
+For rc5, legacy fixed shop-entry taps are replaced by template matching against
+private user-prepared navigation references. Shop verification gates entry and
+shop actions. The engine package includes the navigation module, offline
+preparation utility and corresponding tests; game screenshots/reference crops
+remain private runtime files and are not bundled.
+
 The running GUI currently uses a previously installed ADB engine executable,
 with SHA-256 `79ba2165937a326a3c4bdf2593c5ceee3383f7644f6f302e4266cf8584f35a6b`.
 That binary was not rebuilt from the source base above, and its exact matching
