@@ -21,7 +21,9 @@ DEVICE_SCAN = gui.RefreshGui.refresh_devices
 class ProtocolTests(unittest.TestCase):
     def test_navigation_evidence_is_shown_without_starting_a_gui(self):
         details, events = [], []
-        app = SimpleNamespace(detail=SimpleNamespace(set=details.append), _event=events.append)
+        app = SimpleNamespace(detail=SimpleNamespace(set=details.append), _event=events.append,
+                              stopping=False, stop_key_pressed=False,
+                              status=SimpleNamespace(get=lambda: 'Ready'))
         gui.RefreshGui._handle_line(app, 'Navigation: Secret Shop screen verified.')
         self.assertEqual(details, ['Secret Shop screen verified.'])
         self.assertEqual(events, ['Navigation: Secret Shop screen verified.'])
@@ -166,6 +168,19 @@ class GuiTests(unittest.TestCase):
         settings = self.app._settings()
         self.assertEqual((settings.budget, settings.tap_sleep, settings.stop_key, settings.random_offset),
                          (12.0, 0.3, "`", True))
+
+    def test_hidden_ui_wait_state_resumes_and_does_not_override_stop(self):
+        self.app.run_settings = self.app._settings()
+        waiting = 'Navigation: Waiting for visible game controls. Click the game to reveal its UI.'
+        self.app._handle_line(waiting)
+        self.assertEqual(self.app.status.get(), 'Waiting for game')
+        self.assertIn('no taps or spending', self.app.progress_text.get())
+        self.app._handle_line('Navigation: Opening the recognized Secret Shop menu.')
+        self.assertEqual(self.app.status.get(), 'Running')
+        self.app.stopping = True
+        self.app.status.set('Stopping')
+        self.app._handle_line(waiting)
+        self.assertEqual(self.app.status.get(), 'Stopping')
 
     def test_stop_key_capture_and_rejection(self):
         self.app._capture_stop_key(SimpleNamespace(keysym="Escape", char="\x1b", state=0))

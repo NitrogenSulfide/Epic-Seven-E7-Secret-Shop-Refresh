@@ -28,6 +28,15 @@ Both title and Refresh are still required; ambiguous matches are rejected.
 Menu matching retains the rc5 edge detector. Failed verification reports marker
 scores and says the shop may already be open, rather than claiming entry failed.
 
+In rc9, unknown startup frames enter a bounded 60-second wait. The engine checks
+once per second for the recognized menu text or both shop markers, sending no
+taps while waiting. The GUI asks the user to reveal the UI or open the shop,
+and resumes without requiring another Start. Stop cancels the wait. Timeout
+still aborts before purchasing or refreshing. This handles faded home controls
+without relying on wallpaper, and does not weaken the existing checks after
+shop entry. No automatic wake-up tap is used because an unknown frame cannot
+establish which page or action is under a coordinate.
+
 Use this engine with the matching GUI candidate for live counters. The GUI also
 accepts the original engine, whose totals still arrive at 10% milestones.
 This ZIP contains no ADB executables, game templates, device settings or history.

@@ -16,7 +16,14 @@ defaults and requires its existing confirmation.
 Pillow 11.3+ enables this appearance; the plain palette remains available when
 Pillow is absent. The prepared local test launcher uses the existing private
 environment, without installing anything into system Python. The engine remains
-the rc6 build; this appearance change makes no new game actions.
+the paired rc9 build, which handles startup with hidden game controls.
+
+When home controls fade away, Start waits up to 60 seconds and shows
+**Waiting for game**. Click the game to reveal its controls, or open Secret Shop
+manually. The session continues when the menu or shop is recognized, without
+restarting. No navigation taps or spending happen while controls are unrecognized;
+Stop still works. Wallpaper is never used to identify the home screen. If the
+controls remain unknown, the session ends with a clear explanation.
 
 ## Run the imported GUI
 
