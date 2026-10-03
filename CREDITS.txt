@@ -1,34 +1,21 @@
-GUI, process management, enhancements and Windows launcher: Blue Natto.
-GitHub identity and original maintainer attribution: NitrogenSulfide.
+GUI, enhancements and Windows launcher: Blue Natto.
+GitHub identity: NitrogenSulfide.
 
-Original refresh engine and upstream project: Solunium.
+Original refresh engine: Solunium.
 https://github.com/Solunium/Epic-Seven-E7-Secret-Shop-Refresh
-Software licence: GNU GPL version 3; see LICENSE and preserved upstream notices.
+Software licence: GNU GPL-3.0; see LICENSE and upstream notices.
 
-Epic Seven game credit: Smilegate and the respective game/artwork rights holders.
-Official game website: https://epic7.onstove.com/en/brand
-This project is an independent community tool and does not claim endorsement.
+Epic Seven game and artwork: Smilegate and respective rights holders.
+https://epic7.onstove.com/en/brand
+Independent community tool; no official endorsement.
 
-Icon: adapted from character artwork supplied by the project owner, edited with
-image_gen and encoded for Windows. The owner requested retention on 2026-10-03.
-The exact original image source/artist has not been established. Credit here is
-not a claim of original authorship or a redistribution licence.
-
-Start/end audio: Robin Lamb, UI Sound Effects (Button Clicks, User Feedback,
-Notifications), CC0. Original sounds use VCSL and VSCO 2 CE sample libraries.
+Start/end audio: Robin Lamb, UI Sound Effects, CC0.
+Original sounds use VCSL and VSCO 2 CE sample libraries.
 https://opengameart.org/content/ui-sound-effects-button-clicks-user-feedback-notifications
 https://creativecommons.org/publicdomain/zero/1.0/
-See e7_gui_assets/CREDITS.txt and provenance.json for source hashes and edits.
 
-Day/night scenery and Mystic Medal, Covenant Bookmark and Skystone images:
-supplied by the project owner on 2026-10-03 for the GUI appearance. Game/artwork
-credit: Epic Seven, Smilegate and the respective rights holders. Original source
-links/artists and redistribution permissions have not been independently
-established. The software GPL does not relicense this third-party artwork.
-Source PNG bytes are preserved; sizing and tinting occur in the UI renderer.
-Sun/moon button glyphs are drawn by the GUI appearance module.
-
-rc8 day/night enhancement: built-in image_gen restoration and sharpening.
-Original supplied PNGs are retained alongside background-day-hd.png and
-background-night-hd.png; underlying artwork credits remain unchanged.
-Restoration prompt and output hashes are recorded in provenance.json.
+Icon, backgrounds and currency artwork retain their original rights holders.
+The software GPL does not relicense third-party artwork.
+Background restoration and sharpening: image_gen.
+Asset sources, edits and hashes: e7_gui_assets/CREDITS.txt and
+e7_gui_assets/provenance.json.
