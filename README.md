@@ -25,6 +25,13 @@ restarting. No navigation taps or spending happen while controls are unrecognize
 Stop still works. Wallpaper is never used to identify the home screen. If the
 controls remain unknown, the session ends with a clear explanation.
 
+The rc10 GUI adds an amber notice above the counters: if hidden home UI is
+enabled, click once inside the game before starting. While waiting, the notice
+explains that the session continues automatically after the controls return.
+Both the notice and waiting status use amber in light and dark mode. The engine
+is unchanged from rc9. Live insufficient-currency checks are deferred at the
+owner's request; no automatic-stop guarantee has been established for that case.
+
 ## Run the imported GUI
 
 Use Python 3 with Tkinter and the separately installed upstream ADB engine:
