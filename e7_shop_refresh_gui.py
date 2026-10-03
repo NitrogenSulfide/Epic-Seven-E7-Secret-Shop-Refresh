@@ -220,14 +220,14 @@ class RefreshGui(tk.Tk):
         self.finished = False
         self.partial_line = ""
         self.raw_output = ""
-        self.budget = tk.StringVar(value="750")
+        self.budget = tk.StringVar(value="12")
         self.tap_sleep = tk.StringVar(value="0.3")
-        self.stop_key = tk.StringVar(value="esc")
+        self.stop_key = tk.StringVar(value="`")
         self.device = tk.StringVar(value="localhost:5555")
         self.device_labels = {}
         self.connected_devices = []
         self.debug_mode = tk.BooleanVar(value=False)
-        self.random_offset = tk.BooleanVar(value=False)
+        self.random_offset = tk.BooleanVar(value=True)
         self.status = tk.StringVar(value="Ready")
         self.detail = tk.StringVar(value="Open Epic Seven’s Secret Shop, then start a session.")
         self.setting_notice = tk.StringVar(value="")
@@ -616,6 +616,7 @@ class RefreshGui(tk.Tk):
         metrics.bind("<Configure>", self._schedule_layout)
         metrics.grid(row=2, column=0, sticky="ew")
         self.metric_cards = []
+        self.metric_captions = []
         self.currency_images = currency_icons(self, ASSET_DIR, dp(34))
         self.currency_labels = {}
         for i, (label, var, key) in enumerate((("Elapsed", self.elapsed, None), ("Skystone spent ≈", self.spent, 'spent'), ("Covenant buys", self.covenant, 'covenant'), ("Mystic buys", self.mystic, 'mystic'))):
@@ -628,7 +629,9 @@ class RefreshGui(tk.Tk):
                 icon.grid(row=0, column=0, rowspan=2, sticky='w', padx=(0,dp(8)))
                 self.currency_labels[key] = icon
                 column = 1
-            ttk.Label(card, text=label, font=self.heading_font).grid(row=0,column=column,sticky='w')
+            caption = ttk.Label(card, text=label, font=self.heading_font)
+            caption.grid(row=0,column=column,sticky='w')
+            self.metric_captions.append(caption)
             ttk.Label(card, textvariable=var, style="Value.TLabel").grid(row=1,column=column,sticky="w",pady=(dp(3),0))
             self.metric_cards.append(card)
         self.progress_frame = progress = ttk.Frame(right)
@@ -711,7 +714,7 @@ class RefreshGui(tk.Tk):
                 settings = parser["Settings"]
                 for key, var in (("tap_sleep", self.tap_sleep), ("budget", self.budget), ("stop_refresh_key", self.stop_key)):
                     var.set(settings.get(key, var.get()))
-                self.random_offset.set(settings.get("random_offset", "false").lower() == "true")
+                self.random_offset.set(settings.get("random_offset", str(self.random_offset.get())).lower() == "true")
         except (OSError, ValueError, configparser.Error) as exc:
             self.setting_notice.set(f"Settings could not be read: {exc}")
         try:
@@ -862,7 +865,7 @@ class RefreshGui(tk.Tk):
         self.elapsed.set("0m 00s")
         self.raw_output = self.partial_line = ""
         self._live_stats_seen = False
-        self.metric_cards[1].configure(text='Skystone spent ≈')
+        self.metric_captions[1].configure(text='Skystone spent ≈')
         self.log.configure(state=tk.NORMAL)
         self.log.delete("1.0", tk.END)
         self.log.configure(state=tk.DISABLED)
@@ -971,7 +974,7 @@ class RefreshGui(tk.Tk):
             percent = min(100, stats['skystone_spent'] / self.run_settings.budget * 100)
             self.progress.configure(value=percent)
             self.progress_text.set(f"{stats['refreshes']:,} refreshes · {stats['skystone_spent']:,} skystone spent · engine reported")
-            self.metric_cards[1].configure(text='Skystone spent')
+            self.metric_captions[1].configure(text='Skystone spent')
             return
         if "Shop refresh terminated!" in line:
             self.stop_key_pressed = True

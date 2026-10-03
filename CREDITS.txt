@@ -26,3 +26,8 @@ links/artists and redistribution permissions have not been independently
 established. The software GPL does not relicense this third-party artwork.
 Source PNG bytes are preserved; sizing and tinting occur in the UI renderer.
 Sun/moon button glyphs are drawn by the GUI appearance module.
+
+rc8 day/night enhancement: built-in image_gen restoration and sharpening.
+Original supplied PNGs are retained alongside background-day-hd.png and
+background-night-hd.png; underlying artwork credits remain unchanged.
+Restoration prompt and output hashes are recorded in provenance.json.

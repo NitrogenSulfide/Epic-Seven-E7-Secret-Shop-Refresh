@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 
 try:
-    from PIL import Image, ImageDraw, ImageFilter, ImageOps, ImageTk
+    from PIL import Image, ImageDraw, ImageOps, ImageTk
 except ImportError:
     Image = None
 
@@ -71,7 +71,7 @@ class Scenery:
         if Image is None:
             return
         self.sources = {}
-        for dark, filename in ((False,'background-day.png'),(True,'background-night.png')):
+        for dark, filename in ((False,'background-day-hd.png'),(True,'background-night-hd.png')):
             path = assets/filename
             if path.is_file():
                 with Image.open(path) as source:
@@ -127,9 +127,8 @@ class Scenery:
         key = (width,height,dark)
         if key != self.cache_key:
             scene = ImageOps.fit(self.sources[dark],(width,height),Image.Resampling.LANCZOS)
-            scene = scene.filter(ImageFilter.GaussianBlur(1.2))
             tint = Image.new('RGB',(width,height),'#111827' if dark else '#f3f5f8')
-            self.backdrop = Image.blend(tint,scene,.40 if dark else .30)
+            self.backdrop = Image.blend(tint,scene,.23 if dark else .20)
             self.layer_image = ImageTk.PhotoImage(self.backdrop,master=self.root)
             self.layer.configure(image=self.layer_image)
             self.cache_key = key

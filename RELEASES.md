@@ -48,6 +48,15 @@ py -3 test_e7_shop_refresh_layout.py
 py -3 test_e7_shop_refresh_icons.py
 ```
 
+Run the full GUI test module for every candidate that changes widgets or
+callbacks, including Start through its actual button and live counter reports.
+Appearance-only tests do not clear those paths. An isolated desktop can keep
+these fake-engine tests from disturbing the user's active desktop. Use the
+private Pillow environment when verifying artwork. Fresh normal fixtures and
+manual candidates use 12 skystones, 0.3-second delay, backtick stop key, and
+random offsets on. Tests of alternate inputs and calibration are explicit
+exceptions and never authorize live spending.
+
 Use their fixtures, inspect screenshots for final layout/icon/interaction
 changes, and keep visual evidence incomplete when it is unavailable. Linux GUI
 support is not claimed by this Windows project.
