@@ -2,12 +2,19 @@ import json
 import sys
 from pathlib import Path
 import tempfile
+import time
 from unittest.mock import patch
 
 import e7_shop_refresh_gui as gui
 
 MATRIX = [(1920, 1080, 1), (1920, 1080, 1.25), (1920, 1080, 1.5), (1920, 1080, 2), (2560, 1440, 1), (2560, 1440, 1.5), (2560, 1440, 2), (3840, 2160, 1.5), (3840, 2160, 2), (3840, 2160, 2.5), (3840, 2160, 3)]
 results = []
+def settle(app):
+    # Let the existing 35ms layout and 140ms scenery debounce timers run.
+    deadline = time.monotonic() + .35
+    while time.monotonic() < deadline:
+        app.update()
+        time.sleep(.01)
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp)
     history = root / "history.csv"
@@ -21,11 +28,10 @@ with tempfile.TemporaryDirectory() as temp:
         app._apply_devices(['localhost:6520'], 'Connected.', '')
         app._event('Engine ready. Refreshing started.')
         app.elapsed.set('12h 59m 59s')
-        for _ in range(4):
-            app.update()
+        settle(app)
         if app.compact_history:
             app.notebook.select(app.history_tab)
-            app.update()
+            settle(app)
         problems = []
         if app.device_button.winfo_width() < app.ui_font.measure('Scan') + app._dp(32):
             problems.append('Scan too narrow')

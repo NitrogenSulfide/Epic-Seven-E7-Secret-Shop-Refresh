@@ -150,6 +150,12 @@ Record startup/prompt compatibility, stop behavior, owned-process cleanup and
 history results against this candidate. Agree any spending budget before testing;
 fake-engine success cannot clear those checks.
 
+Owner decision, 2026-10-03: live insufficient-gold/skystone checks are deferred
+for this release effort. Do not drain the owner's account to manufacture them.
+Record them as unverified; inherited behavior does not establish an automatic
+stop guarantee. Future work can use fake ADB/dialog fixtures before any optional
+live check. This deferral does not require new features for the current candidate.
+
 ## Independent review and publication
 
 Provide exact comparison-base and candidate commits, every package hash, member

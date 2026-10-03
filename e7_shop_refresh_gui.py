@@ -230,6 +230,7 @@ class RefreshGui(tk.Tk):
         self.random_offset = tk.BooleanVar(value=True)
         self.status = tk.StringVar(value="Ready")
         self.detail = tk.StringVar(value="Open Epic Seven’s Secret Shop, then start a session.")
+        self.home_ui_hint = tk.StringVar(value="Hidden home UI? Click the game once before Start.")
         self.setting_notice = tk.StringVar(value="")
         self.device_notice = tk.StringVar(value="Checking ADB devices…")
         self.history_notice = tk.StringVar(value="")
@@ -377,7 +378,8 @@ class RefreshGui(tk.Tk):
         for name in ('TFrame', 'TLabel', 'TLabelframe', 'TLabelframe.Label', 'Large.TCheckbutton'):
             style.configure(name, background=bg, foreground=fg, bordercolor=border)
         style.configure('Muted.TLabel', foreground=muted)
-        style.configure('Status.TLabel', foreground='#60a5fa' if dark else '#2563eb')
+        style.configure('Status.TLabel', foreground=('#fbbf24' if dark else '#92400e') if self.status.get() == 'Waiting for game' else ('#60a5fa' if dark else '#2563eb'))
+        self.home_ui_notice.configure(bg='#422006' if dark else '#fff4d6', fg='#fbbf24' if dark else '#92400e', highlightbackground='#b45309' if dark else '#f59e0b')
         for name in ('TEntry', 'TCombobox'):
             style.configure(name, background=field, fieldbackground=field, foreground=fg, insertcolor=fg, bordercolor=border, lightcolor=border, darkcolor=border, arrowcolor=fg)
             style.map(name, background=[('disabled', bg), ('readonly', field)], fieldbackground=[('disabled', bg), ('readonly', field)], foreground=[('disabled', muted), ('readonly', fg)], arrowcolor=[('disabled', muted), ('!disabled', fg)])
@@ -418,6 +420,13 @@ class RefreshGui(tk.Tk):
             self.setting_notice.set('Theme changed for this session; preference could not be saved.')
             self._append_log(f'Theme preference save failed: {exc}\n')
 
+    def _update_home_ui_hint(self, *_):
+        waiting = self.status.get() == 'Waiting for game'
+        self.home_ui_hint.set('Click the game once to reveal controls and continue.' if waiting else
+                              'Hidden home UI? Click the game once before Start.')
+        dark = self.dark_mode.get()
+        ttk.Style(self).configure('Status.TLabel', foreground=('#fbbf24' if dark else '#92400e') if waiting else ('#60a5fa' if dark else '#2563eb'))
+
     def _schedule_layout(self, _event=None):
         if self._layout_job is not None:
             self.after_cancel(self._layout_job)
@@ -426,6 +435,7 @@ class RefreshGui(tk.Tk):
     def _layout_dashboard(self):
         self._layout_job = None
         width = self.right_panel.winfo_width()
+        self.home_ui_notice.configure(wraplength=max(self._dp(250), width-self._dp(30)))
         self.detail_label.configure(wraplength=max(self._dp(250), width-self._dp(12)))
         self.diagnostics_label.configure(wraplength=max(self._dp(250), width-self._dp(60)))
         self.history_label.configure(wraplength=max(self._dp(250), width-self._dp(12)))
@@ -436,7 +446,10 @@ class RefreshGui(tk.Tk):
             self.metrics.columnconfigure(i, weight=1 if i < columns else 0, minsize=0, uniform="metrics" if i < columns else "")
         for i, card in enumerate(self.metric_cards):
             card.grid(row=i//columns, column=i%columns, sticky="nsew", padx=(0 if i%columns == 0 else self._dp(6), 0), pady=(0, self._dp(6) if columns == 2 else 0))
-        required_height = sum(widget.winfo_reqheight() for widget in (self.session_title, self.detail_label, self.metrics, self.progress_frame, self.history_header, self.history_label)) + self.table_rowheight*6 + self._dp(160)
+        # Measure both messages even when detail is hidden in a short window,
+        # so hiding it cannot flip the layout back and forth on the next pass.
+        messages_height = self.home_ui_notice.winfo_reqheight() + self.detail_label.winfo_reqheight() + self._dp(6)
+        required_height = sum(widget.winfo_reqheight() for widget in (self.session_title, self.metrics, self.progress_frame, self.history_header, self.history_label)) + messages_height + self.table_rowheight*6 + self._dp(160)
         compact = self.right_panel.winfo_height() < required_height
         if compact != self.compact_history:
             self.compact_history = compact
@@ -454,7 +467,7 @@ class RefreshGui(tk.Tk):
                 self.history_frame.grid(row=6, column=0, sticky="nsew")
                 self.history_label.grid(row=7, column=0, sticky="w", pady=(self._dp(6), 0))
                 self.right_panel.rowconfigure(6, weight=2, minsize=self.table_rowheight*3+self._dp(55))
-        top_height = sum(widget.winfo_reqheight() for widget in (self.session_title, self.detail_label, self.metrics, self.progress_frame)) + self._dp(40)
+        top_height = sum(widget.winfo_reqheight() for widget in (self.session_title, self.metrics, self.progress_frame)) + messages_height + self._dp(40)
         condensed = compact and self.right_panel.winfo_height() < top_height + self.table_rowheight*2 + self._dp(90)
         for widget in (self.session_title, self.detail_label):
             widget.grid_remove() if condensed else widget.grid()
@@ -610,8 +623,17 @@ class RefreshGui(tk.Tk):
         right.rowconfigure(6, weight=2, minsize=self.table_rowheight * 3 + dp(55))
         self.session_title = ttk.Label(right, text="Current session", font=("Segoe UI", 13, "bold"))
         self.session_title.grid(row=0, column=0, sticky="w")
-        self.detail_label = ttk.Label(right, textvariable=self.detail, style="Muted.TLabel", wraplength=dp(620))
-        self.detail_label.grid(row=1, column=0, sticky="w", pady=(dp(4), dp(12)))
+        self.session_messages = ttk.Frame(right)
+        self.session_messages.grid(row=1, column=0, sticky="ew", pady=(dp(4), dp(12)))
+        self.session_messages.columnconfigure(0, weight=1)
+        self.home_ui_notice = tk.Label(self.session_messages, textvariable=self.home_ui_hint,
+                                      font=self.heading_font, anchor='w', justify='left',
+                                      wraplength=dp(620), padx=dp(10), pady=dp(8),
+                                      borderwidth=0, highlightthickness=dp(1))
+        self.home_ui_notice.grid(row=0, column=0, sticky='ew', pady=(0,dp(6)))
+        self.status.trace_add('write', self._update_home_ui_hint)
+        self.detail_label = ttk.Label(self.session_messages, textvariable=self.detail, style="Muted.TLabel", wraplength=dp(620))
+        self.detail_label.grid(row=1, column=0, sticky="w")
         self.metrics = metrics = ttk.Frame(right)
         metrics.bind("<Configure>", self._schedule_layout)
         metrics.grid(row=2, column=0, sticky="ew")

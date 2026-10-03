@@ -171,12 +171,15 @@ class GuiTests(unittest.TestCase):
 
     def test_hidden_ui_wait_state_resumes_and_does_not_override_stop(self):
         self.app.run_settings = self.app._settings()
+        self.assertIn('before Start', self.app.home_ui_hint.get())
         waiting = 'Navigation: Waiting for visible game controls. Click the game to reveal its UI.'
         self.app._handle_line(waiting)
         self.assertEqual(self.app.status.get(), 'Waiting for game')
+        self.assertIn('reveal controls and continue', self.app.home_ui_hint.get())
         self.assertIn('no taps or spending', self.app.progress_text.get())
         self.app._handle_line('Navigation: Opening the recognized Secret Shop menu.')
         self.assertEqual(self.app.status.get(), 'Running')
+        self.assertIn('before Start', self.app.home_ui_hint.get())
         self.app.stopping = True
         self.app.status.set('Stopping')
         self.app._handle_line(waiting)
