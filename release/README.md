@@ -1,20 +1,29 @@
 # E7 Secret Shop Refresh GUI
 
 Windows GUI by Blue Natto (GitHub: NitrogenSulfide) for Solunium's Epic Seven Secret Shop Refresh ADB
-engine. This is version **0.1.0-rc13**, a local release candidate. It has not been
+engine. This is version **0.1.0-rc14**, a local release candidate. It has not been
 published or cleared for live-game use by the release workflow.
 
 ## Requirements
 
+**Start with [SETUP.md](SETUP.md).** For the enhanced version, obtain all three
+matching downloads: GUI, LiveEngine and Source. The source download supplies the
+preserved upstream ADB tools and item templates; the engine download supplies
+the modified EXE. Recognition images must be prepared locally from your game.
+The GUI ZIP by itself does not reproduce the enhanced version.
+
 - Windows with Python 3 and Tkinter, plus Python's Windows launcher (`py`/`pyw`).
+  The EXE requires the legacy launcher's standard installation path. With the
+  newer Python install manager, use the included CMD or Python command instead.
   Pillow 11.3 or newer enables the scenery and currency artwork. Without Pillow
   the GUI uses its plain light/dark palette. The prepared owner test launcher uses
   the existing private environment with Pillow; system Python is unchanged.
   Automated candidate checks use Python 3.13; other versions are not yet verified.
 - A separately installed Solunium ADB engine folder containing
   `E7ADBShopRefresh.exe` and `adb-assets\platform-tools\adb.exe`.
-- A compatible emulator/game setup as described in
-  [Solunium's preserved instructions](docs/UPSTREAM-README.md).
+- Google Play Games on PC Developer Emulator, with ADB debugging enabled,
+  English game UI and a 1920 x 1080 Android display. Other emulators are unverified;
+  the native STOVE client is not supported by this ADB version.
 
 This package contains the GUI source and a small launcher. Python, the engine,
 ADB and emulator are separate dependencies. The launcher is not a self-contained
@@ -61,7 +70,7 @@ totals at 10% budget milestones. The GUI alone cannot make that engine emit more
 frequent reports. The rebuilt engine sleeps between stop-key checks to reduce
 CPU/GIL contention with foreground typing.
 
-The matching rc5 engine uses private visual references to locate Secret Shop
+The matching engine uses private visual references to locate Secret Shop
 on the home screen and verify its title plus Refresh button. It removes the
 old three fixed menu taps. Unknown, missing or ambiguous references stop the
 engine rather than guessing. See [reference preparation](ENGINE.md). These
@@ -78,6 +87,10 @@ Fake-engine/source checks do not establish real engine prompt compatibility,
 emulator behavior, purchasing, stopping a real refresh, or final visual behavior.
 Live and desktop verification remain separate checks. Review the candidate
 record before using it for a real spending session. There is no automatic updater.
+Insufficient-gold and insufficient-skystone live checks are deferred; automatic
+stopping in those cases is unverified. Counters report completed engine actions,
+not confirmed game balances. First-use defaults are 12 skystones, 0.3-second tap
+delay, backtick stop key and randomized offsets; saved settings take precedence.
 
 To remove the GUI, close it after stopping any active session and remove only
 its extracted folder. The separately installed engine and its settings/history

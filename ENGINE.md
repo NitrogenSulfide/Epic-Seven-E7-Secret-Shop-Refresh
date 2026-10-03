@@ -1,9 +1,12 @@
 # E7 live-counter engine candidate
 
-Modified from Solunium's GPL-3.0 E7 ADB engine, maintained by NitrogenSulfide.
+Modified from Solunium's GPL-3.0 E7 ADB engine, maintained by Blue Natto
+(GitHub: NitrogenSulfide).
 Source: `E7ADBShopRefresh.py`. The upstream history remains in the maintained
 repository; upstream base `49313d14b24f1b8efbeb49f9a6b2126f9bbd0849`.
-This local candidate has not been published or verified in the live game.
+This local candidate has not been published. Automated checks and the owner's
+reports about earlier candidates are separate from verification of these exact
+download bytes. Insufficient-currency live checks remain deferred.
 
 The stop-key loop sleeps 20 ms between checks instead of continuously polling.
 The engine flushes `E7GUI_STATS` JSON after a completed buy sequence and refresh.
@@ -40,6 +43,9 @@ establish which page or action is under a coordinate.
 Use this engine with the matching GUI candidate for live counters. The GUI also
 accepts the original engine, whose totals still arrive at 10% milestones.
 This ZIP contains no ADB executables, game templates, device settings or history.
+The matching GUI and full Source ZIPs are separate release downloads. The Source
+ZIP contains tracked upstream ADB tools/item templates. Follow `release/SETUP.md`
+in the source checkout, or `SETUP.md` inside the GUI/engine ZIP, for fresh setup.
 
 ## Private navigation references
 
@@ -92,3 +98,24 @@ Build from a clean committed checkout. The builder does not run the real engine,
 copy personal state, or modify the installed engine. It records the exact commit,
 Python/dependency versions and binary/package hashes beside the ZIP. Third-party
 licence files are included under `third-party-licenses/`.
+
+### Rebuild from a downloaded source archive
+
+The Source ZIP and engine ZIP do not contain Git metadata. The maintained builder
+requires Git evidence, so use this direct compilation recipe from the extracted
+engine source directory instead. It needs Python 3.13 and installs build tools
+only into the new private environment you choose; it does not run the game.
+
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r engine-build-requirements.txt
+.\.venv\Scripts\python.exe -m unittest test_e7_live_engine test_e7_shop_navigation -v
+.\.venv\Scripts\python.exe -m PyInstaller --clean --onefile --console --name E7ADBShopRefresh --distpath rebuilt-engine --workpath rebuild-work --specpath rebuild-work .\E7ADBShopRefresh.py
+.\rebuilt-engine\E7ADBShopRefresh.exe --verify
+```
+
+Use new environment/output directories to preserve any previous builds. `--verify`
+checks bundled imports only. A locally rebuilt binary will have a different hash
+and is not covered by the downloaded candidate's review or approval. GUI source
+and its launcher rebuild instructions are supplied in the matching GUI ZIP;
+the full Source ZIP also includes the maintained builders and tests.

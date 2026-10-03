@@ -70,6 +70,7 @@ Use an explicit allowlist. The proposed GUI-only package contains:
 - `e7_gui_assets/`, including icon, sounds, credits and provenance;
 - `engine-location.example.ini`, packaged `README.md` and `BUILDING.md`, `VERSION`,
   `LICENSE`, `CREDITS.txt`, `UPSTREAM.md`;
+- packaged `SETUP.md` with fresh-user instructions;
 - `E7ShopLauncher.cs` and `docs/UPSTREAM-README.md` as source/documentation;
 - a launcher EXE only if rebuilt from this candidate's C# source and checked.
 
@@ -78,6 +79,14 @@ GUI-only scope. An engine-bundled release is a different package specification:
 first establish/build the exact engine source version and its corresponding
 source/build instructions per UPSTREAM.md. Do not imply the previously installed
 engine binary came from the cloned source base.
+
+For the enhanced beta, `build_release_assets.ps1` prepares the matching GUI ZIP,
+engine ZIP and full tracked Source ZIP from one clean commit, with SHA256SUMS.
+The Source ZIP intentionally includes tracked upstream `adb-assets` (including
+ADB and its NOTICE) for setup; this is a separate source/runtime input, not an
+exception that adds personal files to the GUI/engine ZIPs. Inspect **all tracked
+members** for private data before review. It contains no Git history, ignored
+files or local navigation references. Keep each reviewed ZIP byte-for-byte.
 
 Exclude installed engine binaries, `adb-assets/`, upstream engine assets,
 `.git/`, caches, virtual environments, `.local-state/`, scratch files, private
@@ -163,5 +172,5 @@ list and automated/visual/live evidence to a fresh reviewer using the General
 workflow prompt. The reviewer reports blockers and incomplete checks; it cannot
 edit, deploy or publish. Publication requires separate approval naming package
 hashes and destination. Creating a GitHub fork/origin and pushing are later
-authorized publication actions. Keep NitrogenSulfide attribution while the public
-name remains undecided.
+authorized publication actions. Use Blue Natto publicly and retain
+NitrogenSulfide as the GitHub identity, alongside Solunium's upstream attribution.
