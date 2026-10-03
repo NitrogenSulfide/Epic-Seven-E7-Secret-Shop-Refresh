@@ -12,9 +12,9 @@ Obtain the **GUI**, **LiveEngine** and **Source** ZIPs with the same version.
 Check their SHA-256s against the release's `SHA256SUMS.txt`:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefreshGUI-0.1.0-rc14.zip'
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7LiveEngine-0.1.0-rc14.zip'
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7Source-0.1.0-rc14.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefreshGUI-0.1.0-rc15.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7LiveEngine-0.1.0-rc15.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7Source-0.1.0-rc15.zip'
 ```
 
 1. Extract the GUI into a folder such as `Documents\E7 GUI`.
@@ -64,29 +64,31 @@ Open Epic Seven and close news/dispatch/popups. If the home controls are hidden,
 click once inside the game to reveal them.
 
 The following commands read screenshots; they do not tap, refresh or purchase.
-Run PowerShell **inside `E7 Runtime`**. Use the emulator's actual ADB address:
+Run PowerShell **inside `E7 Runtime`**. Google's documented developer-emulator
+endpoint is `localhost:6520`; see its [connection guide](https://developer.android.com/games/playgames/pg-emulator#installing-a-game).
+Use that endpoint first, then the actual connected identifier shown by `devices`:
 
 ```powershell
-.\adb-assets\platform-tools\adb.exe connect localhost:5555
+.\adb-assets\platform-tools\adb.exe connect localhost:6520
 .\adb-assets\platform-tools\adb.exe devices
 ```
 
-If your emulator uses another port, replace `localhost:5555` below with the
+If your emulator uses another port, replace `localhost:6520` below with the
 connected device identifier shown by `devices`. Continue only when it is listed
 as `device`, not `offline` or `unauthorized`.
 
 While the **home menu** is visible:
 
 ```powershell
-.\adb-assets\platform-tools\adb.exe -s localhost:5555 shell screencap -p /sdcard/e7-home.png
-.\adb-assets\platform-tools\adb.exe -s localhost:5555 pull /sdcard/e7-home.png .\home.png
+.\adb-assets\platform-tools\adb.exe -s localhost:6520 shell screencap -p /sdcard/e7-home.png
+.\adb-assets\platform-tools\adb.exe -s localhost:6520 pull /sdcard/e7-home.png .\home.png
 ```
 
 Open **Secret Shop manually**, then capture its normal list screen:
 
 ```powershell
-.\adb-assets\platform-tools\adb.exe -s localhost:5555 shell screencap -p /sdcard/e7-shop.png
-.\adb-assets\platform-tools\adb.exe -s localhost:5555 pull /sdcard/e7-shop.png .\shop.png
+.\adb-assets\platform-tools\adb.exe -s localhost:6520 shell screencap -p /sdcard/e7-shop.png
+.\adb-assets\platform-tools\adb.exe -s localhost:6520 pull /sdcard/e7-shop.png .\shop.png
 .\E7ADBShopRefresh.exe --prepare-navigation-references --home .\home.png --shop .\shop.png --output .\adb-assets\gui-navigation
 ```
 
@@ -108,9 +110,15 @@ py -3.13 .\e7_shop_refresh_gui.py
 The EXE currently recognizes only the legacy launcher's standard installation
 paths. With the newer Python install manager, use the command above or the
 included `E7 Secret Shop Refresh GUI.cmd` instead; that CMD uses `pyw` on PATH.
+The EXE/CMD select the latest installed Python. If several versions are installed,
+use the `py -3.13` command above to match the documented Pillow installation.
 
 Opening the GUI discovers ADB devices. Spending begins only after **Start
-refresh**. Check the selected device and settings first. New defaults are a
+refresh**. Select the connected device (normally `localhost:6520` for Google's
+developer emulator); do not retain an unrelated manual address. Leave
+**Debug / calibration mode** unchecked for this normal test: it uses a separate
+100-skystone budget after confirmation and is not the offline image-preparation
+utility. Check the settings first. New normal defaults are a
 12-skystone budget, 0.3-second delay, backtick stop key and randomized offsets.
 Counters count Covenant/Mystic **buys**, not individual bookmarks/medals awarded.
 

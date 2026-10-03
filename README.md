@@ -143,7 +143,7 @@ environment, choose a new output directory:
 ```
 
 This adds no installer or service and runs no ADB/game checks. Engine runtime
-code is unchanged from rc9; rc14 improves the setup documentation and packaging.
+code is unchanged from rc9; rc15 improves the setup documentation and packaging.
 
 ## Ownership and licensing
 
