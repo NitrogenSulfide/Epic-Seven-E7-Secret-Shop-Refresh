@@ -23,6 +23,7 @@ class EngineTests(unittest.TestCase):
         app.storage.inventory = {'Covenant bookmark': engine.E7Item(count=0), 'Mystic medal': engine.E7Item(count=0)}
         app.generateOffset = lambda: (0, 0)
         app.navigation = Mock()
+        app.navigation.verification_details.return_value = 'title=0.500 (unverified); refresh=0.400 (unverified)'
         app.takeScreenshot = lambda: 'fake'
         return app
 

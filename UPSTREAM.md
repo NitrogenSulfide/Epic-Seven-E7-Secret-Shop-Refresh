@@ -25,6 +25,11 @@ shop actions. The engine package includes the navigation module, offline
 preparation utility and corresponding tests; game screenshots/reference crops
 remain private runtime files and are not bundled.
 
+For rc6, shop markers use brightness-normalized grayscale matching to tolerate
+desktop screenshot resampling, while retaining both required markers and the
+menu detector. Errors include match scores and distinguish failed verification
+from a claim that the shop did not open. This does not change item detection.
+
 The running GUI currently uses a previously installed ADB engine executable,
 with SHA-256 `79ba2165937a326a3c4bdf2593c5ceee3383f7644f6f302e4266cf8584f35a6b`.
 That binary was not rebuilt from the source base above, and its exact matching

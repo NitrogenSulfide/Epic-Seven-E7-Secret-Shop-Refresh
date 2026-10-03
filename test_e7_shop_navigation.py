@@ -59,6 +59,14 @@ class NavigationTests(unittest.TestCase):
         home[700:700+image.shape[0],12:12+image.shape[1]] = image
         self.assertIsNone(self.nav.menu_target(home))
 
+    def test_duplicate_refresh_labels_do_not_verify_a_shop(self):
+        shop = self.frame(['shop-title.png'])
+        image = self.images['refresh-label.png']
+        for x in (260, 400):
+            shop[950:950+image.shape[0], x:x+image.shape[1]] = image
+        self.assertIsNone(self.nav.match(shop, 'refresh-label.png'))
+        self.assertFalse(self.nav.shop_visible(shop))
+
     def test_invalid_size_or_missing_reference_fails(self):
         with self.assertRaises(RuntimeError):
             self.nav.shop_visible(np.zeros((720,1280),dtype=np.uint8))
@@ -71,6 +79,30 @@ class NavigationTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('E7_NAV_FIXTURES'),'Private image fixtures not supplied')
 class PrivateScreenshotTests(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get('E7_NAV_LIVE_SHOP'), 'Independent raw shop screenshot not supplied')
+    def test_held_out_raw_adb_shop_with_original_desktop_references(self):
+        folder = Path(os.environ['E7_NAV_FIXTURES'])
+        nav = ShopNavigator(folder/'references')
+        path = Path(os.environ['E7_NAV_LIVE_SHOP'])
+        shop = cv2.imdecode(np.frombuffer(path.read_bytes(), dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
+        self.assertTrue(nav.shop_visible(shop))
+        self.assertIsNone(nav.menu_target(shop))
+        for name in ('shop-title.png', 'refresh-label.png'):
+            match = nav.match(shop, name)
+            self.assertIsNotNone(match)
+            self.assertGreater(match['score'], .95)
+        for factor in (.65, .85, 1.15):
+            adjusted = np.clip(shop.astype(np.float32)*factor, 0, 255).astype(np.uint8)
+            self.assertTrue(nav.shop_visible(adjusted))
+        for name in ('shop-title.png','refresh-label.png'):
+            obscured = shop.copy()
+            # Suppress the whole search region so no remaining fragment can
+            # accidentally stand in for the required marker.
+            from e7_shop_navigation import SEARCH_BOXES
+            x1,y1,x2,y2 = SEARCH_BOXES[name]
+            obscured[y1:y2,x1:x2] = 0
+            self.assertFalse(nav.shop_visible(obscured))
+
     def test_user_screenshots_and_brightness(self):
         folder = Path(os.environ['E7_NAV_FIXTURES'])
         nav = ShopNavigator(folder/'references')
