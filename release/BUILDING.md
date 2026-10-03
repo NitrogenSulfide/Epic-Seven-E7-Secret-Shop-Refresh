@@ -10,7 +10,7 @@ new private build environment. The pins are supplied with the engine source:
 ```powershell
 py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r runtime\engine-build-requirements.txt
-.\.venv\Scripts\python.exe -m PyInstaller --clean --onefile --windowed --name "E7 Secret Shop Refresh" --icon e7_gui_assets\shopkeeper-v2.ico --distpath rebuilt-gui --workpath rebuild-work --specpath rebuild-work .\e7_shop_refresh_gui.py
+.\.venv\Scripts\python.exe -m PyInstaller --clean --onefile --windowed --name "E7 Secret Shop Refresh" --icon (Resolve-Path e7_gui_assets\shopkeeper-v2.ico).Path --distpath rebuilt-gui --workpath rebuild-work --specpath rebuild-work .\e7_shop_refresh_gui.py
 ```
 
 Use new output directories. Stage the rebuilt EXE in a separate copy of the

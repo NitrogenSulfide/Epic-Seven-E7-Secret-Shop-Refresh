@@ -64,7 +64,7 @@ $launcher = Join-Path $staging 'E7 Secret Shop Refresh.exe'
 Push-Location $staging
 try {
     & $python -m PyInstaller --noconfirm --clean --onefile --windowed --name 'E7 Secret Shop Refresh' `
-        --icon e7_gui_assets\shopkeeper-v2.ico --distpath $staging --workpath (Join-Path $output 'work') `
+        --icon (Join-Path $staging 'e7_gui_assets/shopkeeper-v2.ico') --distpath $staging --workpath (Join-Path $output 'work') `
         --specpath $output .\e7_shop_refresh_gui.py *> (Join-Path $output 'compiler.log')
     if ($LASTEXITCODE -ne 0) { throw 'GUI compilation failed; inspect compiler.log.' }
 }
