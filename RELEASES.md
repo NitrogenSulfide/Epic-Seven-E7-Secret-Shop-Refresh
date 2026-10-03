@@ -20,6 +20,19 @@ py -3 -m unittest test_e7_shop_refresh_gui.ProtocolTests test_e7_engine_location
 .\launch_e7_shop_refresh_gui.ps1 --help
 ```
 
+For the optional live-counter engine, use the approved private build environment:
+
+```powershell
+.\.local-state\engine-build-venv\Scripts\python.exe -m unittest test_e7_live_engine -v
+.\build_engine_release.ps1 -BuildPython .local-state\engine-build-venv\Scripts\python.exe -OutputDirectory C:\absolute\new\engine-candidate
+```
+
+See [engine candidate instructions](release/ENGINE.md). Record both GUI and engine
+ZIP/binary hashes against the same exact clean source commit. Engine-only checks
+use fake ADB calls and keyboard polling; `--verify` only verifies bundled imports.
+Keep personal runtime assets/config/history outside both ZIPs. A rebuilt engine
+does not establish live-game correctness or clear publication approval.
+
 The current non-GUI tests use temporary fixtures and a fake engine. They check
 prompt handling, validation, history interpretation, location precedence,
 path isolation, stop-key capture mapping and startup failure behavior. They do not test a real ADB

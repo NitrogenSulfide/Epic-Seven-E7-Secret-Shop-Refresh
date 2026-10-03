@@ -1,7 +1,7 @@
 # E7 Secret Shop Refresh GUI
 
 Windows GUI by NitrogenSulfide for Solunium's Epic Seven Secret Shop Refresh ADB
-engine. This is version **0.1.0-rc3**, a local release candidate. It has not been
+engine. This is version **0.1.0-rc4**, a local release candidate. It has not been
 published or cleared for live-game use by the release workflow.
 
 ## Requirements
@@ -45,6 +45,18 @@ folder performs ADB device discovery; pressing Start runs the real refresh engin
 To select a stop key, click the Stop key box and press Esc or another supported
 single key. Tab moves to the next control. Unsupported keys and Ctrl/Alt
 combinations leave the previous selection unchanged and show a message.
+
+Use **Dark mode** in the top-right header to switch appearance. It is remembered
+in the selected engine folder's GUI preferences and remains available during a
+session. It does not change Windows' appearance settings.
+
+With the matching [live-counter engine candidate](ENGINE.md), Covenant/Mystic
+buys update after each engine-completed buy sequence, and skystone spent updates
+after each completed refresh. These are engine-reported actions, not a balance
+verification. The original installed engine remains supported but only reports
+totals at 10% budget milestones. The GUI alone cannot make that engine emit more
+frequent reports. The rebuilt engine sleeps between stop-key checks to reduce
+CPU/GIL contention with foreground typing.
 
 The engine's `ADBconfig.ini`, `ShopRefreshGUI.ini` and `ShopRefreshHistory` stay
 inside the selected engine installation. Existing settings/history are reused;

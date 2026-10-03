@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import configparser
+import json
 import csv
 import math
 import os
@@ -203,6 +204,8 @@ class RefreshGui(tk.Tk):
         self._finalized_run_id = None
         self.stop_key_pressed = False
         self.sound_enabled = tk.BooleanVar(value=True)
+        self.dark_mode = tk.BooleanVar(value=False)
+        self._live_stats_seen = False
         self.process = None
         self.process_tree = None
         self._exit_seen = False
@@ -238,6 +241,7 @@ class RefreshGui(tk.Tk):
         self.ev = tk.StringVar()
         self._load_config()
         self._build_ui()
+        self._apply_theme()
         self._load_icon()
         self._fit_initial_window()
         self.bind('<Map>', self._schedule_native_icon, add='+')
@@ -331,22 +335,80 @@ class RefreshGui(tk.Tk):
     def _build_checkbox_style(self, style):
         side = self._dp(20)
         border = self._dp(2)
-        self.checkbox_images = []
+        dark = self.dark_mode.get()
+        prefix = 'DarkCheck' if dark else 'LargeCheck'
+        if not hasattr(self, '_checkbox_palettes'):
+            self._checkbox_palettes = {}
+        if prefix in self._checkbox_palettes:
+            style.layout("Large.TCheckbutton", self._checkbox_palettes[prefix])
+            return
+        images = []
         for selected, disabled in ((False, False), (True, False), (False, True), (True, True)):
             image = tk.PhotoImage(master=self, width=side + self._dp(10), height=side)
-            image.put("#94a3b8" if disabled else "#64748b", to=(0, 0, side, side))
-            image.put("#cbd5e1" if disabled else "#2563eb" if selected else "#ffffff", to=(border, border, side-border, side-border))
+            image.put("#475569" if dark and disabled else "#94a3b8" if disabled else "#64748b", to=(0, 0, side, side))
+            image.put("#334155" if dark and disabled else "#cbd5e1" if disabled else "#2563eb" if selected else "#1e293b" if dark else "#ffffff", to=(border, border, side-border, side-border))
             if selected:
                 for x in range(self._dp(4), side-self._dp(4)):
                     y = round(side * (0.55 + (x/side - 0.2) if x < side*0.43 else 0.78 - (x/side - 0.43)))
                     for dy in range(-border//2, border//2+1):
                         if 0 <= y+dy < side:
                             image.put("#ffffff", to=(x, y+dy))
-            self.checkbox_images.append(image)
-        off, on, disabled_off, disabled_on = self.checkbox_images
-        style.element_create("LargeCheck.indicator", "image", off, ("disabled", "selected", disabled_on), ("disabled", disabled_off), ("selected", on), sticky="w")
-        style.layout("Large.TCheckbutton", [("Checkbutton.padding", {"sticky": "nswe", "children": [("LargeCheck.indicator", {"side": "left", "sticky": "w"}), ("Checkbutton.focus", {"side": "left", "sticky": "w", "children": [("Checkbutton.label", {"sticky": "nswe"})]})]})])
+            images.append(image)
+        if not hasattr(self, 'checkbox_images'):
+            self.checkbox_images = []
+        self.checkbox_images.extend(images)
+        off, on, disabled_off, disabled_on = images
+        style.element_create(prefix + ".indicator", "image", off, ("disabled", "selected", disabled_on), ("disabled", disabled_off), ("selected", on), sticky="w")
+        layout = [("Checkbutton.padding", {"sticky": "nswe", "children": [(prefix + ".indicator", {"side": "left", "sticky": "w"}), ("Checkbutton.focus", {"side": "left", "sticky": "w", "children": [("Checkbutton.label", {"sticky": "nswe"})]})]})]
+        self._checkbox_palettes[prefix] = layout
+        style.layout("Large.TCheckbutton", layout)
         style.configure("Large.TCheckbutton", background="#f3f5f8", font=self.ui_font, padding=(0, self._dp(5)))
+
+    def _apply_theme(self):
+        dark = self.dark_mode.get()
+        bg, field, fg, muted, border, active = (
+            ('#111827', '#1e293b', '#e2e8f0', '#94a3b8', '#475569', '#334155') if dark else
+            ('#f3f5f8', '#ffffff', '#1e293b', '#64748b', '#cbd5e1', '#e2e8f0'))
+        style = ttk.Style(self)
+        self.configure(bg=bg)
+        self.settings_canvas.configure(bg=bg)
+        for name in ('TFrame', 'TLabel', 'TLabelframe', 'TLabelframe.Label', 'Large.TCheckbutton'):
+            style.configure(name, background=bg, foreground=fg, bordercolor=border)
+        style.configure('Muted.TLabel', foreground=muted)
+        style.configure('Status.TLabel', foreground='#60a5fa' if dark else '#2563eb')
+        for name in ('TEntry', 'TCombobox'):
+            style.configure(name, background=field, fieldbackground=field, foreground=fg, insertcolor=fg, bordercolor=border, lightcolor=border, darkcolor=border, arrowcolor=fg)
+            style.map(name, background=[('disabled', bg), ('readonly', field)], fieldbackground=[('disabled', bg), ('readonly', field)], foreground=[('disabled', muted), ('readonly', fg)], arrowcolor=[('disabled', muted), ('!disabled', fg)])
+        for name in ('TButton', 'Treeview.Heading'):
+            style.configure(name, background=active, foreground=fg, bordercolor=border, lightcolor=border, darkcolor=border)
+            style.map(name, background=[('active', border)], foreground=[('disabled', muted)])
+        style.configure('Accent.TButton', background='#2563eb', foreground='#ffffff')
+        style.map('Accent.TButton', background=[('disabled', active), ('active', '#1d4ed8')], foreground=[('disabled', muted), ('!disabled', '#ffffff')])
+        style.map('Large.TCheckbutton', foreground=[('disabled', muted)], background=[('active', bg)])
+        style.configure('Treeview', background=field, fieldbackground=field, foreground=fg, bordercolor=border)
+        style.map('Treeview', background=[('selected', '#2563eb')], foreground=[('selected', '#ffffff')])
+        self.history.tag_configure('even', background=bg, foreground=fg)
+        self.history.tag_configure('debug', background='#422006' if dark else '#fff4d6', foreground='#fcd34d' if dark else '#92400e')
+        style.configure('TNotebook', background=bg, bordercolor=border)
+        tabs = [('selected', bg), ('active', active), ('!selected', field)]
+        style.map('TNotebook.Tab', background=tabs, lightcolor=tabs, darkcolor=tabs, foreground=[('selected', fg), ('!selected', muted)])
+        for name in ('TScrollbar', 'Horizontal.TScrollbar', 'Vertical.TScrollbar'):
+            style.configure(name, background=active, troughcolor=bg, arrowcolor=fg, bordercolor=border, lightcolor=border, darkcolor=border)
+            style.map(name, background=[('active', border), ('!disabled', active)], arrowcolor=[('disabled', muted), ('!disabled', fg)])
+        style.configure('Horizontal.TProgressbar', troughcolor=active, bordercolor=border)
+        self.log.configure(bg=field, fg=fg, insertbackground=fg, selectbackground='#2563eb', selectforeground='#ffffff')
+        for option, color in (('background', field), ('foreground', fg), ('selectBackground', '#2563eb'), ('selectForeground', '#ffffff')):
+            self.option_add('*TCombobox*Listbox.' + option, color)
+        self._build_checkbox_style(style)
+        style.configure('Large.TCheckbutton', background=bg, foreground=fg)
+
+    def _toggle_dark_mode(self):
+        self._apply_theme()
+        try:
+            self._write_sound_preference()
+        except (OSError, configparser.Error) as exc:
+            self.setting_notice.set('Theme changed for this session; preference could not be saved.')
+            self._append_log(f'Theme preference save failed: {exc}\n')
 
     def _schedule_layout(self, _event=None):
         if self._layout_job is not None:
@@ -451,7 +513,9 @@ class RefreshGui(tk.Tk):
         header.columnconfigure(0, weight=1)
         ttk.Label(header, text="Secret Shop", style="Title.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(header, text="Refresh sessions · Epic Seven", style="Muted.TLabel").grid(row=1, column=0, sticky="w")
-        ttk.Label(header, textvariable=self.status, font=("Segoe UI", 12, "bold"), foreground="#2563eb").grid(row=0, column=1, sticky="e")
+        ttk.Label(header, textvariable=self.status, font=("Segoe UI", 12, "bold"), style='Status.TLabel').grid(row=0, column=1, sticky="e")
+        self.theme_button = ttk.Checkbutton(header, text='Dark mode', variable=self.dark_mode, command=self._toggle_dark_mode, style='Large.TCheckbutton')
+        self.theme_button.grid(row=1, column=1, sticky='e')
         body = ttk.Frame(self, padding=(dp(24), 0, dp(24), dp(20)))
         body.grid(row=1, column=0, sticky="nsew")
         body.columnconfigure(1, weight=1)
@@ -634,6 +698,7 @@ class RefreshGui(tk.Tk):
             parser = configparser.ConfigParser()
             parser.read(GUI_CONFIG_FILE)
             self.sound_enabled.set(parser.getboolean("GUI", "sound_enabled", fallback=True))
+            self.dark_mode.set(parser.getboolean("GUI", "dark_mode", fallback=False))
             self.device.set(parser.get("GUI", "device", fallback=self.device.get()))
         except (OSError, ValueError, configparser.Error) as exc:
             self.setting_notice.set(f"Sound preference could not be read: {exc}")
@@ -646,6 +711,7 @@ class RefreshGui(tk.Tk):
         if not parser.has_section("GUI"):
             parser.add_section("GUI")
         parser["GUI"]["sound_enabled"] = str(self.sound_enabled.get())
+        parser["GUI"]["dark_mode"] = str(self.dark_mode.get())
         parser["GUI"]["device"] = self._device_address()
         temp = GUI_CONFIG_FILE.with_suffix(".ini.tmp")
         with temp.open("w", encoding="utf-8") as fh:
@@ -775,6 +841,8 @@ class RefreshGui(tk.Tk):
         self.launch_started_at = time.monotonic()
         self.elapsed.set("0m 00s")
         self.raw_output = self.partial_line = ""
+        self._live_stats_seen = False
+        self.metric_cards[1].configure(text='Skystone spent ≈')
         self.log.configure(state=tk.NORMAL)
         self.log.delete("1.0", tk.END)
         self.log.configure(state=tk.DISABLED)
@@ -859,6 +927,28 @@ class RefreshGui(tk.Tk):
     def _handle_line(self, line):
         if not line:
             return
+        if line.startswith('E7GUI_STATS '):
+            try:
+                stats = json.loads(line[len('E7GUI_STATS '):])
+                keys = ('refreshes', 'skystone_spent', 'covenant', 'mystic', 'friendship')
+                if not isinstance(stats, dict) or any(type(stats.get(key)) is not int or stats[key] < 0 for key in keys):
+                    raise ValueError('Invalid live counters')
+                if stats['skystone_spent'] != stats['refreshes'] * 3:
+                    raise ValueError('Invalid refresh spending')
+            except (ValueError, TypeError):
+                return
+            self._live_stats_seen = True
+            for key, var in (('skystone_spent', self.spent), ('covenant', self.covenant), ('mystic', self.mystic), ('friendship', self.friendship)):
+                value = number_text(stats[key])
+                if var.get() != value:
+                    if key in ('covenant', 'mystic') and stats[key] > 0:
+                        self._event(f"{'Covenant' if key == 'covenant' else 'Mystic'} purchases: {value}.")
+                    var.set(value)
+            percent = min(100, stats['skystone_spent'] / self.run_settings.budget * 100)
+            self.progress.configure(value=percent)
+            self.progress_text.set(f"{stats['refreshes']:,} refreshes · {stats['skystone_spent']:,} skystone spent · engine reported")
+            self.metric_cards[1].configure(text='Skystone spent')
+            return
         if "Shop refresh terminated!" in line:
             self.stop_key_pressed = True
             self.status.set("Stopping")
@@ -868,7 +958,7 @@ class RefreshGui(tk.Tk):
             self.after(1500, lambda process=self.process, run_id=self.run_id: self._end_stopped_engine(process, run_id))
         if "Progress:" in line and not self.stopping and not self.stop_key_pressed:
             self._engine_started()
-        if match := re.match(r"^(\d{1,3})%", line):
+        if (match := re.match(r"^(\d{1,3})%", line)) and not self._live_stats_seen:
             percent = min(int(match[1]), 100)
             self.progress.configure(value=percent)
             self.progress_text.set(f"{percent}% of budget used · engine reported")
@@ -986,7 +1076,11 @@ class RefreshGui(tk.Tk):
         self.stop_button.configure(state=tk.NORMAL if running else tk.DISABLED)
 
     def _drain_log_queue(self):
+        output = []
+        deadline = time.perf_counter() + 0.008
         for _ in range(300):
+            if time.perf_counter() >= deadline:
+                break
             try:
                 run_id, kind, value = self.log_queue.get_nowait()
             except queue.Empty:
@@ -994,8 +1088,14 @@ class RefreshGui(tk.Tk):
             if run_id is not None and run_id != self.run_id:
                 continue
             if kind == "output":
-                self._handle_output(value)
-            elif kind == "eof":
+                output.append(value)
+                if sum(map(len, output)) >= 16384:
+                    break
+                continue
+            if output:
+                self._handle_output(''.join(output))
+                output.clear()
+            if kind == "eof":
                 self._finish_process()
             elif kind == "started":
                 self._engine_started()
@@ -1004,6 +1104,8 @@ class RefreshGui(tk.Tk):
             elif kind == "devices":
                 devices, note, raw = value
                 self._apply_devices(devices, note, raw)
+        if output:
+            self._handle_output(''.join(output))
         self.after(100, self._drain_log_queue)
 
     def _append_log(self, text):

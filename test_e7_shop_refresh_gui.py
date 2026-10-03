@@ -207,6 +207,55 @@ class GuiTests(unittest.TestCase):
         self.app.update()
         self.assertEqual(self.app.stop_key.get(), 'a')
 
+    def test_live_counters_update_before_session_end_and_ignore_old_percent(self):
+        self.app.run_settings = gui.validate_settings('localhost:5555', '33', '.3', 'esc', False, False)
+        def stats(refreshes, cov, mys):
+            return 'E7GUI_STATS ' + gui.json.dumps(dict(refreshes=refreshes, skystone_spent=3*refreshes, covenant=cov, mystic=mys, friendship=0)) + '\n'
+        # Fragmented stream: no final result or history is needed for live cards.
+        message = stats(1, 1, 0)
+        self.app._handle_output(message[:19])
+        self.app._handle_output(message[19:])
+        self.assertEqual((self.app.spent.get(), self.app.covenant.get(), self.app.mystic.get()), ('3', '1', '0'))
+        self.app._handle_output(stats(1, 1, 1))
+        self.app._handle_output('10% Cove: 0 Myst: 0\r')
+        self.assertEqual((self.app.spent.get(), self.app.covenant.get(), self.app.mystic.get()), ('3', '1', '1'))
+        self.app._handle_output(stats(2, 1, 1))
+        self.assertEqual(self.app.spent.get(), '6')
+        self.assertFalse(self.app.finished)
+
+    def test_invalid_live_stats_do_not_change_cards(self):
+        self.app.run_settings = gui.validate_settings('localhost:5555', '30', '.3', 'esc', False, False)
+        for text in ('not json', '{}', '[1]', '{"refreshes":true}', '{"refreshes":1,"skystone_spent":6,"covenant":0,"mystic":0,"friendship":0}'):
+            self.app._handle_line('E7GUI_STATS ' + text)
+        self.assertFalse(self.app._live_stats_seen)
+        self.assertEqual(self.app.spent.get(), '—')
+
+    def test_dark_mode_persists_without_disabling_during_session(self):
+        self.app.theme_button.invoke()
+        self.assertTrue(self.app.dark_mode.get())
+        self.assertEqual(self.app.settings_canvas.cget('background'), '#111827')
+        self.assertIn('dark_mode = True', self.gui_config.read_text())
+        self.app._set_controls(True)
+        self.assertFalse(self.app.theme_button.instate(['disabled']))
+        self.app.theme_button.invoke()
+        self.assertFalse(self.app.dark_mode.get())
+        self.assertTrue(self.app.stop_key_entry.instate(['readonly', 'disabled']))
+        self.app._set_controls(False)
+        self.app.dark_mode.set(True)
+        self.app._toggle_dark_mode()
+        self.app.dark_mode.set(False)
+        self.app._load_config()
+        self.assertTrue(self.app.dark_mode.get())
+
+    def test_output_queue_batches_diagnostics_but_preserves_counter_order(self):
+        self.app.run_settings = gui.validate_settings('localhost:5555', '30', '.3', 'esc', False, False)
+        for i in range(30):
+            self.app.log_queue.put((self.app.run_id, 'output', f'{i}% Cove: {i} Myst: 0\n'))
+        with patch.object(self.app, '_append_log', wraps=self.app._append_log) as log:
+            self.app._drain_log_queue()
+        self.assertEqual(log.call_count, 1)
+        self.assertEqual(self.app.covenant.get(), '29')
+
     def test_end_to_end(self):
         self.start_fake()
         self.pump_until(lambda: self.app.status.get() == "Finished")

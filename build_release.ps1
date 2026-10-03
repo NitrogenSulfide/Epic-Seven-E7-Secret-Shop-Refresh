@@ -41,6 +41,7 @@ $mapping = [ordered]@{
     'VERSION' = 'VERSION'
     'release/README.md' = 'README.md'
     'release/BUILDING.md' = 'BUILDING.md'
+    'release/ENGINE.md' = 'ENGINE.md'
     'docs/UPSTREAM-README.md' = 'docs/UPSTREAM-README.md'
 }
 $assets = @(& git -c "safe.directory=$safeRepository" -C $repository ls-files -- e7_gui_assets)

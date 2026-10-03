@@ -38,6 +38,15 @@ uses the saved file or environment variable.
 For the Stop key setting, click its box and press Esc or another supported
 single key. Tab remains navigation; unsupported keys leave the selection intact.
 
+**Dark mode** in the top-right header switches appearance and remembers the
+choice in `ShopRefreshGUI.ini`. It remains available during a session.
+
+The separately built [live-counter engine](release/ENGINE.md) sleeps between
+stop-key checks and emits counts after each completed buy/refresh. The GUI consumes
+those reports immediately. The original engine remains supported with its older
+10% milestone updates. Build candidates from recorded source; preserve the
+installed binary and test a separate runtime folder first.
+
 The copied `E7 Secret Shop Refresh.exe` launcher is available locally and remains
 ignored by Git. It requires Python's Windows launcher and the adjacent GUI source;
 it is not a self-contained application. The existing desktop shortcut still uses

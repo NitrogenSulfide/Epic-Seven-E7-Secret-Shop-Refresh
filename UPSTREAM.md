@@ -12,6 +12,13 @@ This checkout preserves the upstream history. Your Windows GUI is added on top;
 no upstream engine source was modified during extraction. The original README
 is retained in docs/UPSTREAM-README.md.
 
+For 0.1.0-rc4, the maintained ADB engine source is modified to sleep between
+stop-key checks, emit flushed per-action counters, and avoid counting interrupted
+or failed ADB tap sequences. A new engine candidate is built from this checkout
+and supplied with its exact source and [build instructions](release/ENGINE.md).
+It is separate from the previously installed binary described below. Both
+candidate hashes and the full source commit are recorded by their builders.
+
 The running GUI currently uses a previously installed ADB engine executable,
 with SHA-256 `79ba2165937a326a3c4bdf2593c5ceee3383f7644f6f302e4266cf8584f35a6b`.
 That binary was not rebuilt from the source base above, and its exact matching
