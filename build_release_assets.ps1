@@ -16,7 +16,7 @@ $python = (Resolve-Path -LiteralPath $BuildPython).Path
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $output) { throw 'Choose a new candidate output directory.' }
 New-Item -ItemType Directory -Path $output | Out-Null
-& (Join-Path $repository 'build_release.ps1') -OutputDirectory (Join-Path $output 'gui-build')
+& (Join-Path $repository 'build_release.ps1') -BuildPython $python -OutputDirectory (Join-Path $output 'gui-build')
 & (Join-Path $repository 'build_engine_release.ps1') -BuildPython $python -OutputDirectory (Join-Path $output 'engine-build')
 # The component ZIPs are private build evidence. Players receive one assembled ZIP.
 $staging = Join-Path $output 'player-staging'
@@ -25,6 +25,8 @@ Copy-Item -Path (Join-Path $output 'gui-build/staging/*') -Destination $staging 
 $runtime = Join-Path $staging 'runtime'
 New-Item -ItemType Directory -Path $runtime | Out-Null
 Copy-Item -Path (Join-Path $output 'engine-build/staging/*') -Destination $runtime -Recurse
+(Get-FileHash -LiteralPath (Join-Path $runtime 'E7ADBShopRefresh.exe') -Algorithm SHA256).Hash.ToLowerInvariant() |
+    Set-Content -LiteralPath (Join-Path $runtime 'E7ADBShopRefresh.sha256') -Encoding utf8
 $adbAssets = @(& git -c "safe.directory=$safe" -C $repository ls-files -- adb-assets)
 if ($LASTEXITCODE -ne 0 -or $adbAssets.Count -eq 0) { throw 'Tracked upstream ADB tools/templates are missing.' }
 foreach ($asset in $adbAssets) {

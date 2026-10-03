@@ -27,8 +27,8 @@ Fresh settings and prepared offline/manual tests use a 12-skystone budget,
 0.3-second tap delay, backtick stop key, and randomized tap offsets.
 Existing saved settings still take precedence; calibration retains its engine
 defaults and requires its existing confirmation.
-Pillow 11.3+ enables this appearance; the plain palette remains available when
-Pillow is absent. The prepared local test launcher uses the existing private
+The rc19 player EXE bundles Python/Tk/Pillow for this appearance. Source-only
+launches still need Pillow; the legacy plain fallback remains available there. The prepared local test launcher uses the existing private
 environment, without installing anything into system Python. The engine remains
 paired with the GUI and retains rc9 handling of startup with hidden controls.
 rc16 also fixes selecting an already connected device when several ADB devices
@@ -52,7 +52,7 @@ owner's request; no automatic-stop guarantee has been established for that case.
 
 ## Run the imported GUI
 
-Use Python 3 with Tkinter and the separately installed upstream ADB engine:
+Use a source Python environment with Tkinter and Pillow and the separately installed upstream ADB engine:
 
 ```powershell
 py -3 .\e7_shop_refresh_gui.py
@@ -96,9 +96,9 @@ Refresh button before shop actions. It requires private navigation references;
 the supplied local test setup already has them. The old installed engine does
 not gain these checks just by using a newer GUI.
 
-The copied `E7 Secret Shop Refresh.exe` launcher is available locally and remains
-ignored by Git. It requires Python's Windows launcher and the adjacent GUI source;
-it is not a self-contained application. The existing desktop shortcut still uses
+The historical copied launcher remains as a recovery artifact and requires
+external Python. The rc19 player EXE instead bundles Python/Tk/Pillow and is
+built from the maintained GUI source. The existing desktop shortcut still uses
 the original General/scripts copy. No shortcut or installed engine was changed.
 
 ## Checks
@@ -130,7 +130,7 @@ The component builder creates a GUI-only ZIP for private build evidence, with
 source, assets and a launcher compiled from the same clean commit:
 
 ```powershell
-.\build_release.ps1
+.\build_release.ps1 -BuildPython .local-state\engine-build-venv\Scripts\python.exe
 ```
 
 The output is under ignored `dist/candidates/<VERSION>/` with a build manifest.
@@ -165,3 +165,17 @@ For a future GitHub fork, create the fork under NitrogenSulfide and add it as
 `origin`. The existing `upstream` fetch remote points to Solunium. This checkout
 has upstream ancestry, so the GUI work can be pushed to the fork without
 rewriting Solunium's history. Public hosting is a separate approval step.
+
+## rc19 fresh-install fixes
+
+The player EXE now contains Python, Tk and Pillow. It reads artwork and portable
+configuration beside the EXE, never from PyInstaller's temporary extraction path.
+Fresh player installs need no system Python launcher or Pillow installation.
+The preserved C# launcher and CMD/PowerShell source launchers remain historical
+developer entry points; they are not included in the current player ZIP.
+
+Missing recognition opens a read-only, user-directed home/shop capture dialog
+before launching the engine. It uses the exact bundled setup engine, verified
+against its package checksum, and preserves previous calibration as a backup.
+Setup never sends game taps or starts a refresh. A separate explicit Start is
+required after successful setup. Private captures remain in the selected runtime.

@@ -19,8 +19,9 @@ from tkinter import font as tkfont, messagebox, ttk
 from e7_process import launch_engine
 from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon
 from e7_about import AboutDialog
+from e7_setup import missing_references, RecognitionSetup
 
-PROJECT_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
 DEFAULT_ENGINE_DIR = Path.home() / "Downloads" / "E7 Secret Shop Refresh"
 ENGINE_LOCATION_FILE = PROJECT_DIR / "engine-location.ini"
 APP_DIR = DEFAULT_ENGINE_DIR
@@ -219,6 +220,7 @@ class RefreshGui(tk.Tk):
         self.run_id = 0
         self.log_queue = queue.Queue()
         self.run_settings = None
+        self.setup_window = None
         self.started_at = None
         self.stopping = False
         self.finished = False
@@ -227,7 +229,7 @@ class RefreshGui(tk.Tk):
         self.budget = tk.StringVar(value="12")
         self.tap_sleep = tk.StringVar(value="0.3")
         self.stop_key = tk.StringVar(value="`")
-        self.device = tk.StringVar(value="localhost:5555")
+        self.device = tk.StringVar(value="localhost:6520")
         self.device_labels = {}
         self.connected_devices = []
         self.debug_mode = tk.BooleanVar(value=False)
@@ -920,6 +922,20 @@ class RefreshGui(tk.Tk):
         if not ENGINE_EXE.is_file():
             messagebox.showerror("Missing engine", f"Could not find {ENGINE_EXE}", parent=self)
             return
+        if missing_references(ENGINE_EXE.parent):
+            if self.setup_window is not None and self.setup_window.winfo_exists():
+                self.setup_window.lift()
+                return
+            try:
+                settings = self._settings()
+                self.setup_window = RecognitionSetup(self, ENGINE_EXE.parent, ADB_EXE, ENGINE_EXE, settings.device)
+            except (ValueError, OSError) as error:
+                messagebox.showerror('Recognition setup unavailable', str(error), parent=self)
+                return
+            self.status.set('Setup required')
+            self.detail.set('Prepare home/shop recognition once. No refreshing or spending has started.')
+            self._event('Recognition setup required. Engine not started.')
+            return
         if self.debug_mode.get():
             message = "Debug uses a fixed 100-skystone test budget, the Esc stop key, and randomized offsets. It includes Friendship Points when detected, and pauses BEFORE each click. Check each image, then press a key other than Esc in that image to continue. Buy and confirmation each have a pause. Continue?"
             if not messagebox.askyesno("Start calibration?", message, parent=self):
@@ -1321,10 +1337,29 @@ def enable_dpi_awareness():
 def main(argv=None):
     parser = argparse.ArgumentParser(description="E7 Secret Shop Refresh GUI")
     parser.add_argument("--engine-dir", metavar="FOLDER", help="installed ADB engine folder")
+    parser.add_argument('--verify', action='store_true', help='offline package/image-support check; no GUI or ADB')
+    parser.add_argument('--verification-report', metavar='FILE', help='save the offline verification result as JSON')
     args = parser.parse_args(argv)
     try:
         configure_engine_directory(resolve_engine_directory(args.engine_dir))
-    except ValueError as error:
+        if args.verify:
+            from e7_appearance import Image
+            if Image is None:
+                raise ValueError('Pillow image support is missing. Use the bundled player EXE.')
+            for name in ('background-day-hd.png', 'background-night-hd.png', 'mystic-medal.png',
+                         'covenant-bookmark.png', 'skystone.png', 'blue-natto-avatar.png'):
+                with Image.open(ASSET_DIR/name) as artwork:
+                    artwork.verify()
+            if args.verification_report:
+                Path(args.verification_report).write_text(json.dumps(dict(
+                    frozen=bool(getattr(sys, 'frozen', False)), artwork='verified', pillow=Image.__version__,
+                    tcl=tk.Tcl().eval('info patchlevel'),
+                    engine_directory=str(APP_DIR), missing_references=missing_references(APP_DIR),
+                    gui_or_adb_started=False), indent=2), encoding='utf-8')
+            return 0
+    except (ValueError, OSError) as error:
+        if args.verify:
+            return 2
         # Windowed Python launchers have no stderr; keep their errors visible.
         if sys.stderr is None:
             root = tk.Tk()

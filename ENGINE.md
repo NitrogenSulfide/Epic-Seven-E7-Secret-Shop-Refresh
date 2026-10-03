@@ -126,3 +126,8 @@ checks bundled imports only. A locally rebuilt binary will have a different hash
 and is not covered by the downloaded candidate's review or approval. GUI source
 and its launcher rebuild instructions are supplied at the player ZIP's root;
 the full Source ZIP also includes the maintained builders and tests.
+
+For rc19 players, missing references open a guided home/shop screenshot dialog.
+It checks the bundled engine checksum before invoking its offline preparation
+utility. It performs no game taps and never starts refreshing automatically after
+setup. The manual utility remains available for developers and older candidates.
