@@ -1359,6 +1359,10 @@ def main(argv=None):
             return 0
     except (ValueError, OSError, tk.TclError, ImportError) as error:
         if args.verify:
+            if args.verification_report:
+                Path(args.verification_report).write_text(json.dumps(dict(
+                    frozen=bool(getattr(sys, 'frozen', False)), error=str(error),
+                    project_directory=str(PROJECT_DIR), gui_or_adb_started=False), indent=2), encoding='utf-8')
             return 2
         # Windowed Python launchers have no stderr; keep their errors visible.
         if sys.stderr is None:
