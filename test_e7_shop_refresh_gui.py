@@ -25,10 +25,19 @@ class ProtocolTests(unittest.TestCase):
         for key in "1/,;'[]`":
             self.assertEqual(gui.captured_stop_key(key, key), key)
         for keysym, char, state in (("F1", "", 0), ("space", " ", 0),
-                                   ("a", "\x01", 4), ("Escape", "\x1b", 8),
+                                   ("a", "\x01", 4), ("Escape", "\x1b", 0x10),
                                    ("a", "a", 0x20000), ("exclam", "!", 1)):
             with self.subTest(keysym=keysym):
                 self.assertIsNone(gui.captured_stop_key(keysym, char, state))
+
+    def test_windows_lock_flags_do_not_reject_stop_keys(self):
+        for state in (0x8, 0x2, 0x20, 0x8 | 0x2 | 0x20):
+            with self.subTest(state=state):
+                self.assertEqual(gui.captured_stop_key("Escape", "\x1b", state), "esc")
+                for key in gui.STOP_KEY_CHARACTERS:
+                    self.assertEqual(gui.captured_stop_key(key, key, state), key)
+                self.assertIsNone(gui.captured_stop_key("Escape", "\x1b", state | 0x10))
+                self.assertIsNone(gui.captured_stop_key("a", "\x01", state | 0x4))
 
     def setUp(self):
         self.settings = gui.validate_settings("localhost:5555", "30", "0.3", "`", True, False)
@@ -178,6 +187,25 @@ class GuiTests(unittest.TestCase):
         self.app.update()
         self.assertEqual(self.app.stop_key.get(), "esc")
         self.assertEqual(self.app._settings().stop_key, "esc")
+
+    def test_stop_key_click_then_key_with_num_lock(self):
+        self.app.deiconify()
+        self.app.update()
+        # Focus the window, then let the ordinary entry click binding focus it.
+        self.app.focus_force()
+        self.app.update()
+        entry = self.app.stop_key_entry
+        entry.event_generate('<ButtonPress-1>', x=10, y=10)
+        entry.event_generate('<ButtonRelease-1>', x=10, y=10)
+        self.app.update()
+        self.assertEqual(self.app.focus_get(), entry)
+        for keysym, expected in (('q', 'q'), ('Escape', 'esc'), ('a', 'a')):
+            entry.event_generate('<KeyPress>', keysym=keysym, state=0x8)
+            self.app.update()
+            self.assertEqual(self.app.stop_key.get(), expected)
+        entry.event_generate('<KeyPress>', keysym='F1', state=0x8)
+        self.app.update()
+        self.assertEqual(self.app.stop_key.get(), 'a')
 
     def test_end_to_end(self):
         self.start_fake()

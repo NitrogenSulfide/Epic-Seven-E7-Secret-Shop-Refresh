@@ -33,7 +33,9 @@ STOP_KEY_CHARACTERS = "0123456789abcdefghijklmnopqrstuvwxyz/.,';[]`"
 
 def captured_stop_key(keysym, character, state=0):
     # Control/Alt combinations are not supported by the engine's single-key setting.
-    if state & (0x4 | 0x8 | 0x20000):
+    # Windows Tk: Control=0x4, Alt/Mod2=0x10 (also ALT_MASK=0x20000).
+    # Mod1=0x8 is Num Lock, not Alt; lock states must not reject input.
+    if state & (0x4 | 0x10 | 0x20000):
         return None
     if keysym == "Escape":
         return "esc"
