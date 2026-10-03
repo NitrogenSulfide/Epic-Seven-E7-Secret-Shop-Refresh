@@ -16,6 +16,7 @@ from unittest.mock import patch
 import e7_shop_refresh_gui as gui
 PACKAGED_ASSETS = gui.ASSET_DIR
 DEVICE_SCAN = gui.RefreshGui.refresh_devices
+CREDITS_AUTO = gui.RefreshGui._maybe_show_credits
 
 
 class ProtocolTests(unittest.TestCase):
@@ -134,12 +135,15 @@ class GuiTests(unittest.TestCase):
         self.patches = [patch.object(gui, "CONFIG_FILE", self.config), patch.object(gui, "GUI_CONFIG_FILE", self.gui_config), patch.object(gui, "ASSET_DIR", self.assets), patch.object(gui, "HISTORY_FILE", self.history), patch.object(gui, "ENGINE_EXE", self.fake), patch.object(gui.RefreshGui, "refresh_devices", lambda _: None), patch("winsound.PlaySound")]
         for p in self.patches:
             p.start()
+        self.credits_auto_patch = patch.object(gui.RefreshGui, '_maybe_show_credits', lambda _: None)
+        self.credits_auto_patch.start()
         import winsound
         self.sound_mock = winsound.PlaySound
         self.app = gui.RefreshGui()
         self.app.withdraw()
 
     def tearDown(self):
+        self.credits_auto_patch.stop()
         if self.app.process and self.app.process.poll() is None:
             self.app.process.kill()
             self.app.process.wait(timeout=5)
@@ -168,6 +172,46 @@ class GuiTests(unittest.TestCase):
         settings = self.app._settings()
         self.assertEqual((settings.budget, settings.tap_sleep, settings.stop_key, settings.random_offset),
                          (12.0, 0.3, "`", True))
+
+    def test_credits_first_launch_dismissal_and_startup_opt_in_persist(self):
+        with patch.object(self.app,'winfo_viewable',return_value=True), patch.object(self.app,'_show_about') as show:
+            CREDITS_AUTO(self.app)
+            show.assert_called_once()
+        self.app.about_button.invoke()
+        dialog = self.app.about_window
+        self.assertEqual(dialog.title(), 'Welcome · About & Credits')
+        self.assertFalse(self.app.credits_on_startup.get())
+        dialog.continue_button.invoke()
+        self.assertTrue(self.app.credits_seen.get())
+        with patch.object(self.app,'winfo_viewable',return_value=True), patch.object(self.app,'_show_about') as show:
+            CREDITS_AUTO(self.app)
+            show.assert_not_called()
+        self.app.about_button.invoke()
+        self.app.about_window.startup_check.invoke()
+        self.app.about_window.close()
+        self.app.credits_seen.set(False)
+        self.app.credits_on_startup.set(False)
+        self.app._load_config()
+        self.assertTrue(self.app.credits_seen.get())
+        self.assertTrue(self.app.credits_on_startup.get())
+        with patch.object(self.app,'winfo_viewable',return_value=True), patch.object(self.app,'_show_about') as show:
+            CREDITS_AUTO(self.app)
+            show.assert_called_once()
+
+    def test_about_reopens_once_and_remains_available_during_session(self):
+        self.app._set_controls(True)
+        self.assertFalse(self.app.about_button.instate(['disabled']))
+        self.app.about_button.invoke()
+        dialog = self.app.about_window
+        self.app.about_button.invoke()
+        self.assertIs(self.app.about_window,dialog)
+        contents = '\n'.join(reader.get('1.0','end') for reader in dialog.readers)
+        for credit in ('Blue Natto','NitrogenSulfide','Solunium','Robin Lamb','GNU GENERAL PUBLIC LICENSE'):
+            self.assertIn(credit,contents)
+        self.app.theme_button.invoke()
+        self.assertEqual(dialog.readers[0].cget('foreground'),'#e2e8f0')
+        dialog.close()
+        self.assertTrue(self.app.stop_key_entry.instate(['disabled']))
 
     def test_hidden_ui_wait_state_resumes_and_does_not_override_stop(self):
         self.app.run_settings = self.app._settings()

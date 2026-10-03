@@ -23,7 +23,7 @@ with tempfile.TemporaryDirectory() as temp:
         def scaling(app):
             app.tk.call('tk', 'scaling', scale * 96 / 72)
             app.ui_scale = scale
-        with patch.object(gui.RefreshGui, '_configure_scaling', scaling), patch.object(gui.RefreshGui, '_screen_work_area', lambda _: (0, 0, width, height-48)), patch.object(gui.RefreshGui, 'refresh_devices', lambda _: None), patch.object(gui, 'CONFIG_FILE', root / 'config.ini'), patch.object(gui, 'GUI_CONFIG_FILE', root / 'gui.ini'), patch.object(gui, 'HISTORY_FILE', history):
+        with patch.object(gui.RefreshGui, '_maybe_show_credits', lambda _: None), patch.object(gui.RefreshGui, '_configure_scaling', scaling), patch.object(gui.RefreshGui, '_screen_work_area', lambda _: (0, 0, width, height-48)), patch.object(gui.RefreshGui, 'refresh_devices', lambda _: None), patch.object(gui, 'CONFIG_FILE', root / 'config.ini'), patch.object(gui, 'GUI_CONFIG_FILE', root / 'gui.ini'), patch.object(gui, 'HISTORY_FILE', history):
             app = gui.RefreshGui()
         app._apply_devices(['localhost:6520'], 'Connected.', '')
         app._event('Engine ready. Refreshing started.')

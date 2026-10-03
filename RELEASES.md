@@ -65,7 +65,7 @@ support is not claimed by this Windows project.
 
 Use an explicit allowlist. The proposed GUI-only package contains:
 
-- `e7_shop_refresh_gui.py`, `e7_process.py`, `e7_windows_icon.py`, `e7_appearance.py`;
+- `e7_shop_refresh_gui.py`, `e7_process.py`, `e7_windows_icon.py`, `e7_appearance.py`, `e7_about.py`;
 - `launch_e7_shop_refresh_gui.ps1`, `E7 Secret Shop Refresh GUI.cmd`;
 - `e7_gui_assets/`, including icon, sounds, credits and provenance;
 - `engine-location.example.ini`, packaged `README.md` and `BUILDING.md`, `VERSION`,

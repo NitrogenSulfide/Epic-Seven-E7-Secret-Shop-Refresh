@@ -1,10 +1,17 @@
 # E7 Secret Shop Refresh GUI
 
-Windows GUI maintained by NitrogenSulfide, using Solunium's Epic Seven Secret
+Windows GUI maintained by Blue Natto (GitHub: NitrogenSulfide), using Solunium's Epic Seven Secret
 Shop Refresh ADB engine. The original upstream source and Git history are
 preserved, alongside the imported GUI, launchers, tests, sounds and icon.
 
 This is a local development project. No GitHub fork or release has been published.
+
+The header's ⓘ button opens About & Credits, also shown on first launch for the
+selected runtime's saved GUI preferences. Continue or closing that window marks
+it seen. Show this on startup is off by default, and can be enabled there later.
+It remembers the choice in ShopRefreshGUI.ini alongside sound/theme/device
+preferences; keep this file when updating. Full credits and the software licence
+are readable offline. The modeless window also remains available during sessions.
 
 The rc8 GUI fixes Start and live counter captions after the rc7 card redesign.
 It sharpens the day/night scenes with AI restoration and uses lighter image

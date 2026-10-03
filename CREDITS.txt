@@ -1,4 +1,5 @@
-GUI, process management and Windows launcher: NitrogenSulfide.
+GUI, process management, enhancements and Windows launcher: Blue Natto.
+GitHub identity and original maintainer attribution: NitrogenSulfide.
 
 Original refresh engine and upstream project: Solunium.
 https://github.com/Solunium/Epic-Seven-E7-Secret-Shop-Refresh
