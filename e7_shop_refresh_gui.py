@@ -1357,7 +1357,7 @@ def main(argv=None):
                     engine_directory=str(APP_DIR), missing_references=missing_references(APP_DIR),
                     gui_or_adb_started=False), indent=2), encoding='utf-8')
             return 0
-    except (ValueError, OSError) as error:
+    except (ValueError, OSError, tk.TclError, ImportError) as error:
         if args.verify:
             return 2
         # Windowed Python launchers have no stderr; keep their errors visible.
