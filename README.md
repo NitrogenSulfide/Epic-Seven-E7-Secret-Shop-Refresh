@@ -29,7 +29,9 @@ defaults and requires its existing confirmation.
 Pillow 11.3+ enables this appearance; the plain palette remains available when
 Pillow is absent. The prepared local test launcher uses the existing private
 environment, without installing anything into system Python. The engine remains
-the paired rc9 build, which handles startup with hidden game controls.
+paired with the GUI and retains rc9 handling of startup with hidden controls.
+rc16 also fixes selecting an already connected device when several ADB devices
+are listed; shop/purchase logic is unchanged.
 
 When home controls fade away, Start waits up to 60 seconds and shows
 **Waiting for game**. Click the game to reveal its controls, or open Secret Shop
@@ -142,8 +144,8 @@ environment, choose a new output directory:
 .\build_release_assets.ps1 -BuildPython .local-state\engine-build-venv\Scripts\python.exe -OutputDirectory C:\absolute\new\candidate-directory
 ```
 
-This adds no installer or service and runs no ADB/game checks. Engine runtime
-code is unchanged from rc9; rc15 improves the setup documentation and packaging.
+This adds no installer or service and runs no ADB/game checks. rc14/rc15 improve
+setup documentation and packaging; rc16 fixes the multiple-device startup loop.
 
 ## Ownership and licensing
 

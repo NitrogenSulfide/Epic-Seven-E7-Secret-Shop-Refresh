@@ -40,6 +40,12 @@ without relying on wallpaper, and does not weaken the existing checks after
 shop entry. No automatic wake-up tap is used because an unknown frame cannot
 establish which page or action is under a coordinate.
 
+In rc16, selecting an already connected device leaves the device-selection loop
+even when more than one ADB device is listed. The original loop repeated the
+Device prompt indefinitely in that case. A bounded actual-entry-point test with
+fake ADB output covers both selectable devices and stops before engine creation.
+Shop navigation, purchase/refresh logic and polling behavior are unchanged.
+
 Use this engine with the matching GUI candidate for live counters. The GUI also
 accepts the original engine, whose totals still arrive at 10% milestones.
 This ZIP contains no ADB executables, game templates, device settings or history.

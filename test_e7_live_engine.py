@@ -2,6 +2,8 @@
 import contextlib
 import io
 import json
+from pathlib import Path
+import sys
 import threading
 import time
 import unittest
@@ -9,6 +11,47 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import E7ADBShopRefresh as engine
+
+
+class StartupSelectionTests(unittest.TestCase):
+    def test_existing_device_selection_advances_to_settings(self):
+        # Execute the real entry point, with every ADB operation replaced.
+        # Stop at the first settings question, before construction/game actions.
+        class SettingsReached(Exception):
+            pass
+
+        prompts = []
+        source = Path(engine.__file__).read_text(encoding='utf-8')
+        for device in ('localhost:6520', 'emulator-5554'):
+            with self.subTest(device=device):
+                prompts.clear()
+                def answer(prompt):
+                    prompts.append(prompt)
+                    if len(prompts) > 3:
+                        self.fail('Existing-device selection repeated instead of advancing.')
+                    if 'finish reading' in prompt:
+                        return ''
+                    if prompt == 'Device: ':
+                        return device
+                    if 'Launch in debug mode?' in prompt:
+                        raise SettingsReached
+                    self.fail(f'Unexpected startup prompt: {prompt}')
+
+                def fake_adb(arguments, **kwargs):
+                    self.assertEqual(arguments[-1], 'devices')
+                    return SimpleNamespace(stdout='List of devices attached\nlocalhost:6520\tdevice\nemulator-5554\tdevice\n\n', returncode=0)
+
+                with patch.object(engine.subprocess, 'run', side_effect=fake_adb) as adb, \
+                        patch('builtins.input', side_effect=answer), \
+                        patch.object(engine.os.path, 'isdir', return_value=True), \
+                        patch.object(engine.os.path, 'exists', return_value=False), \
+                        patch.object(sys, 'argv', ['E7ADBShopRefresh.py']), \
+                        contextlib.redirect_stdout(io.StringIO()), \
+                        self.assertRaises(SettingsReached):
+                    exec(compile(source, str(engine.__file__), 'exec'),
+                         {'__name__':'__main__', '__file__':str(engine.__file__)})
+                self.assertEqual(prompts.count('Device: '), 1)
+                self.assertEqual(adb.call_count, 2)
 
 
 class EngineTests(unittest.TestCase):
