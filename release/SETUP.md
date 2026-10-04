@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc24.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc25.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,7 +14,7 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc24.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc25.zip'
 ```
 
 ## Emulator setup
@@ -104,6 +104,8 @@ mode testing yet. No ADB connection is needed for this preview.
 
 1. Open English Epic Seven, reveal its home controls or open Secret Shop manually.
    Keep a 16:9 game view, at least 640 × 360 pixels, visible and unobstructed.
+   The outer window can have a different shape: plain symmetric black bars are
+   cropped automatically when they surround a recognizable 16:9 image.
 2. Choose **Control mode → Mouse (preview)**, press **Scan** and select the game
    window. Press **Preview targets**, then click the game during the three-second
    countdown. Keep the window still until the capture finishes.

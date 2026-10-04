@@ -93,6 +93,27 @@ class WindowsCapture:
         return True
 
 
+def game_view(image):
+    """Keep the client image, or remove obvious symmetric black letterboxing."""
+    width, height = image.size
+    if abs(width/height - 16/9) <= .03:
+        return image, (0,0,width,height)
+    bounds = image.convert('L').point(lambda value: 255 if value > 12 else 0).getbbox()
+    if bounds:
+        left, top, right, bottom = bounds
+        view_width, view_height = right-left, bottom-top
+        if width/height > 16/9:
+            bars = top == 0 and bottom == height and left >= 3 and width-right >= 3
+            centered = abs(left-(width-right)) <= max(4,round(width*.005))
+        else:
+            bars = left == 0 and right == width and top >= 3 and height-bottom >= 3
+            centered = abs(top-(height-bottom)) <= max(4,round(height*.005))
+        if bars and centered and view_width >= 640 and view_height >= 360 and abs(view_width/view_height - 16/9) <= .03:
+            return image.crop(bounds), bounds
+    raise ValueError(f'Could not identify a 16:9 game image inside the {width} × {height} window. '
+                     'Try full screen or a game window with plain black borders.')
+
+
 def capture_selected(target, destination, *, backend=None, grabber=None):
     if Image is None:
         raise ValueError('Mouse preview needs Pillow. Use the bundled player EXE.')
@@ -101,8 +122,6 @@ def capture_selected(target, destination, *, backend=None, grabber=None):
     if before.pid != target.pid or before.title != target.title:
         raise ValueError('The selected window changed. Scan and select it again.')
     width, height = before.rectangle[2]-before.rectangle[0], before.rectangle[3]-before.rectangle[1]
-    if abs(width/height - 16/9) > .03:
-        raise ValueError('Use a 16:9 game view for this preview. Resize the game window and try again.')
     if not backend.unobstructed(before):
         raise ValueError('Click the selected game during the countdown and keep it unobstructed. No screenshot was saved.')
     image = (grabber or ImageGrab.grab)(bbox=before.rectangle, all_screens=True)
@@ -114,8 +133,11 @@ def capture_selected(target, destination, *, backend=None, grabber=None):
     image = image.convert('RGB')
     if max(high-low for low, high in image.getextrema()) < 12:
         raise ValueError('The game capture was blank. This client has not passed capture testing.')
+    image, bounds = game_view(image)
     image.save(destination)
-    return before
+    left, top = before.rectangle[:2]
+    return GameWindow(before.handle,before.pid,before.title,
+                      (left+bounds[0],top+bounds[1],left+bounds[2],top+bounds[3]))
 
 
 def analyze_capture(engine, runtime, capture, report, *, runner=None):

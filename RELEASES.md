@@ -80,6 +80,10 @@ Mouse mode is preview-only in rc24. Test selected-window capture with fake Win32
 metadata and a fake grabber: changed identity, focus, geometry, obstruction,
 aspect ratio, blank images and negative monitor coordinates. Confirm cancellation,
 stale-result handling, mode switching and the offline-only engine command.
+Also check maximized STOVE dimensions with symmetric black side bars, top/bottom
+bars, exact cropped screen coordinates and recognition on the resulting image;
+reject colored chrome, asymmetric borders and images that do not contain a
+16:9 viewport.
 Use saved frames to check annotations. Actual Google Play/STOVE capture remains
 a separate user-run check. Do not add input or claim live refreshing support until
 window/process identity, focus-loss stops, purchase confirmation and budget/stop
