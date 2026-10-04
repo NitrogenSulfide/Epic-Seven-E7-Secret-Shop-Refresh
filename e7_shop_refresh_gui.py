@@ -1319,8 +1319,8 @@ class RefreshGui(tk.Tk):
             verify_setup_engine(ENGINE_EXE)
             check = subprocess.run([str(ENGINE_EXE),'--verify'],cwd=APP_DIR,capture_output=True,text=True,
                                    timeout=15,creationflags=NO_WINDOW)
-            if check.returncode or 'window mouse v4' not in check.stdout or 'tap timing v2' not in check.stdout:
-                raise ValueError('Mouse mode needs the matching rc37 or newer engine for emulator support. Use the complete new player folder.')
+            if check.returncode or 'window mouse v5' not in check.stdout or 'tap timing v2' not in check.stdout:
+                raise ValueError('Mouse mode needs the matching rc38 or newer engine for emulator support. Use the complete new player folder.')
             target = activate_native_target(target)
         except (ValueError,OSError,RuntimeError,subprocess.SubprocessError) as error:
             self._set_connection_warning(str(error),reveal=True)
