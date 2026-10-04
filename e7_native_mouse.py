@@ -16,6 +16,10 @@ class MouseStopped(RuntimeError):
     pass
 
 
+class MouseElevationRequired(ValueError):
+    """Only a verified game/app elevation mismatch may offer a UAC restart."""
+
+
 class MouseRecheckRequired(MouseStopped):
     """Visibility returned before mouse-down; discard the prepared action."""
 
@@ -88,7 +92,7 @@ def process_is_elevated(pid=None, *, kernel=None, security=None):
 
 def require_mouse_permissions(target):
     if process_is_elevated(target.pid) and not process_is_elevated():
-        raise ValueError('Epic Seven is running as administrator. Close this app and reopen it with Run as administrator, then press Start. Windows blocks normal apps from controlling an elevated game. No Mouse input sent.')
+        raise MouseElevationRequired('The selected game is running as administrator. Restart this app as administrator, or close it and use Run as administrator, then press Start. Windows blocks normal apps from controlling an elevated game. No Mouse input sent.')
 
 
 def verify_native_target(target, *, backend=None, lookup=process_name):

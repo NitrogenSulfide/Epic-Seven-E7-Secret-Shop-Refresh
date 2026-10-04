@@ -27,7 +27,9 @@ QUICKSTART = (
     'ordinary sessions. Both modes buy only Covenant Bookmarks and Mystic Medals.\n'
     'To stop: press your stop key or use Stop Session.\n\n'
     'Mouse: resize before Start; game view must be at least 640 × 360. If the '
-    'game runs as administrator, the app needs the same permission.\n\n'
+    'game runs as administrator, Start offers to restart the app with Windows\' '
+    'permission prompt. After reopening, select the game and press Start again. '
+    'Cancelling leaves this app open without sending Mouse input.\n\n'
     + TESTED_CLIENTS
 )
 

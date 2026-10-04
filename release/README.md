@@ -1,7 +1,7 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.1.0** is the first official release, based on the rc51 working baseline.
-Players need only **E7ShopRefresh-0.1.0.zip**.
+Version **0.1.1** adds a guided administrator restart to the first release.
+Players need only **E7ShopRefresh-0.1.1.zip**.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
 Pillow are included in this EXE. Artwork, the matching compiled engine, ADB tools
@@ -31,12 +31,16 @@ If no home controls are recognized, startup can try one center click, wait
 briefly, then locate the Secret Shop icon. No saved wallpaper is required;
 animation and incidental artwork lettering are accepted. Known dialog/loading
 controls and blank captures block the attempt. Start from home or Secret Shop.
-Your budget, delay, randomized offsets, counters and Stop key apply. Leave the PC
-alone until it stops. Focus or coverage changes pause input for up to 10 seconds;
+Your budget, delay, randomized offsets, counters and Stop key apply.
+Open the app normally: if the selected game is elevated,
+Start offers to save settings and restart through Windows' administrator prompt.
+After reopening, select the game and press Start again. Cancelling keeps the app
+open without sending Mouse input. ADB and non-elevated games need no restart.
+Leave the PC alone until it stops. Focus or coverage changes pause input for up to 10 seconds;
 a changed window or an unrecognized confirmation stops the session. The game keeps its current size. Use normal settings; Debug
 remains an ADB feature. Saving settings also saves your control mode without
 starting a session next time. The owner reports the ordinary live cases pass on both clients with rc51. This
-release preserves that automation code; begin with a small supervised budget. Keep English game text readable.
+release preserves that recognition and input behavior; begin with a small supervised budget. Keep English game text readable.
 
 Live counters report engine-completed buys/refreshes, not confirmed balances.
 Insufficient-currency stopping remains unverified. Keep initial runs supervised.

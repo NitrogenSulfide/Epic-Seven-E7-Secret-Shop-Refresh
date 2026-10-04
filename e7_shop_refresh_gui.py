@@ -22,7 +22,8 @@ from e7_process import launch_engine
 from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon, avatar_icon, coffee_icon
 from e7_about import AboutDialog
 from e7_setup import missing_references, has_builtin_references, RecognitionSetup, verify_setup_engine
-from e7_native_mouse import activate_native_target, release_native_button
+from e7_native_mouse import activate_native_target, release_native_button, MouseElevationRequired
+from e7_elevation import restart_as_administrator, ElevationCancelled
 from e7_connection import check_connection, ConnectionCheck
 from e7_windows_capture import WindowsCapture
 
@@ -1239,11 +1240,39 @@ class RefreshGui(tk.Tk):
             if check.returncode or 'window mouse v6' not in check.stdout or 'tap timing v2' not in check.stdout:
                 raise ValueError('Mouse mode needs the matching rc39 or newer engine for emulator support. Use the complete new player folder.')
             target = activate_native_target(target)
+        except MouseElevationRequired as error:
+            self._set_connection_warning(str(error), reveal=True)
+            self._offer_administrator_restart(settings)
+            return
         except (ValueError,OSError,RuntimeError,subprocess.SubprocessError) as error:
             self._set_connection_warning(str(error),reveal=True)
             return
         self._set_connection_warning('')
         self._begin_refresh(settings,mouse_target=target)
+
+    def _offer_administrator_restart(self, settings):
+        if not messagebox.askyesno(
+                'Restart as administrator?',
+                'The selected game runs as administrator. Windows requires this app '
+                'to have the same permission for Mouse mode.\n\n'
+                'Restart as administrator now? Your settings will be saved, then '
+                'Windows will ask for permission. Select your game and press Start '
+                'Refresh again after the app reopens. No session starts automatically.',
+                parent=self):
+            return
+        if self.save_settings(settings) is None:
+            return
+        try:
+            restart_as_administrator(APP_DIR, parent=self.winfo_id())
+        except ElevationCancelled as error:
+            self._set_connection_warning(str(error) + ' Press Start Refresh to retry.', reveal=True)
+            return
+        except OSError as error:
+            self._set_connection_warning(
+                f'{error} Close the app and use Run as administrator to retry. No Mouse input sent.',
+                reveal=True)
+            return
+        self._close()
 
     def _begin_refresh(self, settings, *, mouse_target=None):
         if settings.debug:
