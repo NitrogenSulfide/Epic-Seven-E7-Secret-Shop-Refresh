@@ -76,7 +76,7 @@ offsets; alternate-input/calibration fixtures are explicit exceptions.
 
 ## Review, live game and publication
 
-Mouse mode is preview-only in rc24. Test selected-window capture with fake Win32
+Mouse mode remains preview-only in rc28. Test selected-window capture with fake Win32
 metadata and a fake grabber: changed identity, focus, geometry, obstruction,
 aspect ratio, blank images and negative monitor coordinates. Confirm cancellation,
 stale-result handling, mode switching and the offline-only engine command.

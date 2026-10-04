@@ -106,9 +106,12 @@ mode testing yet. No ADB connection is needed for this preview.
    Keep its game view, at least 640 × 360 pixels, visible and unobstructed.
    Native STOVE can fill a wider maximized window; preview preserves that image.
    Plain symmetric black bars around a 16:9 view are cropped when clearly identifiable.
-2. Choose **Control mode → Mouse (preview)**, press **Scan** and select the game
-   window. Press **Preview targets**, then click the game during the three-second
-   countdown. If it is not ready yet, the app waits up to 20 more seconds for
+2. Choose **Control mode → Mouse (preview)**. The app scans automatically and
+   selects the window if only one is found. If several are found, choose yours;
+   **Scan** checks again. The selected game's name and capture size appear below
+   the selector. Open Secret Shop manually, then press **Preview targets** and
+   switch to the selected game. The three-second countdown begins the readiness
+   check; it is not a deadline to switch windows. The app waits up to 20 more seconds for
    the selected game to be in front and unobstructed. Keep it still until capture
    finishes. The app never brings the game forward or moves your mouse for you.
 3. Return to this app. Yellow markers show the recognized Secret Shop menu or
@@ -118,7 +121,7 @@ mode testing yet. No ADB connection is needed for this preview.
    or open Secret Shop manually, then preview again.
 
 The tool does not move the pointer, click, refresh, buy or install hooks in this
-mode. Stop cancels the countdown/window wait and ignores late preview results. Captures
+mode. **Cancel preview** cancels the countdown/window wait and ignores late preview results. Captures
 and reports, including the original client capture for troubleshooting, stay
 private under `runtime/mouse-previews`; keep them out of shared
 ZIPs. A closed, covered, unfocused, moved or blank window fails with an explanation.

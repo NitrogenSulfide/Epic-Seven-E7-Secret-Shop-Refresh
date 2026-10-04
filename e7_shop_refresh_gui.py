@@ -665,6 +665,7 @@ class RefreshGui(tk.Tk):
         device_row.columnconfigure(0, weight=1)
         self.device_box = ttk.Combobox(device_row, textvariable=self.device, width=19, font=self.ui_font)
         self.device_box.grid(row=0, column=0, sticky="ew")
+        self.device_box.bind('<<ComboboxSelected>>', self._select_mouse_window)
         self.device_button = ttk.Button(device_row, text="Scan", width=7, command=self.refresh_devices)
         self.device_button.grid(row=0, column=1, padx=(dp(12), 0))
         self.settings_widgets.extend([self.device_box, self.device_button])
@@ -1002,14 +1003,62 @@ class RefreshGui(tk.Tk):
                                   values=list(self.mouse_windows) if mouse else list(self.device_labels),
                                   state='readonly' if mouse else 'normal')
         self.target_label.configure(text='Game window' if mouse else 'Emulator / ADB device')
-        self.start_button.configure(text='Preview targets' if mouse else 'Start Refresh')
+        self.start_button.configure(text='Preview targets' if mouse else 'Start Refresh', state=tk.NORMAL)
         self._set_connection_warning('')
         self.home_ui_hint_dismissed = False
         self.home_ui_banner.grid()
         self.status.set('Mouse preview' if mouse else 'Ready')
-        self.detail.set('Choose the game window. Preview captures and marks targets without clicking.' if mouse else
+        self.detail.set('Open Secret Shop, press Preview targets, then switch to the selected game.' if mouse else
                         'Open Epic Seven’s Secret Shop, then start a session.')
+        if mouse:
+            self._update_mouse_selection()
         self.refresh_devices()
+
+    def _select_mouse_window(self, _event=None):
+        if self.control_mode.get() == 'ADB' or self._mouse_preview_busy:
+            return
+        if self.mouse_windows.get(self.mouse_target.get()) is not None:
+            self._set_connection_warning('')
+        self._update_mouse_selection()
+
+    def _update_mouse_selection(self):
+        target = self.mouse_windows.get(self.mouse_target.get())
+        if target is not None:
+            left, top, right, bottom = target.rectangle
+            self.device_notice.set(f'Selected: {target.title} · {right-left} × {bottom-top}\n'
+                                   'Open Secret Shop, then press Preview targets.\n'
+                                   'Switch to the game when the countdown starts.')
+        elif self.mouse_windows:
+            self.device_notice.set('Several game windows found. Choose the one to preview above.')
+        else:
+            self.device_notice.set('Open Epic Seven, then Scan to find its window.')
+        if not self._mouse_preview_busy:
+            self.start_button.configure(state=tk.NORMAL if target is not None else tk.DISABLED)
+
+    def _apply_mouse_windows(self, windows, error):
+        selected = self.mouse_windows.get(self.mouse_target.get())
+        titles = [window.title for window in windows]
+        choices = {}
+        for window in windows:
+            label = window.title if titles.count(window.title) == 1 else window.label
+            # Keep distinct handles distinct even if a title resembles an ID label.
+            while label in choices:
+                label += ' ·'
+            choices[label] = window
+        self.mouse_windows = choices
+        selection = next((label for label, window in choices.items()
+                          if selected is not None and (window.handle, window.pid, window.title) ==
+                          (selected.handle, selected.pid, selected.title)), '')
+        if not selection and len(choices) == 1:
+            selection = next(iter(choices))
+        self.mouse_target.set(selection)
+        self.device_box.configure(values=list(choices))
+        self.device_button.configure(state=tk.NORMAL)
+        warning = error or ('No game window found. Open Epic Seven, then Scan.' if not windows else '')
+        self._set_connection_warning(warning)
+        self._update_mouse_selection()
+        if error:
+            self.device_notice.set(error)
 
     def _scan_game_windows(self):
         if self._mouse_scan_busy or self._mouse_preview_busy or (self.process and self.process.poll() is None):
@@ -1017,7 +1066,8 @@ class RefreshGui(tk.Tk):
         self._mouse_scan_busy = True
         token = self._connection_check_id
         self.device_button.configure(state=tk.DISABLED)
-        self.device_notice.set('Looking for game windows…')
+        if not self._background_scan:
+            self.device_notice.set('Looking for game windows…')
         def scan():
             try:
                 windows, error = WindowsCapture().list_windows(), ''
@@ -1044,6 +1094,7 @@ class RefreshGui(tk.Tk):
         self._mouse_preview_busy = True
         self._preview_cancel = threading.Event()
         self._set_controls(True)
+        self.stop_button.configure(text='Cancel preview')
         self._set_connection_warning('')
         self.status.set('Preview countdown')
         self._mouse_preview_countdown(token,target,3)
@@ -1052,11 +1103,13 @@ class RefreshGui(tk.Tk):
         if token != self._preview_token or not self._mouse_preview_busy:
             return
         if seconds:
-            self.detail.set(f'Click the selected game now. Capture in {seconds} seconds. No clicks or spending.')
+            self.detail.set(f'Switch to {target.title}. Ready check in {seconds} seconds; '
+                            'capture waits until the game is in front and unobstructed.')
             self.after(1000,lambda:self._mouse_preview_countdown(token,target,seconds-1))
             return
         self.status.set('Waiting for game window')
-        self.detail.set('Click the selected game and keep it unobstructed. Waiting up to 20 seconds; no mouse actions.')
+        self.detail.set(f'Waiting up to 20 seconds for {target.title}. Keep its view unobstructed. '
+                        'After capture, return here to see the preview.')
         cancel = self._preview_cancel
         def preview():
             capture = report = None
@@ -1460,6 +1513,9 @@ class RefreshGui(tk.Tk):
         self.stop_button.configure(state=tk.NORMAL if running else tk.DISABLED)
         if not running and self.control_mode.get() != 'ADB':
             self.device_box.state(['readonly'])
+            self._update_mouse_selection()
+        if not running:
+            self.stop_button.configure(text='Stop Session')
 
     def _drain_log_queue(self):
         output = []
@@ -1503,14 +1559,7 @@ class RefreshGui(tk.Tk):
                 token, windows, error = value
                 self._mouse_scan_busy = False
                 if token == self._connection_check_id and self.control_mode.get() != 'ADB' and not self._mouse_preview_busy:
-                    self.mouse_windows = {window.label:window for window in windows}
-                    self.device_box.configure(values=list(self.mouse_windows))
-                    if self.mouse_target.get() not in self.mouse_windows:
-                        self.mouse_target.set(next(iter(self.mouse_windows),'') if len(windows)==1 else '')
-                    self.device_button.configure(state=tk.NORMAL)
-                    warning = error or ('No game window found. Open Google Play Games or Epic Seven, then Scan.' if not windows else '')
-                    self.device_notice.set(warning or 'Choose the game window. Preview sends no clicks.')
-                    self._set_connection_warning(warning)
+                    self._apply_mouse_windows(windows, error)
             elif kind == 'mouse_preview':
                 token, capture, report, error = value
                 self._finish_mouse_preview(token,capture,report,error)
