@@ -774,6 +774,18 @@ time.sleep(30)
         self.assertIsNone(self.app.setup_window)
         self.assertEqual(self.app.status.get(), 'Stopped')
 
+    def test_connected_background_emulator_shows_warning_and_launches_nothing(self):
+        settings = self.app._settings()
+        result = gui.ConnectionCheck((settings.device,), 'Emulator connected in the background. Open its window and Epic Seven, then press Start.', '')
+        with patch.object(gui, 'check_connection', return_value=result), patch.object(gui, 'launch_engine') as launch:
+            CONNECTION_CHECK(self.app, settings)
+            self.pump_until(lambda:self.app.status.get() == 'Not ready')
+        launch.assert_not_called()
+        self.assertIsNone(self.app.process)
+        self.assertIsNone(self.app.setup_window)
+        self.assertIn('background',self.app.home_ui_hint.get())
+        self.assertEqual(str(self.app.start_button.cget('state')), 'normal')
+
     def test_stale_scan_cannot_replace_new_connection_result(self):
         self.app._connection_check_id = 2
         self.app.log_queue.put((None, 'devices', (1, gui.ConnectionCheck((), 'Old failed scan', ''), False)))

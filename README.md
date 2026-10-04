@@ -208,3 +208,8 @@ rc22 adds a red warning for missing ADB connections and a bounded background
 connection check before engine launch. Start stays available to retry after the
 emulator opens. Offline/unauthorized or unselected devices cannot satisfy this
 check. The recognition timeout and guided fallback from rc21 are unchanged.
+
+rc23 fixes rc22 accepting Google Play's connected background VM after its window
+was closed. Read-only checks now require an open Google Play window and Epic Seven
+as the current Android activity. A launcher/history entry does not count. Missing
+game/window readiness shows the red banner and launches no refresh engine.

@@ -980,9 +980,9 @@ class RefreshGui(tk.Tk):
         self._apply_devices(result.devices, result.warning, result.diagnostics)
         self._set_connection_warning(result.warning, reveal=True)
         if not result.ready:
-            self.status.set('Not connected')
+            self.status.set('Not ready' if settings.device in result.devices else 'Not connected')
             self.detail.set(result.warning)
-            self._event('Emulator connection unavailable. No refresh engine started.')
+            self._event('Emulator or game is not ready. No refresh engine started.')
             return
         if self.setup_window is not None and self.setup_window.winfo_exists():
             self.setup_window.lift()
