@@ -1086,7 +1086,9 @@ class RefreshGui(tk.Tk):
             self._set_connection_warning(error,reveal=True)
             return
         self.status.set('Preview complete')
-        self.detail.set(f"Recognized {report['state']}. Preview only; no refresh session started.")
+        self.detail.set('Game captured. Reveal hidden home controls or open Secret Shop, then preview again.'
+                        if report['state']=='unrecognized' else
+                        f"Recognized {report['state']}. Preview only; no refresh session started.")
         self._event('Mouse preview complete. No clicks, purchases or refreshes.')
         self.preview_window = MousePreviewDialog(self,capture,report)
 

@@ -95,7 +95,7 @@ class WindowsCapture:
 
 
 def game_view(image):
-    """Keep the client image, or remove obvious symmetric black letterboxing."""
+    """Preserve the client view; crop only clearly identifiable black bars."""
     width, height = image.size
     if abs(width/height - 16/9) <= .03:
         return image, (0,0,width,height)
@@ -111,8 +111,9 @@ def game_view(image):
             centered = abs(top-(height-bottom)) <= max(4,round(height*.005))
         if bars and centered and view_width >= 640 and view_height >= 360 and abs(view_width/view_height - 16/9) <= .03:
             return image.crop(bounds), bounds
-    raise ValueError(f'Could not identify a 16:9 game image inside the {width} × {height} window. '
-                     'Try full screen or a game window with plain black borders.')
+    # Native PC clients can fill a wider window without letterboxing. Preview
+    # must show that actual image rather than inventing a centered 16:9 crop.
+    return image, (0,0,width,height)
 
 
 def wait_for_window(target, cancel, *, timeout=20, backend=None, now=time.monotonic):
@@ -156,6 +157,7 @@ def capture_selected(target, destination, *, backend=None, grabber=None, cancel=
     image = image.convert('RGB')
     if max(high-low for low, high in image.getextrema()) < 12:
         raise ValueError('The game capture was blank. This client has not passed capture testing.')
+    image.save(Path(destination).with_name('client-capture.png'))
     image, bounds = game_view(image)
     image.save(destination)
     left, top = before.rectangle[:2]
@@ -188,16 +190,18 @@ def analyze_capture(engine, runtime, capture, report, *, runner=None):
 
 def annotated_capture(capture, report):
     with Image.open(capture) as source:
-        image = source.convert('RGB').resize((1920,1080),Image.Resampling.LANCZOS)
+        image = source.convert('RGB')
+        image.thumbnail((1920,1080),Image.Resampling.LANCZOS)
     draw = ImageDraw.Draw(image)
+    scale_x, scale_y = image.width/1920, image.height/1080
     for index, target in enumerate(report.get('targets',[]),1):
-        x,y = target['point']
+        x,y = target['point'][0]*scale_x,target['point'][1]*scale_y
         draw.ellipse((x-24,y-24,x+24,y+24), outline='#fbbf24',width=5)
         draw.line((x-32,y,x+32,y), fill='#fbbf24',width=3)
         draw.line((x,y-32,x,y+32), fill='#fbbf24',width=3)
         draw.text((x+30,y-18),str(index),fill='#fbbf24',stroke_width=1)
     for detection in report.get('detections',[]):
-        draw.rectangle(detection['box'],outline='#22d3ee',width=5)
+        draw.rectangle([value*scale for value,scale in zip(detection['box'],(scale_x,scale_y,scale_x,scale_y))],outline='#22d3ee',width=5)
     return image
 
 
@@ -219,6 +223,9 @@ class MousePreviewDialog(tk.Toplevel):
         names = [f"{index}. {target['label']}" for index,target in enumerate(report['targets'],1)]
         found = [d['label'] for d in report['detections']]
         message = ('Recognized: '+report['state']+'. '+(' · '.join(names) or 'No click targets recognized.'))
+        if report['state'] == 'unrecognized':
+            message = ('Game controls were not recognized. If home UI is hidden, click the game once '
+                       'to reveal it, or open Secret Shop manually, then try another preview.')
         if found: message += '\nCyan boxes: '+', '.join(found)+'.'
         message += '\nThe screenshot stays private in this runtime’s mouse-previews folder.'
         self.message = ttk.Label(self,text=message,wraplength=image.width,justify='left')
