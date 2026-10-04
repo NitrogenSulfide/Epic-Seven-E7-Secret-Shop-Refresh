@@ -20,7 +20,7 @@ Epic Seven and a **1920 × 1080** Android display. Other emulators are unverifie
 The original upstream source and Git history are preserved, alongside the GUI,
 launchers, tests, sounds and icon. The first public preview is **0.1.0-rc20**.
 
-The local **rc33** candidate includes **Control mode → Mouse** for native STOVE
+The local **rc34** candidate includes **Control mode → Mouse** for native STOVE
 Epic Seven. **Start Refresh** brings the selected game forward, opens its recognized
 Secret Shop menu, buys detected Covenant/Mystic items, scrolls and refreshes using
 your actual pointer and the existing budget, delay, counters and Stop key.
@@ -28,6 +28,9 @@ Mouse movement eases into each target. With randomized tap offsets enabled,
 Refresh clicks vary slightly inside the recognized button.
 Scrolling uses a short eased mouse drag. Its small position and timing variations
 follow the same randomization setting; vertical travel stays consistent.
+Native currency detection also verifies the observed summon name, gold price and
+Buy label when icon matching fails. A recognized but uncertain currency row
+stops before Refresh, so it cannot silently discard that row.
 Leave the PC alone while it runs. Focus or coverage changes pause input for up to
 10 seconds; changed geometry or a stale prepared click stops the session.
 A supervised elevated check opened the native shop from home and refreshed once

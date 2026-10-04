@@ -38,7 +38,19 @@ Native capture samples the client
 interior; each action checks its exact destination. Focus/coverage changes pause
 input for up to 10 seconds; resumed capture discards stale frames and renews recognition timeouts. Changed geometry or a stale prepared click stops it.
 Item detection is restricted to the shop icon column; Buy and confirmation clicks
-use observed button bounds. Refresh uses the recognized label, with small offsets
+use observed button bounds. rc34 adds native name/price recognition when a currency
+icon does not match: the summon category, full Covenant Bookmark/Mystic Medal
+name, expected gold price and active Buy label must align on one row. Shop OCR
+is cached only for the same captured RGB image; a preceding purchase invalidates
+it. Name/price buys target the observed Buy label; icon-based buys use the button's
+right side. Both keep randomized clicks away from the stock-count inset.
+Partial bottom rows may advance from the first to the second scan; uncertain
+currency rows on the second scan stop before Refresh. Confirmations still verify
+the intended item and price. Already purchased currencies are skipped before
+second-page detection. The owner's saved native Mystic row reproduced the old
+icon rejection; offline recognition and a fake both-currency purchase sequence
+cover this fix. Live native buying remains unverified.
+Refresh uses the recognized label, with small offsets
 up to ±14 horizontal and ±7 vertical normalized pixels when randomization is
 enabled and its green button is observed. Otherwise it retains the label point.
 Confirmation text
@@ -57,6 +69,10 @@ session diagnostics under `runtime/mouse-session-logs`. Missing confirmations sa
 image offline and reports a text match without input, hooks or ADB. A buy check
 also needs `--item-name "Covenant bookmark"` or `"Mystic medal"`. The temporary
 OCR crop stays local and is removed on exit; recognized text is not logged.
+
+`--check-mouse-items FILE` runs the purchase detector on a saved shop-client image
+offline and reports verified currency names, prices and Buy targets. It creates
+no mouse session, capture, keyboard hook, ADB connection or purchase.
 
 In rc5, `e7_shop_navigation.py` replaces the original three fixed menu taps with
 recognition of a private Secret Shop text reference. It sends at most one

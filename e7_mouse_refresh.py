@@ -13,10 +13,11 @@ import uuid
 import cv2
 import numpy as np
 from PIL import Image
-from E7ADBShopRefresh import E7ADBShopRefresh
+from E7ADBShopRefresh import E7ADBShopRefresh, E7Inventory, E7Item
 from e7_native_mouse import WindowsMouse, MouseStopped
-from e7_windows_capture import GameWindow
+from e7_windows_capture import GameWindow, game_view
 from e7_mouse_confirmation import read_confirmation_text, read_ui_text, confirmation_matches
+from e7_shop_navigation import create_navigator
 
 
 def home_menu_target(result,rgb=None):
@@ -67,6 +68,51 @@ def hidden_home_matches(frame, reference=Path('adb-assets/native-home/hidden.png
     saved = cv2.resize(saved,(1920,1080),interpolation=cv2.INTER_AREA)
     difference = cv2.absdiff(frame,saved)
     return float(difference.mean()) <= 10 and float(np.quantile(difference,.95)) <= 28
+
+
+class IncompleteCurrencyRow(MouseStopped):
+    pass
+
+
+def currency_button(result, boxes, item_name):
+    """Associate native summon name, gold price and Buy text on one row."""
+    expected = {'Covenant bookmark':('covenant','bookmark','184000'),
+                'Mystic medal':('mystic','medal','280000')}
+    if item_name not in expected:
+        return None
+    prefix,noun,price = expected[item_name]
+    words = [(re.sub(r'[^a-z0-9]','',word['text'].lower()),tuple(word['box']))
+             for word in result.get('words',[])]
+    middle = lambda box:(box[1]+box[3])/2
+    names = [(text,box) for text,box in words if 1010<=box[0]<box[2]<=1480
+             and text in (prefix,prefix+noun,prefix+noun+'s')]
+    if not names:
+        return None
+    if len(names)!=1:
+        raise MouseStopped(f'The {item_name} rows are ambiguous. Stopped before scrolling or refreshing.')
+    text,name = names[0]; y = middle(name)
+    suffixes = [box for word,box in words if word in (noun,noun+'s')
+                and name[2]<=box[0]<=name[2]+60 and box[2]<=1480 and abs(middle(box)-y)<=20]
+    complete = text!=prefix or len(suffixes)==1
+    row_words = [word for word,box in sorted(words,key=lambda pair:pair[1][0])
+                 if 1010<=box[0]<box[2]<=1480 and y+15<middle(box)<y+85]
+    unavailable = complete and re.search(r'\bsold\s*out\b|\bpurchased\b|\bonly\s+0\s+available\b',' '.join(row_words))
+    summons = [box for word,box in words if word=='summon' and 1010<=box[0]<box[2]<=1480
+               and 25<=y-middle(box)<=80]
+    prices = [box for word,box in words if word==price and 1480<=box[0]<box[2]<=1880
+              and -80<=middle(box)-y<=10]
+    buys = [(label,button) for word,label in words if word=='buy'
+            for button in boxes if button[0]<=label[0]<label[2]<=button[2]
+            and button[1]<=label[1]<label[3]<=button[3] and 0<=middle(label)-y<=90]
+    if unavailable and not buys:
+        return None
+    if complete and len(summons)==len(prices)==len(buys)==1:
+        label,button = buys[0]
+        if 40<=middle(label)-middle(prices[0])<=125:
+            return label
+    if not buys and name[3]+70>1080:
+        raise IncompleteCurrencyRow(f'The {item_name} row is partly offscreen. Stopped before refreshing; expose its full Buy button.')
+    raise MouseStopped(f'The {item_name} name was recognized, but its price and Buy button could not be verified on the same row. Stopped before scrolling or refreshing.')
 
 
 def green_buttons(rgb, region):
@@ -215,7 +261,12 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
         raise MouseStopped('The Secret Shop did not open after selecting its menu. No refresh or purchase sent.')
 
     def findItemPosition(self,frame,template):
-        region = frame[110:1080,760:1030]
+        if not self.loop_active:
+            return None
+        # A preceding purchase may have updated _rgb since the shared loop's
+        # initial grayscale frame. Always inspect the latest captured image.
+        region = cv2.cvtColor(self._rgb,cv2.COLOR_RGB2GRAY)[110:1080,760:1030]
+        item_name = next((name for name,item in self.storage.inventory.items() if item.image is template),None)
         best = None
         for scale in np.linspace(.65,1.45,17):
             item = cv2.resize(template,None,fx=float(scale),fy=float(scale),interpolation=cv2.INTER_LINEAR)
@@ -224,16 +275,41 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
             _,score,_,(_,y) = cv2.minMaxLoc(cv2.matchTemplate(region,item,cv2.TM_CCOEFF_NORMED))
             if score >= .90 and (best is None or score > best[0]):
                 best = (score,y+110+item.shape[0]/2)
-        if best is None:
-            return None
-        choices = sorted((abs((box[1]+box[3])/2-best[1]),box)
-                         for box in green_buttons(self._rgb,(1480,110,1880,1080)))
-        if not choices or choices[0][0] > 140 or (len(choices)>1 and choices[1][0]-choices[0][0] < 15):
-            return None
+        boxes = green_buttons(self._rgb,(1480,110,1880,1080))
+        choices = [] if best is None else sorted((abs((box[1]+box[3])/2-best[1]),box) for box in boxes)
+        if choices and choices[0][0]<=90 and (len(choices)==1 or choices[1][0]-choices[0][0]>=15):
+            box = choices[0][1]
+            # The left stock-count inset can ignore clicks in the native skin.
+            # Keep icon-based purchases within the observed button's right side.
+            width,height = box[2]-box[0],box[3]-box[1]
+            box = (box[0]+round(width*.55),box[1]+round(height*.2),
+                   box[2]-round(width*.08),box[3]-round(height*.2))
+            method = 'icon'
+        else:
+            if item_name not in ('Covenant bookmark','Mystic medal'):
+                return None
+            if getattr(self,'_shop_ocr_source',None) is not self._rgb:
+                self._shop_ocr = read_ui_text(self._rgb,(1010,110,1880,1080))
+                self._shop_ocr_source = self._rgb
+            if not self.loop_active:
+                return None
+            try:
+                box = currency_button(self._shop_ocr,boxes,item_name)
+            except IncompleteCurrencyRow:
+                if getattr(self,'_scan_page',2)==1:
+                    return None
+                raise
+            if box is None:
+                return None
+            method = 'name-price'
         self._item = template
-        self._item_name = next((name for name,item in self.storage.inventory.items() if item.image is template),None)
-        box = choices[0][1]
-        return ((box[0]+box[2])/2,(box[1]+box[3])/2)
+        self._item_name = item_name
+        self._item_button = box
+        point = ((box[0]+box[2])/2,(box[1]+box[3])/2)
+        self._item_method = method
+        if not getattr(self,'_quiet_items',False):
+            print('E7GUI_MOUSE_ITEM '+json.dumps(dict(item=item_name,method=method,buy=list(point))),flush=True)
+        return point
 
     def _click_button(self,box):
         x,y = (box[0]+box[2])/2,(box[1]+box[3])/2
@@ -316,7 +392,9 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
         if len(boxes) != 1:
             raise MouseStopped('The Buy button was not recognized. No click sent.')
         before = self._rgb.copy()
-        self._click_button(boxes[0])
+        # Name/price recognition uses the observed Buy label to keep random
+        # clicks away from the native button's separate stock-count inset.
+        self._click_button(self._item_button)
         return self._confirm('buy',before)
 
     def clickRefresh(self):
@@ -345,6 +423,31 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
             y += max(-margin_y,min(margin_y,dy*.28))
         self.tap(x,y)
         return self._confirm('refresh',before)
+
+
+def inspect_mouse_items(path,assets='adb-assets'):
+    """Exercise the live purchase detector on a saved client image only."""
+    with Image.open(path) as image:
+        if image.width<640 or image.height<360:
+            raise ValueError('Use a game-client screenshot at least 640 × 360 pixels.')
+        image,_ = game_view(image.convert('RGB'))
+        rgb = np.asarray(image.resize((1920,1080),Image.Resampling.LANCZOS))
+    frame = cv2.cvtColor(rgb,cv2.COLOR_RGB2GRAY)
+    create_navigator(assets).require_shop(frame)
+    app = E7MouseShopRefresh.__new__(E7MouseShopRefresh)
+    app.loop_active,app._rgb,app._quiet_items = True,rgb,True
+    app.storage = E7Inventory()
+    for filename,name,price in (('cov.png','Covenant bookmark',184000),('mys.png','Mystic medal',280000)):
+        template = cv2.imdecode(np.frombuffer((Path(assets)/filename).read_bytes(),dtype=np.uint8),cv2.IMREAD_GRAYSCALE)
+        if template is None:
+            raise ValueError('A currency item template is missing or unreadable.')
+        app.storage.inventory[name] = E7Item(template,price)
+    items = []
+    for name,item in app.storage.inventory.items():
+        point = app.findItemPosition(frame,item.image)
+        if point is not None:
+            items.append(dict(item=name,buy=list(point),method=app._item_method,price=item.price))
+    return dict(read_only=True,state='shop',items=items)
 
 
 def run_mouse_session(arguments):
