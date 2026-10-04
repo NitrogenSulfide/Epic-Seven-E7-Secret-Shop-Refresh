@@ -1,7 +1,7 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.1.0-rc39** is a local candidate. The previous rc20 public preview is unchanged.
-Players need only **E7ShopRefresh-0.1.0-rc39.zip**.
+Version **0.1.0-rc40** is a local candidate. The previous rc20 public preview is unchanged.
+Players need only **E7ShopRefresh-0.1.0-rc40.zip**.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
 Pillow are included in this EXE. Artwork, the matching compiled engine, ADB tools
@@ -32,19 +32,7 @@ alone until it stops. Focus or coverage changes pause input for up to 10 seconds
 a changed window or an unrecognized confirmation stops the session. The game keeps its current size. Use normal settings; Debug
 remains an ADB feature. Saving settings also saves your control mode without
 starting a session next time. Native checks succeeded in earlier candidates. Google developer-emulator live
-actions in rc39 remain unverified; begin with a small supervised budget. Keep English game text readable.
-
-For an optional read-only native STOVE or regular Google Play Games capture, choose
-**Control mode → Mouse (preview)**. Windows are scanned automatically; one result
-is selected for you, and multiple results need your choice. The selector uses
-readable names and shows the selected game's capture size and preparation steps.
-Open Secret Shop manually, press **Preview targets**, then switch to that game.
-The three-second countdown starts a readiness check, followed by up to 20 seconds
-of waiting for the game to be in front and unobstructed. **Cancel preview** cancels
-the attempt. Return here to inspect the capture and recognized targets.
-This mode sends no mouse movements, clicks, refreshes, purchases or ADB commands.
-Captures stay private under `runtime/mouse-previews`. An owner-run rc27 native
-STOVE shop preview succeeded; that does not verify rc39's new live actions.
+actions in rc40 remain unverified; begin with a small supervised budget. Keep English game text readable.
 
 Live counters report engine-completed buys/refreshes, not confirmed balances.
 Insufficient-currency stopping remains unverified. Keep initial runs supervised.
@@ -60,3 +48,13 @@ remain in the full source history and are not player entry points.
 Software is GPL-3.0; see [LICENSE](LICENSE) and [CREDITS.txt](CREDITS.txt). Solunium's
 original notices and the artwork/audio credits are retained. Dependency licences
 are under `runtime/third-party-licenses`, with ADB notices in its tool folder.
+
+## Quickstart and tested clients
+
+About & Credits contains Quickstart and bundled Release notes tabs. The main
+screen’s Buy me a coffee button opens https://ko-fi.com/bluenatto only when clicked.
+
+For this upcoming first full release, testing has been limited to Google Play
+Games on PC Developer Emulator and the official STOVE client of Epic Seven.
+Other emulators and methods have not been tested. Both modes buy only Covenant
+Bookmarks and Mystic Medals; Friendship purchases are removed from calibration too.

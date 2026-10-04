@@ -13,17 +13,18 @@ import sys
 import threading
 import time
 import uuid
+import webbrowser
 import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
 from tkinter import font as tkfont, messagebox, ttk
 from e7_process import launch_engine
-from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon, avatar_icon
+from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon, avatar_icon, coffee_icon
 from e7_about import AboutDialog
 from e7_setup import missing_references, has_builtin_references, RecognitionSetup, verify_setup_engine
 from e7_native_mouse import activate_native_target, release_native_button
 from e7_connection import check_connection, ConnectionCheck
-from e7_window_preview import WindowsCapture, capture_selected, analyze_capture, MousePreviewDialog, wait_for_window
+from e7_windows_capture import WindowsCapture
 
 PROJECT_DIR = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
 DEFAULT_ENGINE_DIR = Path.home() / "Downloads" / "E7 Secret Shop Refresh"
@@ -149,7 +150,7 @@ def number_text(value):
 
 
 def history_mode(row, fieldnames):
-    # The engine has two inventory schemas: debug adds a Friendship count.
+    # Older engines recorded calibration with a Friendship column.
     # Existing files retain their first header, so mixed runs may place that
     # count in DictReader's extra-field list instead of a named column.
     if 'Friendship bookmark' in fieldnames:
@@ -240,11 +241,7 @@ class RefreshGui(tk.Tk):
         self.control_mode = tk.StringVar(value='ADB')
         self.mouse_target = tk.StringVar(value='')
         self.mouse_windows = {}
-        self._mouse_preview_busy = False
         self._mouse_scan_busy = False
-        self._preview_token = 0
-        self._preview_cancel = threading.Event()
-        self.preview_window = None
         self.started_at = None
         self.stopping = False
         self.finished = False
@@ -278,7 +275,6 @@ class RefreshGui(tk.Tk):
         self.spent.trace_add('write', lambda *_: self._update_spent_display())
         self.covenant = tk.StringVar(value="—")
         self.mystic = tk.StringVar(value="—")
-        self.friendship = tk.StringVar(value="—")
         self.progress_text = tk.StringVar(value="Waiting for a session")
         self.ev = tk.StringVar()
         self._load_config()
@@ -324,7 +320,7 @@ class RefreshGui(tk.Tk):
             pass
 
     def _update_settings_scroll(self, _event=None):
-        self.settings_canvas.configure(scrollregion=self.settings_canvas.bbox("all"))
+        self.settings_canvas.configure(scrollregion=self.settings_canvas.bbox(self.settings_controls_window))
         if self.settings_controls.winfo_reqheight() > self.settings_canvas.winfo_height() + self._dp(2):
             self.settings_scroll.grid(row=0, column=1, sticky="ns")
         else:
@@ -504,10 +500,6 @@ class RefreshGui(tk.Tk):
             reminder = 'Use an emulator with ADB enabled.'
         if self.control_mode.get() == 'Mouse':
             reminder = 'Mouse uses your pointer · leave the PC alone.'
-        elif self.control_mode.get() != 'ADB':
-            reminder = ('Click the selected game now. Waiting up to 20 seconds · no clicks or spending.'
-                        if self.status.get() == 'Waiting for game window' else
-                        'Mouse preview only · no clicks or spending.')
         self.home_ui_hint.set(self.connection_warning or reminder)
         self._style_home_ui_banner()
         dark = self.dark_mode.get()
@@ -659,6 +651,10 @@ class RefreshGui(tk.Tk):
         ttk.Label(header, textvariable=self.status, font=("Segoe UI", 12, "bold"), style='Status.TLabel').grid(row=0, column=1, sticky="e")
         header_actions = ttk.Frame(header)
         header_actions.grid(row=1,column=1,sticky='e')
+        self.coffee_image = coffee_icon(self, dp(20))
+        self.coffee_button = ttk.Button(header_actions, text='Buy me a coffee', image=self.coffee_image or '', compound='left',
+            command=lambda: webbrowser.open('https://ko-fi.com/bluenatto'), cursor='hand2', takefocus=True)
+        self.coffee_button.pack(side='left', padx=(0, dp(12)))
         self.about_image = avatar_icon(self, ASSET_DIR, dp(28))
         self.about_button = ttk.Button(header_actions, image=self.about_image, text='' if self.about_image else 'Credits', command=self._show_about, padding=dp(6), cursor='hand2', takefocus=True)
         self.about_button.pack(side='left',padx=(0,dp(6)))
@@ -681,7 +677,7 @@ class RefreshGui(tk.Tk):
         action_dock.grid(row=1, column=0, columnspan=2, sticky="ew")
         action_dock.columnconfigure((0, 1), weight=1, uniform="actions")
         self.settings_controls = controls = ttk.Frame(settings_canvas, padding=(0, 0, dp(10), 0))
-        controls_window = settings_canvas.create_window((0, 0), window=controls, anchor="nw")
+        self.settings_controls_window = controls_window = settings_canvas.create_window((0, 0), window=controls, anchor="nw")
         controls.bind("<Configure>", self._update_settings_scroll)
         def resize_settings(event):
             settings_canvas.itemconfigure(controls_window, width=event.width)
@@ -737,11 +733,11 @@ class RefreshGui(tk.Tk):
         self.debug_check.grid(row=9, column=0, sticky="w")
         self.settings_widgets.extend([self.random_check, self.debug_check])
         self.details_button = ttk.Button(controls, text='▸ Estimate & calibration help', command=self._toggle_settings_details)
-        self.details_button.grid(row=10, column=0, sticky='ew', pady=(dp(4), 0))
+        self.details_button.grid(row=10, column=0, sticky='ew', pady=(dp(8), dp(12)))
         self.settings_details = ttk.Frame(controls)
         self.settings_details.grid(row=11, column=0, sticky='ew', pady=(dp(6), 0))
         self.settings_details.columnconfigure(0, weight=1)
-        ttk.Label(self.settings_details, text="ADB Debug includes Friendship Points.\nPress a key (not Esc) in each image to continue.", style="Muted.TLabel", wraplength=dp(350)).grid(row=0, column=0, sticky="w", pady=(0, dp(6)))
+        ttk.Label(self.settings_details, text="ADB calibration pauses before each click.\nCheck the image, then press a key other than Esc to continue.", style="Muted.TLabel", wraplength=dp(350)).grid(row=0, column=0, sticky="w", pady=(0, dp(6)))
         self.start_button = ttk.Button(action_dock, text="Start Refresh", style="Accent.TButton", command=self.start_refresh)
         self.start_button.grid(row=0, column=0, sticky="ew", padx=(0, dp(4)))
         self.stop_button = ttk.Button(action_dock, text="Stop Session", command=self.stop_refresh, state=tk.DISABLED)
@@ -772,7 +768,7 @@ class RefreshGui(tk.Tk):
         mode_panel.columnconfigure(0,weight=1)
         ttk.Label(mode_panel,text='Control mode').grid(row=0,column=0,sticky='w')
         self.mode_box = ttk.Combobox(mode_panel,textvariable=self.control_mode,
-            values=('ADB','Mouse','Mouse (preview)'),state='readonly',font=self.ui_font)
+            values=('ADB','Mouse'),state='readonly',font=self.ui_font)
         self.mode_box.grid(row=1,column=0,sticky='ew',pady=(dp(4),0))
         self.mode_box.bind('<<ComboboxSelected>>',self._change_control_mode)
         self.settings_widgets.append(self.mode_box)
@@ -935,7 +931,7 @@ class RefreshGui(tk.Tk):
             self.adb_hint_dismissed.set(parser.getboolean("GUI", "adb_hint_dismissed", fallback=False))
             self.device.set(parser.get("GUI", "device", fallback=self.device.get()))
             mode = parser.get('GUI','control_mode',fallback='ADB')
-            self.control_mode.set(mode if mode in ('ADB','Mouse','Mouse (preview)') else 'ADB')
+            self.control_mode.set('Mouse' if mode == 'Mouse (preview)' else mode if mode in ('ADB','Mouse') else 'ADB')
             legacy_jitter = min(float(self.tap_sleep.get()) * .1, .05)
             jitter = parser.getfloat('GUI', 'tap_jitter', fallback=legacy_jitter)
             self.tap_jitter.set(jitter if math.isfinite(jitter) and 0 <= jitter <= .1 else .03)
@@ -1068,7 +1064,7 @@ class RefreshGui(tk.Tk):
         self.after(10000, self._rescan_idle_devices)
 
     def _change_control_mode(self, _event=None):
-        if self._checking_connection or self._mouse_preview_busy or (self.process and self.process.poll() is None):
+        if self._checking_connection or (self.process and self.process.poll() is None):
             return
         self._connection_check_id += 1
         self._device_scan_busy = self._mouse_scan_busy = False
@@ -1078,20 +1074,19 @@ class RefreshGui(tk.Tk):
                                   values=list(self.mouse_windows) if mouse else list(self.device_labels),
                                   state='readonly' if mouse else 'normal')
         self.target_label.configure(text='Game window' if mouse else 'Emulator / ADB device')
-        self.start_button.configure(text='Preview targets' if self.control_mode.get() == 'Mouse (preview)' else 'Start Refresh', state=tk.NORMAL)
+        self.start_button.configure(text='Start Refresh', state=tk.NORMAL)
         self._set_connection_warning('')
         self.home_ui_hint_dismissed = False
         self.home_ui_banner.grid()
-        self.status.set('Mouse preview' if self.control_mode.get() == 'Mouse (preview)' else 'Ready')
-        self.detail.set('Press Start Refresh to bring the selected game window forward and automate the shop.' if self.control_mode.get() == 'Mouse' else
-                        'Open Secret Shop, press Preview targets, then switch to the selected game.' if mouse else
+        self.status.set('Ready')
+        self.detail.set('Press Start Refresh to bring the selected game window forward and automate the shop.' if mouse else
                         'Open Epic Seven’s Secret Shop, then start a session.')
         if mouse:
             self._update_mouse_selection()
         self.refresh_devices()
 
     def _select_mouse_window(self, _event=None):
-        if self.control_mode.get() == 'ADB' or self._mouse_preview_busy:
+        if self.control_mode.get() == 'ADB':
             return
         if self.mouse_windows.get(self.mouse_target.get()) is not None:
             self._set_connection_warning('')
@@ -1101,16 +1096,13 @@ class RefreshGui(tk.Tk):
         target = self.mouse_windows.get(self.mouse_target.get())
         if target is not None:
             left, top, right, bottom = target.rectangle
-            next_step = ('Press Start Refresh to open the shop and run.\nMouse mode uses your actual pointer.'
-                         if self.control_mode.get() == 'Mouse' else
-                         'Open Secret Shop, then press Preview targets.\nSwitch to the game when the countdown starts.')
+            next_step = 'Press Start Refresh to open the shop and run.\nMouse mode uses your actual pointer.'
             self.device_notice.set(f'Selected: {target.title} · {right-left} × {bottom-top}\n'+next_step)
         elif self.mouse_windows:
             self.device_notice.set('Several game windows found. Choose your game above.')
         else:
             self.device_notice.set('Open Epic Seven, then Scan to find its window.')
-        if not self._mouse_preview_busy:
-            self.start_button.configure(state=tk.NORMAL if target is not None else tk.DISABLED)
+        self.start_button.configure(state=tk.NORMAL if target is not None else tk.DISABLED)
 
     def _apply_mouse_windows(self, windows, error):
         selected = self.mouse_windows.get(self.mouse_target.get())
@@ -1138,7 +1130,7 @@ class RefreshGui(tk.Tk):
             self.device_notice.set(error)
 
     def _scan_game_windows(self):
-        if self._mouse_scan_busy or self._mouse_preview_busy or (self.process and self.process.poll() is None):
+        if self._mouse_scan_busy or (self.process and self.process.poll() is None):
             return
         self._mouse_scan_busy = True
         token = self._connection_check_id
@@ -1152,75 +1144,6 @@ class RefreshGui(tk.Tk):
                 windows, error = [], str(exc)
             self.log_queue.put((None,'windows',(token,windows,error)))
         threading.Thread(target=scan,daemon=True).start()
-
-    def _start_mouse_preview(self):
-        if self._mouse_preview_busy or self._checking_connection or (self.process and self.process.poll() is None):
-            return
-        if self.setup_window is not None and self.setup_window.winfo_exists():
-            self.setup_window.lift()
-            return
-        if self.preview_window is not None and self.preview_window.winfo_exists():
-            self.preview_window.lift()
-            return
-        target = self.mouse_windows.get(self.mouse_target.get())
-        if target is None:
-            self._set_connection_warning('Choose an open game window first. Press Scan if it is missing.',reveal=True)
-            return
-        self._preview_token += 1
-        token = self._preview_token
-        self._mouse_preview_busy = True
-        self._preview_cancel = threading.Event()
-        self._set_controls(True)
-        self.stop_button.configure(text='Cancel preview')
-        self._set_connection_warning('')
-        self.status.set('Preview countdown')
-        self._mouse_preview_countdown(token,target,3)
-
-    def _mouse_preview_countdown(self, token, target, seconds):
-        if token != self._preview_token or not self._mouse_preview_busy:
-            return
-        if seconds:
-            self.detail.set(f'Switch to {target.title}. Ready check in {seconds} seconds; '
-                            'capture waits until the game is in front and unobstructed.')
-            self.after(1000,lambda:self._mouse_preview_countdown(token,target,seconds-1))
-            return
-        self.status.set('Waiting for game window')
-        self.detail.set(f'Waiting up to 20 seconds for {target.title}. Keep its view unobstructed. '
-                        'After capture, return here to see the preview.')
-        cancel = self._preview_cancel
-        def preview():
-            capture = report = None
-            error = ''
-            try:
-                wait_for_window(target,cancel)
-                folder = ENGINE_EXE.parent/'mouse-previews'/uuid.uuid4().hex
-                folder.mkdir(parents=True)
-                capture = folder/'capture.png'
-                capture_selected(target,capture,cancel=cancel)
-                if cancel.is_set():
-                    raise ValueError('Mouse preview cancelled.')
-                report = analyze_capture(ENGINE_EXE,ENGINE_EXE.parent,capture,folder/'preview.json')
-            except (OSError,ValueError,RuntimeError,subprocess.SubprocessError) as exc:
-                error = str(exc)
-            self.log_queue.put((None,'mouse_preview',(token,capture,report,error)))
-        threading.Thread(target=preview,daemon=True).start()
-
-    def _finish_mouse_preview(self, token, capture, report, error):
-        if token != self._preview_token or not self._mouse_preview_busy or self.control_mode.get() == 'ADB':
-            return
-        self._mouse_preview_busy = False
-        self._set_controls(False)
-        if error:
-            self.status.set('Preview needs attention')
-            self.detail.set(error)
-            self._set_connection_warning(error,reveal=True)
-            return
-        self.status.set('Preview complete')
-        self.detail.set('Game captured. Reveal hidden home controls or open Secret Shop, then preview again.'
-                        if report['state']=='unrecognized' else
-                        f"Recognized {report['state']}. Preview only; no refresh session started.")
-        self._event('Mouse preview complete. No clicks, purchases or refreshes.')
-        self.preview_window = MousePreviewDialog(self,capture,report)
 
     def _start_connection_check(self, settings):
         self._connection_check_id += 1
@@ -1282,9 +1205,6 @@ class RefreshGui(tk.Tk):
         if self.control_mode.get() == 'Mouse':
             self._start_mouse_refresh()
             return
-        if self.control_mode.get() == 'Mouse (preview)':
-            self._start_mouse_preview()
-            return
         if self._checking_connection or (self.process and self.process.poll() is None):
             return
         if not ENGINE_EXE.is_file():
@@ -1301,10 +1221,7 @@ class RefreshGui(tk.Tk):
         self._start_connection_check(settings)
 
     def _start_mouse_refresh(self):
-        if self._mouse_preview_busy or self._checking_connection or (self.process and self.process.poll() is None):
-            return
-        if self.preview_window is not None and self.preview_window.winfo_exists():
-            self.preview_window.lift()
+        if self._checking_connection or (self.process and self.process.poll() is None):
             return
         if self.setup_window is not None and self.setup_window.winfo_exists():
             self.setup_window.lift()
@@ -1330,7 +1247,7 @@ class RefreshGui(tk.Tk):
 
     def _begin_refresh(self, settings, *, mouse_target=None):
         if settings.debug:
-            message = "Debug uses a fixed 100-skystone test budget, the Esc stop key, and randomized offsets. It includes Friendship Points when detected, and pauses BEFORE each click. Check each image, then press a key other than Esc in that image to continue. Buy and confirmation each have a pause. Continue?"
+            message = "Debug uses a fixed 100-skystone test budget, the Esc stop key, and randomized offsets. It pauses BEFORE each click. Check each image, then press a key other than Esc in that image to continue. Buy and confirmation each have a pause. Continue?"
             if not messagebox.askyesno("Start calibration?", message, parent=self):
                 return
         settings = self.save_settings(settings)
@@ -1368,7 +1285,7 @@ class RefreshGui(tk.Tk):
         self.log.delete("1.0", tk.END)
         self.log.configure(state=tk.DISABLED)
         self.activity.delete(*self.activity.get_children())
-        for var in (self.spent, self.covenant, self.mystic, self.friendship):
+        for var in (self.spent, self.covenant, self.mystic):
             var.set("—")
         self._update_spent_display()
         self.progress.configure(value=0)
@@ -1513,7 +1430,7 @@ class RefreshGui(tk.Tk):
             except (ValueError, TypeError):
                 return
             self._live_stats_seen = True
-            for key, var in (('skystone_spent', self.spent), ('covenant', self.covenant), ('mystic', self.mystic), ('friendship', self.friendship)):
+            for key, var in (('skystone_spent', self.spent), ('covenant', self.covenant), ('mystic', self.mystic)):
                 value = number_text(stats[key])
                 if var.get() != value:
                     if key in ('covenant', 'mystic') and stats[key] > 0:
@@ -1550,11 +1467,9 @@ class RefreshGui(tk.Tk):
             self.finished = True
             self._freeze_elapsed()
             self._event("Refresh ended. Recording session results.")
-        for label, var in (("Covenant bookmark", self.covenant), ("Mystic medal", self.mystic), ("Friendship bookmark", self.friendship), ("Skystone spent", self.spent)):
+        for label, var in (("Covenant bookmark", self.covenant), ("Mystic medal", self.mystic), ("Skystone spent", self.spent)):
             if match := re.match(rf"{label}\s*:\s*(\d+)", line):
                 var.set(number_text(match[1]))
-                if label == "Friendship bookmark" and int(match[1]) > 0:
-                    self._event(f"Friendship Points purchases: {match[1]}.")
         if re.search(r"Traceback|Error:|Exception:|Fail to connect|folder is missing|screen.*(?:wrong|incorrect)", line, re.I):
             self._event(line[:350])
             self.detail.set("The engine reported a problem. Check Diagnostics for details.")
@@ -1562,14 +1477,6 @@ class RefreshGui(tk.Tk):
             self._event("Calibration image open. Check the highlighted area before continuing.")
 
     def stop_refresh(self):
-        if self._mouse_preview_busy:
-            self._preview_cancel.set()
-            self._preview_token += 1
-            self._mouse_preview_busy = False
-            self._set_controls(False)
-            self.status.set('Preview cancelled')
-            self.detail.set('Mouse preview cancelled. No clicks or spending.')
-            return
         if self._checking_connection:
             self._connection_check_id += 1
             self._checking_connection = False
@@ -1739,11 +1646,8 @@ class RefreshGui(tk.Tk):
             elif kind == 'windows':
                 token, windows, error = value
                 self._mouse_scan_busy = False
-                if token == self._connection_check_id and self.control_mode.get() != 'ADB' and not self._mouse_preview_busy:
+                if token == self._connection_check_id and self.control_mode.get() != 'ADB':
                     self._apply_mouse_windows(windows, error)
-            elif kind == 'mouse_preview':
-                token, capture, report, error = value
-                self._finish_mouse_preview(token,capture,report,error)
         if output:
             self._handle_output(''.join(output))
         self.after(100, self._drain_log_queue)
@@ -1829,7 +1733,7 @@ class RefreshGui(tk.Tk):
         self.after(3000, self._poll_history)
 
     def _clear_history(self):
-        if self._checking_connection or self._mouse_preview_busy or (self.process and self.process.poll() is None):
+        if self._checking_connection or (self.process and self.process.poll() is None):
             return
         if not HISTORY_FILE.exists() or not self.history.get_children():
             return
@@ -1877,7 +1781,7 @@ class RefreshGui(tk.Tk):
         self.tap_jitter.set(selected)
         enabled = self.random_offset.get() and not self.debug_mode.get()
         if running is None:
-            running = self._checking_connection or self._mouse_preview_busy or (self.process and self.process.poll() is None)
+            running = self._checking_connection or (self.process and self.process.poll() is None)
         self.tap_jitter_slider.state(['disabled'] if running or not enabled else ['!disabled'])
         try:
             baseline = float(self.tap_sleep.get())
@@ -1906,9 +1810,6 @@ class RefreshGui(tk.Tk):
         self._update_spent_display()
 
     def _close(self):
-        self._preview_cancel.set()
-        self._preview_token += 1
-        self._mouse_preview_busy = False
         self._connection_check_id += 1
         self._checking_connection = False
         if self.process and self.process.poll() is None:
@@ -1961,7 +1862,8 @@ def main(argv=None):
             if Image is None:
                 raise ValueError('Pillow image support is missing. Use the bundled player EXE.')
             for name in ('background-day-hd.png', 'background-night-hd.png', 'mystic-medal.png',
-                         'covenant-bookmark.png', 'skystone.png', 'blue-natto-avatar.png'):
+                         'covenant-bookmark.png', 'skystone.png', 'blue-natto-avatar.png',
+                         'github-black.png', 'github-white.png'):
                 with Image.open(ASSET_DIR/name) as artwork:
                     artwork.verify()
             if args.verification_report:

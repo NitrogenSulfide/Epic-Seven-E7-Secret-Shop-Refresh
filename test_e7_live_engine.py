@@ -15,6 +15,20 @@ import E7ADBShopRefresh as engine
 
 
 class StartupSelectionTests(unittest.TestCase):
+    def test_calibration_and_normal_inventory_exclude_friendship(self):
+        import numpy as np
+        for debug in (False, True):
+            with self.subTest(debug=debug), \
+                 patch.object(engine.E7ADBShopRefresh, 'checkScreenDimension'), \
+                 patch.object(engine, 'create_navigator'), \
+                 patch.object(engine.cv2, 'imread', return_value=np.zeros((20, 20, 3), dtype=np.uint8)) as images, \
+                 patch.object(engine.subprocess, 'run') as adb:
+                app = engine.E7ADBShopRefresh(debug=debug)
+                self.assertEqual(set(app.storage.inventory), {'Covenant bookmark', 'Mystic medal'})
+                self.assertEqual(images.call_count, 2)
+                self.assertFalse(any('fb.png' in str(call) for call in images.call_args_list))
+                adb.assert_not_called()
+
     def test_adb_cli_passes_selected_timing_and_whole_budget(self):
         source=Path(engine.__file__).read_text(encoding='utf-8')
         main=ast.parse(source).body[-1]

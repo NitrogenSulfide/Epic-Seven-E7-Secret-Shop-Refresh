@@ -1,5 +1,19 @@
 # Release checks
 
+## rc40 app cleanup
+
+The app exposes ADB and Mouse only. Saved Mouse preview preferences load as
+Mouse without starting a session; offline frame-analysis tooling remains in
+source. Calibration and normal ADB inventory both contain only Covenant and
+Mystic items. Legacy history and reserved protocol counters remain readable.
+
+Quickstart, release notes and the first-release tested-client notice are local
+About & Credits content. Include CHANGELOG.txt and original official black/white
+GitHub icon assets in the player ZIP. GitHub and Ko-fi open only on button clicks.
+Keep the settings canvas decoration outside the controls' scrollregion. Check
+expanded/collapsed help, both themes, smaller displays and popup tab readability
+using fake sessions. No new live game run is required for this GUI cleanup.
+
 The player ZIP supplies the compiled GUI with Python/Tk/Pillow, external artwork,
 matching engine and source, upstream ADB tools/templates/notices, and a portable
 runtime configuration. The full Source ZIP is an optional developer download.

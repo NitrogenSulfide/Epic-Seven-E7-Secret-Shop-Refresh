@@ -106,5 +106,23 @@
     "origin": "Generated previously with imagegen; selected by the owner for the header credits button",
     "sha256": "c185e50b5be5ed99c11ccccb9334221a78a284cc5db40f691258c2d2bb5547dc",
     "ui_render": "28 logical pixel square mark; original PNG unchanged; existing portrait and app icon retained"
+  },
+  "github_profile_button": {
+    "source": "https://brand.github.com/GitHub_Logos.zip",
+    "guidance": "https://brand.github.com/foundations/logo",
+    "retrieved": "2026-10-04",
+    "credit": "GitHub, Inc.",
+    "use": "Social button linking to https://github.com/NitrogenSulfide",
+    "files": {
+      "github-black.png": {
+        "archive_member": "GitHub Logos/PNG/GitHub_Invertocat_Black.png",
+        "sha256": "2a2f5cbcc74c7fa83c40127dd8b0e42c23f1157131aebe28492aa1ac27bbdc6d"
+      },
+      "github-white.png": {
+        "archive_member": "GitHub Logos/PNG/GitHub_Invertocat_White.png",
+        "sha256": "0d4c235fef9efec54174a7c005fc0fe0ce2d63d35c21898ab5148587111397a9"
+      }
+    },
+    "alterations": "None to original files; proportional UI resizing only."
   }
 }

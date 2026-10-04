@@ -20,7 +20,7 @@ Epic Seven and a **1920 × 1080** Android display. Other emulators are unverifie
 The original upstream source and Git history are preserved, alongside the GUI,
 launchers, tests, sounds and icon. The first public preview is **0.1.0-rc20**.
 
-The local **rc39** candidate includes **Control mode → Mouse** for visible
+The local **rc40** candidate includes **Control mode → Mouse** for visible
 Epic Seven windows, including Google Play Games Developer Emulator and STOVE.
 Other discovered emulator windows can use the same transport but remain unverified.
 **Start Refresh** brings the selected game forward, opens its recognized
@@ -56,23 +56,11 @@ that frame is handled at smaller sizes too. Other emulator toolbars are not gues
 The Google crop stays fixed for the session so confirmation dimming cannot
 change its bounds; moving or resizing the window still stops input. Resize
 before pressing Start. An already open Secret Shop does not require visiting home.
-Google developer-emulator live refreshes and purchases in rc39 remain unverified.
-ADB mode remains available. **Mouse (preview)** is an optional read-only capture
-check; regular Google Play Games and STOVE preview capture remain supported.
-See [Mouse instructions](release/SETUP.md#mouse-automation--experimental-native-stove).
-
-The window selector uses readable names, keeps your selection across rescans,
-and shows the selected capture size and preparation steps. The countdown starts
-a readiness check; the app then waits for you to switch to the unobstructed game.
-**Cancel preview** remains available. Native STOVE shop recognition succeeded
-in an owner-run rc27 preview. The new Mouse session has fake/offline checks;
-native purchases and long runs still need supervised checks.
-Plain symmetric black letterboxing is cropped before recognition; a maximized
-client area is not required to have exactly the same aspect ratio as the game.
-Wider native STOVE views are preserved without cropping or stretching the
-displayed preview. Hidden controls produce an unrecognized preview with guidance.
-After its countdown, preview waits up to 20 seconds for the user to bring the
-selected game forward and uncover it; Stop cancels the wait without capturing.
+Google developer-emulator live refreshes and purchases in rc40 remain unverified.
+ADB mode remains available. Mouse preview has been removed; saved preview
+preferences load as Mouse without starting a session. The window selector
+keeps your selection across rescans and shows the game capture size.
+See [Mouse instructions](release/SETUP.md#mouse-automation--visible-game-windows).
 
 For a new user's beta setup, see [SETUP.md](release/SETUP.md). Players need only the combined player ZIP, with the GUI, matching engine,
 upstream ADB tools/item templates and a portable runtime configuration. A separate
@@ -80,7 +68,7 @@ full source ZIP is available for developers; players do not need it. SHA-256s
 identify both downloads. Recognition references are created locally and personal
 state stays private.
 
-The header's ⓘ button opens About & Credits, also shown on first launch for the
+The header's blue-bean button opens About & Credits, also shown on first launch for the
 selected runtime's saved GUI preferences. Continue or closing that window marks
 it seen. Show this on startup is off by default, and can be enabled there later.
 It remembers the choice in ShopRefreshGUI.ini alongside sound/theme/device
@@ -267,3 +255,13 @@ rc23 fixes rc22 accepting Google Play's connected background VM after its window
 was closed. Read-only checks now require an open Google Play window and Epic Seven
 as the current Android activity. A launcher/history entry does not count. Missing
 game/window readiness shows the red banner and launches no refresh engine.
+
+## Quickstart and tested clients
+
+About & Credits contains Quickstart and bundled Release notes tabs. The main
+screen’s Buy me a coffee button opens https://ko-fi.com/bluenatto only when clicked.
+
+For this upcoming first full release, testing has been limited to Google Play
+Games on PC Developer Emulator and the official STOVE client of Epic Seven.
+Other emulators and methods have not been tested. Both modes buy only Covenant
+Bookmarks and Mystic Medals; Friendship purchases are removed from calibration too.
