@@ -1,5 +1,6 @@
 0.1.1 · Administrator restart
 
+• Mouse is the default for new settings; existing saved control modes are preserved.
 • Mouse Start detects an elevated game and offers to restart through Windows UAC.
 • Settings are saved before restarting. Select the game and press Start again;
   reopening never starts a session automatically.

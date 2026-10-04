@@ -239,7 +239,7 @@ class RefreshGui(tk.Tk):
         self._device_scan_busy = False
         self._background_scan = False
         self.connection_warning = ''
-        self.control_mode = tk.StringVar(value='ADB')
+        self.control_mode = tk.StringVar(value='Mouse')
         self.mouse_target = tk.StringVar(value='')
         self.mouse_windows = {}
         self._mouse_scan_busy = False
@@ -931,8 +931,8 @@ class RefreshGui(tk.Tk):
             self.credits_on_startup.set(parser.getboolean("GUI", "show_credits_on_startup", fallback=False))
             self.adb_hint_dismissed.set(parser.getboolean("GUI", "adb_hint_dismissed", fallback=False))
             self.device.set(parser.get("GUI", "device", fallback=self.device.get()))
-            mode = parser.get('GUI','control_mode',fallback='ADB')
-            self.control_mode.set('Mouse' if mode == 'Mouse (preview)' else mode if mode in ('ADB','Mouse') else 'ADB')
+            mode = parser.get('GUI','control_mode',fallback='Mouse')
+            self.control_mode.set(mode if mode in ('ADB','Mouse') else 'Mouse')
             legacy_jitter = min(float(self.tap_sleep.get()) * .1, .05)
             jitter = parser.getfloat('GUI', 'tap_jitter', fallback=legacy_jitter)
             self.tap_jitter.set(jitter if math.isfinite(jitter) and 0 <= jitter <= .1 else .03)
