@@ -603,10 +603,11 @@ class NativeEngineTests(unittest.TestCase):
         app=self.make_engine()
         artwork=np.random.default_rng(42).integers(0,255,(1080,1920,3),dtype=np.uint8)
         visible=shop();visible[561:590,75:95]=230;visible[565:600,105:125]=230
-        app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (artwork,artwork,visible,visible,shop())]
-        app.navigation.shop_visible.side_effect=[False,False,True]
-        app.navigation.menu_target.side_effect=[None,(97,635),(97,635)]
-        self.ui_ocr.return_value=dict(text='',words=[])
+        animated=255-artwork
+        app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (artwork,animated,visible,visible,shop())]
+        app.navigation.shop_visible.side_effect=[False,False,False,True]
+        app.navigation.menu_target.side_effect=[None,None,(97,635),(97,635)]
+        self.ui_ocr.return_value=dict(text='eii -._nr.or decorative wallpaper',words=[])
         with patch('e7_mouse_refresh.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'):
             self.assertTrue(app.clickShop())
         self.assertEqual([call.args for call in app.mouse.click.call_args_list],[(960,540),(100,580.5)])
@@ -631,6 +632,25 @@ class NativeEngineTests(unittest.TestCase):
             self.assertFalse(idle_home_candidate(artwork,dict(text=text,words=[])))
             self.assertFalse(idle_home_candidate(artwork,dict(words=[dict(text=text)])))
         self.assertFalse(idle_home_candidate(shop(),dict(text='',words=[])))
+
+    def test_idle_reveal_accepts_dark_sparse_and_lettered_wallpaper(self):
+        artwork=np.full((1080,1920,3),12,dtype=np.uint8)
+        artwork[300:700,600:1200]=40
+        self.assertTrue(idle_home_candidate(artwork,dict(text='eii -._nr.or',words=[])))
+        self.assertTrue(idle_home_candidate(artwork,dict(text='Winter memories',words=[dict(text='2026')])))
+        for text in ('SecretShop','Log in','Tap to start','Purchase','Loading'):
+            self.assertFalse(idle_home_candidate(artwork,dict(text=text,words=[])))
+
+    def test_controls_appearing_before_reveal_are_used_without_extra_center_click(self):
+        app=self.make_engine()
+        artwork=np.random.default_rng(42).integers(0,255,(1080,1920,3),dtype=np.uint8)
+        visible=shop();visible[561:590,75:95]=230;visible[565:600,105:125]=230
+        app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (artwork,visible,visible,visible,shop())]
+        app.navigation.shop_visible.side_effect=[False,False,False,True]
+        app.navigation.menu_target.side_effect=[None,(97,635),(97,635),(97,635)]
+        with patch('e7_mouse_refresh.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'):
+            self.assertTrue(app.clickShop())
+        app.mouse.click.assert_called_once_with(100,580.5)
 
     def test_idle_reveal_rechecks_full_screen_for_new_dialog_before_click(self):
         app=self.make_engine()

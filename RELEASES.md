@@ -1,5 +1,16 @@
 # Release checks
 
+## rc47 wallpaper-independent reveal attempt
+
+The animated tavern wallpaper produced incidental OCR text and a consecutive
+frame difference above the old reveal stability limit. Both excluded a valid
+hidden home. Remove whole-artwork stability, brightness and quadrant-detail
+requirements, and reject known game UI rather than every OCR character. Recheck
+shop/home controls and full-view dialog/loading labels before one center reveal
+attempt; wait 0.5 seconds and require recognized home controls and verified shop
+entry afterward. No repeated reveal clicks. Replay all three actual wallpapers
+at four sizes, including real local OCR on the tavern frames and mocked input.
+
 ## rc46 STOVE purchase confirmation width
 
 The saved Covenant Bookmarks dialog has a 455-pixel-wide green action button

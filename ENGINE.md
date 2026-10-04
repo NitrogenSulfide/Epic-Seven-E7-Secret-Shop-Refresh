@@ -21,8 +21,8 @@ are checked before input. Capture keeps the full native client (or clearly bound
 black-bar crop); normalized recognition points map back to desktop coordinates.
 Google Play Games windows can additionally crop an observed mostly black custom
 title bar when the remaining image fits the game aspect ratio. No fixed toolbar
-height is assumed. Home/shop recognition is required before input, including
-hover; unknown emulator screens receive none. The GUI requires window mouse v6
+height is assumed. A bounded startup reveal attempt can precede home recognition;
+shop-menu and purchase/refresh input require recognized controls. The GUI requires window mouse v6
 so an older STOVE-only engine cannot be used accidentally.
 The native preflight checks process elevation: a normal app cannot control an
 elevated game. It stops with a Run as administrator instruction before activation.
@@ -233,6 +233,14 @@ permits one center reveal probe. The fresh frame must still qualify immediately
 before input. The probe is never repeated during this startup attempt; observed
 home-menu recognition and shop verification are required afterward. It sends
 no Refresh or purchase before the shop markers are verified.
+
+rc47 replaces the rc42 whole-artwork stability, brightness, quadrant-detail and
+any-OCR-text exclusions. If no home controls are recognized, a nonblank frame
+without known dialog/loading/game-action labels permits one center reveal
+attempt. Incidental wallpaper lettering and animation are accepted. Fresh
+shop/home controls are rechecked before that attempt so newly visible controls
+do not get hidden again. Wait 0.5 seconds, then require the observed shop icon
+and verified shop entry. It remains a bounded probe, not proof of the home page.
 
 The rc24 engine also supports `--preview-mouse-frame PATH --output REPORT.json`.
 This early CLI branch analyzes an existing game-client screenshot with the same shop
