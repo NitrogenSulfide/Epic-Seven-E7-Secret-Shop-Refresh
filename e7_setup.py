@@ -30,6 +30,11 @@ def missing_references(runtime):
     return [name for name in REFERENCE_NAMES if not (folder/name).is_file() or (folder/name).stat().st_size == 0]
 
 
+def has_builtin_references(runtime):
+    folder = Path(runtime)/'adb-assets/builtin-navigation'
+    return all((folder/name).is_file() and (folder/name).stat().st_size > 0 for name in REFERENCE_NAMES)
+
+
 def capture_frame(adb, device, destination, runner=subprocess.run):
     if Image is None:
         raise RuntimeError('Use the included app EXE for image support, or install Pillow for a source launch.')
@@ -77,7 +82,7 @@ class RecognitionSetup(tk.Toplevel):
         verify_setup_engine(engine)
         super().__init__(app)
         self.app, self.runtime, self.adb, self.engine, self.device = app, Path(runtime), adb, engine, device
-        self.title('Set up Secret Shop recognition')
+        self.title('Help recognize Secret Shop')
         self.transient(app)
         self.protocol('WM_DELETE_WINDOW', self.close)
         self.jobs = queue.Queue()
@@ -90,9 +95,10 @@ class RecognitionSetup(tk.Toplevel):
         self.configure(bg=bg)
         self.columnconfigure(0, weight=1)
         dp = app._dp
-        tk.Label(self, text='One-time recognition setup', bg=bg, fg=fg,
+        tk.Label(self, text='Help recognize your shop', bg=bg, fg=fg,
                  font=app.heading_font, anchor='w').grid(row=0,column=0,sticky='ew',padx=dp(20),pady=(dp(20),dp(12)))
-        tk.Label(self, text='These buttons only read screenshots. They do not tap, buy or refresh.\n'
+        tk.Label(self, text='Use this helper when automatic recognition needs help.\n'
+                 'These buttons only read screenshots. They do not tap, buy or refresh.\n'
                  'Use English Epic Seven with a 1920 × 1080 Android display.\n\n'
                  '1. Open the game’s home screen. Click the game once if its UI is hidden.\n'
                  '2. Capture the visible home menu below.\n'

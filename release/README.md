@@ -1,18 +1,20 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.1.0-rc20** is a local candidate; nothing has been published.
-Players need only **E7ShopRefresh-0.1.0-rc20.zip**.
+Version **0.1.0-rc21** is a local candidate. The previous rc20 public preview is unchanged.
+Players need only **E7ShopRefresh-0.1.0-rc21.zip**.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
 Pillow are included in this EXE. Artwork, the matching compiled engine, ADB tools
 and templates are arranged beside it, with the runtime path configured.
 Follow [START-HERE.md](START-HERE.md) or [SETUP.md](SETUP.md) for the emulator and
-guided one-time recognition setup. The optional Source ZIP is for developers.
+automatic shop recognition. A guided recognition helper is offered only when
+startup recognition fails. The optional Source ZIP is for developers.
 
 Use Google Play Games on PC Developer Emulator, English Epic Seven and a
 1920 × 1080 Android display. Native STOVE is unsupported; other emulators are
-unverified. Setup only reads screenshots. Press Start again after it succeeds
-to begin a spending session. Normal fresh settings are 12 skystones, 0.3-second
+unverified. Press Start to try the built-in English templates. If the helper is
+needed, it only reads screenshots; press Start again after it succeeds.
+Normal fresh settings are 12 skystones, 0.3-second
 delay, backtick stop key and randomized offsets; saved settings take precedence.
 
 Live counters report engine-completed buys/refreshes, not confirmed balances.

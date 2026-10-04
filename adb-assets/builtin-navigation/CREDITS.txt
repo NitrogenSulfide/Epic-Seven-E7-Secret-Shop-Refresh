@@ -1,0 +1,4 @@
+Generic Secret Shop / Refresh UI labels: Epic Seven, Smilegate and respective rights holders.
+These game-artwork snippets are not relicensed by the software GPL.
+Only text-label crops are included; personal screenshots and calibration remain private.
+See provenance.json for dimensions and hashes.

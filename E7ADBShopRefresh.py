@@ -13,7 +13,7 @@ import keyboard
 import random
 import configparser
 import json
-from e7_shop_navigation import ShopNavigator, prepare_references
+from e7_shop_navigation import create_navigator, NavigationSetupRequired, prepare_references
 
 class E7Item:
     def __init__(self, image=None, price=0, count=0):
@@ -106,7 +106,7 @@ class E7ADBShopRefresh:
         self.screenwidth = 1920
         self.screenheight = 1080
         self.checkScreenDimension()
-        self.navigation = ShopNavigator(os.path.join('adb-assets', 'gui-navigation'))
+        self.navigation = create_navigator('adb-assets')
 
         self.storage.addItem('cov.png', 'Covenant bookmark', 184000)
         self.storage.addItem('mys.png', 'Mystic medal', 280000)
@@ -333,7 +333,7 @@ class E7ADBShopRefresh:
                 print('Navigation: Waiting for visible game controls. Click the game to reveal its UI, or open Secret Shop manually. No taps or spending while waiting (up to 60 seconds).', flush=True)
                 deadline = time.monotonic() + 60
             if time.monotonic() >= deadline:
-                raise RuntimeError('Game controls remained unrecognized for 60 seconds. No navigation tap sent. Reveal the UI or open Secret Shop manually, then start again.')
+                raise NavigationSetupRequired('Game controls remained unrecognized for 60 seconds. No navigation tap sent. Reveal the UI or use the recognition setup helper.')
             time.sleep(1.0)
             if not self.loop_active:
                 return False
@@ -356,7 +356,7 @@ class E7ADBShopRefresh:
                 return True
         if not self.loop_active:
             return False
-        raise RuntimeError('Secret Shop could not be verified after the navigation tap (' + self.navigation.verification_details(last_screenshot) + '). It may already be open. Stopped before purchasing or refreshing.')
+        raise NavigationSetupRequired('Secret Shop could not be verified after the navigation tap (' + self.navigation.verification_details(last_screenshot) + '). Stopped before purchasing or refreshing. Use the recognition setup helper.')
 
     def clickBuy(self, pos):
         if pos is None or not self.loop_active:
@@ -445,6 +445,16 @@ def saveConfigFile(tap_sleep, budget, stop_refresh_key, random_offset):
         config.write(f)
     print('Setting saved')
 
+def run_refresh_engine(**settings):
+    try:
+        app = E7ADBShopRefresh(**settings)
+        app.start()
+    except NavigationSetupRequired as error:
+        print('E7GUI_SETUP_REQUIRED ' + str(error), flush=True)
+        return False
+    return True
+
+
 if __name__ == '__main__':
     if sys.argv[1:2] == ['--prepare-navigation-references']:
         import argparse
@@ -458,8 +468,20 @@ if __name__ == '__main__':
         print('Private Secret Shop references prepared and checked offline.')
         sys.exit(0)
     if sys.argv[1:] == ['--verify']:
-        print('E7 engine: live counters v1; verified shop navigation v3; visible UI startup wait; sleeping stop-key poll; imports OK')
+        print('E7 engine: live counters v1; verified shop navigation v3; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
         sys.exit(0)
+    if sys.argv[1:2] == ['--check-navigation-frame']:
+        import argparse
+        parser = argparse.ArgumentParser(description='Check a saved screenshot offline; no ADB, hooks or game actions.')
+        parser.add_argument('--check-navigation-frame', required=True)
+        args = parser.parse_args()
+        with open(args.check_navigation_frame, 'rb') as stream:
+            frame = cv2.imdecode(np.frombuffer(stream.read(), dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
+        navigation = create_navigator('adb-assets')
+        visible = navigation.shop_visible(frame)
+        target = None if visible else navigation.menu_target(frame)
+        print(json.dumps(dict(state='shop' if visible else 'home' if target else 'unrecognized', target=target)))
+        sys.exit(0 if visible or target else 2)
 
     #intro
     print('Epic Seven Shop Refresh with ADB')
@@ -535,13 +557,13 @@ if __name__ == '__main__':
             print(f'Press "{config["Settings"]["stop_refresh_key"]}" to terminate anytime!')
             print()
             print('Progress:')
-            ADBSHOP = E7ADBShopRefresh(tap_sleep=config.getfloat("Settings", "tap_sleep"),
+            if not run_refresh_engine(tap_sleep=config.getfloat("Settings", "tap_sleep"),
                                     budget=config.getfloat("Settings", "budget"),
                                     ip_port=ip_port,
                                     stop_refresh_key=config["Settings"]["stop_refresh_key"],
                                     random_offset=config.getboolean("Settings", "random_offset"),
-                                    debug=False)
-            ADBSHOP.start()
+                                    debug=False):
+                sys.exit(3)
             print()
             input('press enter to exit...')
             sys.exit(0)
@@ -626,12 +648,12 @@ if __name__ == '__main__':
     print(f'Press "{stop_refresh_key}" to terminate anytime!')
     print()
     print('Progress:')
-    ADBSHOP = E7ADBShopRefresh(tap_sleep=tap_sleep,
+    if not run_refresh_engine(tap_sleep=tap_sleep,
                                budget=budget,
                                ip_port=ip_port,
                                stop_refresh_key=stop_refresh_key,
                                random_offset=random_offset,
-                               debug=debug)
-    ADBSHOP.start()
+                               debug=debug):
+        sys.exit(3)
     print()
     input('press enter to exit...')
