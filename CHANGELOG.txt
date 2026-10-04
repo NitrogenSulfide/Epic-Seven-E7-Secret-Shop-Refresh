@@ -1,4 +1,9 @@
-0.1.0 · First release preview (rc45)
+0.1.0 · First release preview (rc46)
+
+rc46
+• Fixed native Mouse purchases stopping at the STOVE Buy dialog: its combined
+  gold-price/action button exceeded the old width limit. Purchase confirmations
+  now allow that size; item, price and fresh-dialog checks still apply.
 
 rc45
 • Native Mouse home entry recognizes Sanctuary, Secret Shop and Epic Pass
