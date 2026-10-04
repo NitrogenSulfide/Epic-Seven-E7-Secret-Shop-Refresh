@@ -478,7 +478,7 @@ class RefreshGui(tk.Tk):
         if not self.adb_hint_dismissed.get() and not waiting:
             reminder = 'Use an emulator with ADB enabled.'
         if self.control_mode.get() == 'Mouse':
-            reminder = 'Mouse mode uses your pointer · leave the PC alone while running. Your Stop key stays active.'
+            reminder = 'Mouse uses your pointer · leave the PC alone.'
         elif self.control_mode.get() != 'ADB':
             reminder = ('Click the selected game now. Waiting up to 20 seconds · no clicks or spending.'
                         if self.status.get() == 'Waiting for game window' else
@@ -1041,7 +1041,7 @@ class RefreshGui(tk.Tk):
                          'Open Secret Shop, then press Preview targets.\nSwitch to the game when the countdown starts.')
             self.device_notice.set(f'Selected: {target.title} · {right-left} × {bottom-top}\n'+next_step)
         elif self.mouse_windows:
-            self.device_notice.set('Several game windows found. Choose the one to preview above.')
+            self.device_notice.set('Several game windows found. Choose your game above.')
         else:
             self.device_notice.set('Open Epic Seven, then Scan to find its window.')
         if not self._mouse_preview_busy:
