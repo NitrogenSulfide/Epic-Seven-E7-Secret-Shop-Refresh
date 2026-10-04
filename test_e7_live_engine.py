@@ -60,6 +60,7 @@ class EngineTests(unittest.TestCase):
         app.loop_active, app.end_of_refresh = True, False
         app.stop_refresh_key, app.refresh_count = '`', 0
         app.tap_sleep, app.debug, app.budget = .3, False, 12
+        app.random_offset = False
         app.screenwidth, app.screenheight = 1920, 1080
         app.adb_path, app.device_args = 'NEVER-RUN-ADB', []
         app.storage = engine.E7Inventory()
@@ -69,6 +70,25 @@ class EngineTests(unittest.TestCase):
         app.navigation.verification_details.return_value = 'title=0.500 (unverified); refresh=0.400 (unverified)'
         app.takeScreenshot = lambda: 'fake'
         return app
+
+    def test_tap_delay_variation_is_bounded_and_keeps_baseline(self):
+        app = self.make_engine()
+        app.random_offset = True
+        for baseline, variation in ((.3, .03), (2., .05), (.01, .001), (0., 0.)):
+            app.tap_sleep = baseline
+            with patch.object(engine.random, 'uniform', side_effect=[-variation, variation]) as rng:
+                self.assertAlmostEqual(app.generateTapDelay(), baseline - variation)
+                self.assertAlmostEqual(app.generateTapDelay(), baseline + variation)
+                self.assertEqual(rng.call_args_list, [unittest.mock.call(-variation, variation)] * 2)
+            self.assertEqual(app.tap_sleep, baseline)
+
+    def test_tap_delay_is_fixed_without_randomization_or_during_calibration(self):
+        app = self.make_engine()
+        for randomized, debug in ((False, False), (False, True), (True, True)):
+            app.random_offset, app.debug = randomized, debug
+            with patch.object(engine.random, 'uniform') as rng:
+                self.assertEqual(app.generateTapDelay(), .3)
+                rng.assert_not_called()
 
     def test_key_poll_yields_and_detects_stop(self):
         app = self.make_engine()
@@ -115,6 +135,14 @@ class EngineTests(unittest.TestCase):
         with patch.object(engine.subprocess, 'run') as adb:
             self.assertFalse(app.clickBuy((10, 10)))
         adb.assert_not_called()
+
+    def test_adb_buy_and_refresh_resample_delay_for_each_tap(self):
+        for action in ('buy','refresh'):
+            app=self.make_engine();app.random_offset=True
+            with patch.object(engine.subprocess, 'run'), patch.object(engine.random, 'uniform', side_effect=[-.03,.03]), patch.object(engine.time, 'sleep') as sleep:
+                self.assertTrue(app.clickBuy((10,10)) if action=='buy' else app.clickRefresh())
+            self.assertEqual([round(call.args[0],2) for call in sleep.call_args_list[:2]],[.27,.33])
+            self.assertEqual(app.tap_sleep,.3)
 
     def test_adb_failure_does_not_count_purchase(self):
         app = self.make_engine()

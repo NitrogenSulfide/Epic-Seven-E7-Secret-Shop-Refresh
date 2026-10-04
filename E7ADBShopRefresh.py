@@ -302,6 +302,13 @@ class E7ADBShopRefresh:
     def generateSwipeOffset(self):
         return self.generateOffset()
 
+    def generateTapDelay(self):
+        """Vary only tap pacing; retain the configured baseline and fixed calibration."""
+        if not self.random_offset or self.debug:
+            return self.tap_sleep
+        variation = min(self.tap_sleep * 0.10, 0.05)
+        return self.tap_sleep + random.uniform(-variation, variation)
+
     def generateOffset(self):
         if self.random_offset:
             generate_x_offset = random.randint(-self.x_offset, self.x_offset)
@@ -385,7 +392,7 @@ class E7ADBShopRefresh:
         if not self.loop_active:
             return False
         self.tap(x+xoff,y+yoff)
-        time.sleep(self.tap_sleep)
+        time.sleep(self.generateTapDelay())
 
         #confirm
         x = self.screenwidth * 0.5677
@@ -398,7 +405,7 @@ class E7ADBShopRefresh:
         if not self.loop_active:
             return False
         self.tap(x+xoff,y+yoff)
-        time.sleep(self.tap_sleep)
+        time.sleep(self.generateTapDelay())
         #loading sleep
         time.sleep(1)
         return True
@@ -417,7 +424,7 @@ class E7ADBShopRefresh:
         if not self.loop_active:
             return False
         self.tap(x+xoff,y+yoff)
-        time.sleep(self.tap_sleep)
+        time.sleep(self.generateTapDelay())
 
         if not self.loop_active: return False
         #confirm
@@ -431,7 +438,7 @@ class E7ADBShopRefresh:
         if not self.loop_active:
             return False
         self.tap(x+xoff,y+yoff)
-        time.sleep(self.tap_sleep)
+        time.sleep(self.generateTapDelay())
         return True
 
 def getDevices(print_output):

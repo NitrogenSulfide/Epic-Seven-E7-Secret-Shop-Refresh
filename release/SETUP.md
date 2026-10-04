@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc34.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc35.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,7 +14,7 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc34.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc35.zip'
 ```
 
 ## Emulator setup
@@ -106,10 +106,14 @@ Covenant/Mystic items, scrolls and refreshes using your actual mouse pointer.
 Leave the PC alone while it runs. Your Stop key and Stop Session remain available;
 focus or coverage changes pause input for up to 10 seconds. Moving or resizing
 the game stops it. A prepared click is cancelled if focus changed before input.
-The game keeps its current size. Mouse requires normal settings; turn off Debug.
+The game keeps its current size. Debug/calibration is disabled in Mouse modes
+and is available only in ADB mode.
 The pointer glides smoothly between targets. Tap delay still applies between
 shop actions. **Randomize tap offsets** also adds a small variation to Refresh
 clicks, bounded inside its observed button; turn it off for the fixed label point.
+The recommended checkbox also varies each tap delay by up to 10%, capped at
+0.05 seconds faster or slower, in both modes. Turning it off restores the exact
+configured delay. ADB calibration always keeps a fixed delay.
 Shop scrolling uses a short upward mouse drag. The same checkbox adds small
 position and timing variations while keeping the vertical travel consistent.
 Stop or lost focus releases the drag button immediately. Begin with a small
