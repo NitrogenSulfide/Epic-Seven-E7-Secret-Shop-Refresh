@@ -20,7 +20,7 @@ Epic Seven and a **1920 × 1080** Android display. Other emulators are unverifie
 The original upstream source and Git history are preserved, alongside the GUI,
 launchers, tests, sounds and icon. The first public preview is **0.1.0-rc20**.
 
-The local **rc43** candidate includes **Control mode → Mouse** for visible
+The local **rc44** candidate includes **Control mode → Mouse** for visible
 Epic Seven windows, including Google Play Games Developer Emulator and STOVE.
 Other discovered emulator windows can use the same transport but remain unverified.
 **Start Refresh** brings the selected game forward, opens its recognized
@@ -56,7 +56,7 @@ that frame is handled at smaller sizes too. Other emulator toolbars are not gues
 The Google crop stays fixed for the session so confirmation dimming cannot
 change its bounds; moving or resizing the window still stops input. Resize
 before pressing Start. An already open Secret Shop does not require visiting home.
-Google developer-emulator live refreshes and purchases in rc43 remain unverified.
+Google developer-emulator live refreshes and purchases in rc44 remain unverified.
 ADB mode remains available. Mouse preview has been removed; saved preview
 preferences load as Mouse without starting a session. The window selector
 keeps your selection across rescans and shows the game capture size.

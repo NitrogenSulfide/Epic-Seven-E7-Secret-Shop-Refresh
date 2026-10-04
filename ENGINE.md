@@ -255,3 +255,7 @@ animated wallpaper pixels. A binary native Secret Shop icon mask supplements
 component detection, and joined SecretShop OCR is accepted. Menu templates
 authorize the icon above the caption, not caption clicks. Home-entry failure
 saves only a private left-menu crop and recognition details under mouse-failures.
+
+rc44 accepts the observed native Shop-to-Shoo OCR descender error in the
+same home context. A supervised live native hidden-home reveal and Secret Shop
+entry passed without refreshing or purchasing. Capture/input APIs were unchanged.

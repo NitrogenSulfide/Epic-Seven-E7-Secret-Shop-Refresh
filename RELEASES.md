@@ -1,5 +1,14 @@
 # Release checks
 
+## rc44 native OCR descender
+
+The live STOVE capture at the owner's display scale read `secr.et shoo`.
+Permit that specific Shop descender error only in the existing home context;
+Mouse still requires the observed icon and fresh target agreement. The actual
+source home-entry check succeeded from hidden controls with one reveal and one
+shop icon click, no refresh/purchase/spending. Check compiled saved failing
+frames, extracted fixtures and Google regression frames before owner handoff.
+
 ## rc43 Mouse home menu after reveal
 
 Re-recognize the observed home icon on a fresh frame before clicking; compare
