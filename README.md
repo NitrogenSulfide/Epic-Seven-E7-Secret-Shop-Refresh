@@ -20,7 +20,7 @@ Epic Seven and a **1920 × 1080** Android display. Other emulators are unverifie
 The original upstream source and Git history are preserved, alongside the GUI,
 launchers, tests, sounds and icon. The first public preview is **0.1.0-rc20**.
 
-The local **rc46** candidate includes **Control mode → Mouse** for visible
+The local **rc47** candidate includes **Control mode → Mouse** for visible
 Epic Seven windows, including Google Play Games Developer Emulator and STOVE.
 Other discovered emulator windows can use the same transport but remain unverified.
 **Start Refresh** brings the selected game forward, opens its recognized
@@ -47,16 +47,18 @@ Leave the PC alone while it runs. Focus or coverage changes pause input for up t
 A supervised elevated check opened the native shop from home and refreshed once
 for three Skystone. The owner reports rc34 works; long runs remain unverified.
 Unexpected confirmations stop the run before a confirmation click.
-Mouse mode verifies the selected window and process, then requires recognized
-game controls before sending input. An emulator launcher or unknown screen gets
-no pointer movements or clicks. Keep the English home controls or shop visible;
+Mouse mode verifies the selected window and process. When no home controls are
+recognized, it can try one center click to reveal them, wait briefly, then find
+the Secret Shop icon. Wallpaper animation and incidental lettering do not block
+this attempt; blank captures and known dialog/loading controls do. Shop entry
+and shop actions still require recognized controls. Start from home or the shop;
 plain symmetric black bars and Google's observed dark title bar can be cropped.
 Restored Google windows may have a thin light frame above the dark title bar;
 that frame is handled at smaller sizes too. Other emulator toolbars are not guessed.
 The Google crop stays fixed for the session so confirmation dimming cannot
 change its bounds; moving or resizing the window still stops input. Resize
 before pressing Start. An already open Secret Shop does not require visiting home.
-Google developer-emulator live refreshes and purchases in rc46 remain unverified.
+Google developer-emulator live refreshes and purchases in rc47 remain unverified.
 ADB mode remains available. Mouse preview has been removed; saved preview
 preferences load as Mouse without starting a session. The window selector
 keeps your selection across rescans and shows the game capture size.

@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc46.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc47.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,7 +14,7 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc46.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc47.zip'
 ```
 
 ## Emulator setup
@@ -128,12 +128,13 @@ If the game or emulator runs as administrator, right-click **E7 Secret Shop Refr
 and choose **Run as administrator**, accepting the Windows prompt yourself.
 The app checks this permission mismatch before bringing the game forward.
 Normal game launches do not require an elevated refresh app.
-Start from the English home screen or an already open Secret Shop. Mouse mode
-locates the home Secret Shop label using templates and local Windows OCR. A locally saved known hidden-home image at
-`runtime/adb-assets/native-home/hidden.png` (or a separate verified Google home
-reference at `google-hidden.png` in that folder) permits a hover and one verified reveal click.
-Unknown screens receive no pointer input. Emulator launchers, hidden controls
-without a matching reference, and unsupported layouts must be opened manually.
+Start from the English home screen or an already open Secret Shop. If no home
+controls are recognized, Mouse mode can click the game center once, wait briefly,
+then find the Secret Shop icon. No saved wallpaper is required. Animation,
+dark/sparse artwork and incidental lettering do not block this reveal attempt.
+Blank captures and known dialog/loading controls do. It rechecks freshly visible
+controls before input, never repeats the reveal, and verifies shop entry before
+refreshing or buying. Other game pages and emulator launchers are unsupported.
 The game area must fill the client or have clearly identifiable symmetric black
 bars. Google's observed dark custom title bar is also excluded; colored emulator
 toolbars and arbitrary crops are not inferred. The initial Google crop stays
@@ -141,7 +142,7 @@ fixed during the session, including dimmed confirmation dialogs. Actual window
 moves and resizes still stop input. Restored Google windows with a thin light
 frame above the header are supported. Set the window size before pressing Start;
 you can begin directly in the open Secret Shop.
-Google developer-emulator live actions in rc46 remain unverified.
+Google developer-emulator live actions in rc47 remain unverified.
 
 The app checks each confirmation before clicking it and stops on unexpected text
 or an insufficient-currency message. Keep English confirmation text readable.

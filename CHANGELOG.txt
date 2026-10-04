@@ -1,4 +1,11 @@
-0.1.0 · First release preview (rc46)
+0.1.0 · First release preview (rc47)
+
+rc47
+• Hidden-home reveal tolerates animated, dark or sparse wallpapers and
+  incidental OCR lettering. When no controls are recognized, try one center
+  click, wait briefly, then recognize the shop icon and verify shop entry.
+• Freshly visible controls are used without an extra reveal click. Known
+  dialog/loading labels and blank captures still block the reveal attempt.
 
 rc46
 • Fixed native Mouse purchases stopping at the STOVE Buy dialog: its combined

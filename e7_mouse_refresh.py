@@ -191,21 +191,24 @@ def reframed_home_matches(frame, saved):
 
 
 def idle_home_candidate(rgb, result):
-    """Allow one startup reveal probe on artwork with no readable UI.
+    """Allow one reveal attempt when recognized game UI is absent.
 
     This is only a candidate, not recognition of home. After the probe the
     observed home menu and shop still have to be recognized before continuing.
     """
-    text = str(result.get('text', '')) + ' '.join(str(word.get('text', ''))
-                                                for word in result.get('words', []))
-    if any(character.isalnum() for character in text):
+    text = (str(result.get('text', '')) + ' ' + ' '.join(str(word.get('text', ''))
+                                                for word in result.get('words', []))).lower()
+    # Wallpaper lettering and OCR noise do not establish visible game controls.
+    # Recognizable dialogs/loading/action labels do: never use the reveal probe
+    # as a confirmation, battle action, login or screen-dismissal shortcut.
+    if re.search(r'\b(cancel|confirm|buy|purchase|refresh|connecting|loading|reconnect|'
+                 r'battle|arena|summon|sanctuary|secret\s*shop|epic\s*pass|'
+                 r'log\s*in|sign\s*in|tap\s+to\s+start)\b',text) or '確認' in text:
         return False
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-    # Reject blank/loading captures; artwork must cover most of the view.
-    if gray.std() < 20 or np.quantile(gray, .90) < 90:
-        return False
-    return all(part.std() >= 8 for row in np.array_split(gray, 2, axis=0)
-               for part in np.array_split(row, 2, axis=1))
+    # Only reject an effectively blank capture. Dark or sparse wallpaper is
+    # valid, and animated artwork need not match across consecutive frames.
+    return bool(gray.std() >= 3)
 
 
 class IncompleteCurrencyRow(MouseStopped):
@@ -371,16 +374,22 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
                     time.sleep(.5)
                     continue
             elif not revealed:
-                # A player's wallpaper is not required in the release. Inspect
-                # the entire game view so a dialog or other visible UI cannot
-                # qualify merely because the left navigation crop is empty.
+                # Use one default reveal attempt, independent of wallpaper
+                # text, brightness, quadrant detail or animation. Inspect the
+                # full view for known UI, then recheck controls before input.
                 prior = self._rgb.copy()
                 candidate = read_ui_text(prior,(0,0,1920,1080))
                 if idle_home_candidate(prior,candidate):
-                    self.takeScreenshot()
-                    if (self.loop_active and np.mean(cv2.absdiff(prior,self._rgb)) <= 6
-                            and idle_home_candidate(self._rgb,read_ui_text(self._rgb,(0,0,1920,1080)))):
-                        print('Navigation: Controls appear hidden; clicking once to reveal them.',flush=True)
+                    fresh = self.takeScreenshot()
+                    if not self.loop_active:
+                        return False
+                    if self.navigation.shop_visible(fresh):
+                        return True
+                    if self._home_menu_target(fresh) is not None:
+                        continue
+                    fresh_candidate=read_ui_text(self._rgb,(0,0,1920,1080))
+                    if self.loop_active and idle_home_candidate(self._rgb,fresh_candidate):
+                        print('Navigation: No home controls recognized; clicking once to reveal them.',flush=True)
                         revealed = True
                         self.tap(960,540)
                         time.sleep(.5)
