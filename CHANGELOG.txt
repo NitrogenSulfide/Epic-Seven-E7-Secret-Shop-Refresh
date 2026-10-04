@@ -1,4 +1,10 @@
-0.1.0 · First release preview (rc41)
+0.1.0 · First release preview (rc42)
+
+rc42
+• Mouse startup can click once to reveal idle home controls without a saved
+  wallpaper. It then recognizes the Secret Shop icon and verifies shop entry.
+• Visible text, blank/loading captures or a changed screen prevent the reveal
+  probe. No repeated reveal clicks if the controls do not appear.
 
 rc41
 • STOVE recognizes the same saved home screen across different window shapes,

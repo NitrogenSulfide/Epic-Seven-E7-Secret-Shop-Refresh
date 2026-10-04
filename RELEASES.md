@@ -1,5 +1,16 @@
 # Release checks
 
+## rc42 idle Mouse home controls
+
+When no shop or home menu is recognized, Mouse startup may send one center
+click on a stable artwork-only game view. Full-frame OCR must find no readable
+controls on both captures; blank/loading images fail the texture checks.
+This probe does not establish that the game is home. Require observed home
+menu recognition followed by shop verification before any refresh/purchase.
+Never repeat the reveal probe during the same startup attempt. Test actual
+saved STOVE artwork without a private reference, visible dialogs, changed
+frames, no-controls timeout and the existing saved Google navigation fixtures.
+
 ## rc41 STOVE home entry
 
 STOVE reframes its home artwork when the client aspect ratio changes. The saved

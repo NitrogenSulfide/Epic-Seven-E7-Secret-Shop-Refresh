@@ -223,7 +223,10 @@ rc41 also recognizes a private known STOVE home image after modest changes to
 the window's aspect ratio. Broad image-feature agreement identifies its framing;
 aligned pixel differences must still reject dimmed dialogs, popups and changed
 pages. This only enables the existing guarded reveal-controls and Secret Shop
-entry sequence. Unknown artwork still requires visible home controls. It sends
+entry sequence. In rc42, an unfamiliar stable artwork-only view with no full-frame OCR text
+permits one center reveal probe. The fresh frame must still qualify immediately
+before input. The probe is never repeated during this startup attempt; observed
+home-menu recognition and shop verification are required afterward. It sends
 no Refresh or purchase before the shop markers are verified.
 
 The rc24 engine also supports `--preview-mouse-frame PATH --output REPORT.json`.
