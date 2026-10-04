@@ -700,7 +700,7 @@ class GuiTests(unittest.TestCase):
         self.assertTrue(self.app.adb_hint_dismissed.get())
         self.app._update_home_ui_hint()
         self.assertNotIn('ADB enabled', self.app.home_ui_hint.get())
-        self.assertIn('before Start', self.app.home_ui_hint.get())
+        self.assertIn('revealed automatically', self.app.home_ui_hint.get())
         self.assertEqual(self.app.home_ui_banner.winfo_manager(),'')
         self.app.theme_button.invoke()
         self.app.run_settings = self.app._settings()

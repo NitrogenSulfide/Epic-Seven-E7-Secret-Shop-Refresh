@@ -43,8 +43,8 @@ def capture_frame(adb, device, destination, runner=subprocess.run):
     if result.returncode:
         raise RuntimeError('Screenshot failed. Check that the selected emulator is connected and authorized.')
     with Image.open(io.BytesIO(result.stdout)) as frame:
-        if frame.format != 'PNG' or frame.size != (1920, 1080):
-            raise ValueError('Set the Android display to 1920 × 1080, then capture again.')
+        if frame.format != 'PNG' or frame.width<640 or frame.height<360 or abs(frame.width/frame.height-16/9)>.035:
+            raise ValueError('Use a landscape 16:9 Android display of at least 640 × 360.')
         frame.verify()
     Path(destination).write_bytes(result.stdout)
 
@@ -99,7 +99,7 @@ class RecognitionSetup(tk.Toplevel):
                  font=app.heading_font, anchor='w').grid(row=0,column=0,sticky='ew',padx=dp(20),pady=(dp(20),dp(12)))
         tk.Label(self, text='Use this helper when automatic recognition needs help.\n'
                  'These buttons only read screenshots. They do not tap, buy or refresh.\n'
-                 'Use English Epic Seven with a 1920 × 1080 Android display.\n\n'
+                 'Use English Epic Seven with a landscape 16:9 Android display of at least 640 × 360.\n\n'
                  '1. Open the game’s home screen. Click the game once if its UI is hidden.\n'
                  '2. Capture the visible home menu below.\n'
                  '3. Open Secret Shop yourself, then capture its normal item list.',

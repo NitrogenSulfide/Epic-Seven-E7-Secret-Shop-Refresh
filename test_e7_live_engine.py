@@ -91,6 +91,13 @@ class EngineTests(unittest.TestCase):
         app.random_offset = False
         app.screenwidth, app.screenheight = 1920, 1080
         app.adb_path, app.device_args = 'NEVER-RUN-ADB', []
+        from e7_frame import FrameGeometry
+        import numpy as np
+        app._adb_geometry=FrameGeometry((1920,1080),(0,0,1920,1080))
+        app._rgb=np.full((1080,1920,3),30,dtype=np.uint8)
+        app._item=app._item_name=None
+        app._capture_resumed=False
+        app._save_home_failure=Mock(return_value=False)
         app.storage = engine.E7Inventory()
         app.storage.inventory = {'Covenant bookmark': engine.E7Item(count=0), 'Mystic medal': engine.E7Item(count=0)}
         app.generateOffset = lambda: (0, 0)
@@ -166,26 +173,26 @@ class EngineTests(unittest.TestCase):
         def stop_after_tap(*args, **kwargs):
             app.loop_active = False
         with patch.object(engine.subprocess, 'run', side_effect=stop_after_tap) as adb, patch.object(engine.time, 'sleep'):
-            self.assertFalse(app.clickRefresh())
+            self.assertFalse(app._calibration_clickRefresh())
         self.assertEqual(adb.call_count, 1)
         self.assertEqual(app.refresh_count, 0)
 
     def test_buy_checks_both_adb_taps_and_stop(self):
         app = self.make_engine()
         with patch.object(engine.subprocess, 'run') as adb, patch.object(engine.time, 'sleep'):
-            self.assertTrue(app.clickBuy((10, 10)))
+            self.assertTrue(app._calibration_clickBuy((10, 10)))
         self.assertEqual(adb.call_count, 2)
         self.assertTrue(all(call.kwargs['check'] for call in adb.call_args_list))
         app.loop_active = False
         with patch.object(engine.subprocess, 'run') as adb:
-            self.assertFalse(app.clickBuy((10, 10)))
+            self.assertFalse(app._calibration_clickBuy((10, 10)))
         adb.assert_not_called()
 
     def test_adb_buy_and_refresh_resample_delay_for_each_tap(self):
         for action in ('buy','refresh'):
             app=self.make_engine();app.random_offset=True
             with patch.object(engine.subprocess, 'run'), patch.object(engine.random, 'uniform', side_effect=[-.03,.03]), patch.object(engine.time, 'sleep') as sleep:
-                self.assertTrue(app.clickBuy((10,10)) if action=='buy' else app.clickRefresh())
+                self.assertTrue(app._calibration_clickBuy((10,10)) if action=='buy' else app._calibration_clickRefresh())
             self.assertEqual([round(call.args[0],2) for call in sleep.call_args_list[:2]],[.27,.33])
             self.assertEqual(app.tap_sleep,.3)
 
@@ -194,7 +201,7 @@ class EngineTests(unittest.TestCase):
         error = engine.subprocess.CalledProcessError(1, 'fake adb')
         with patch.object(engine.subprocess, 'run', side_effect=error), patch.object(engine.time, 'sleep'):
             with self.assertRaises(engine.subprocess.CalledProcessError):
-                app.clickBuy((10, 10))
+                app._calibration_clickBuy((10, 10))
         self.assertEqual(app.storage.inventory['Covenant bookmark'].count, 0)
 
     def test_start_cleans_up_poll_thread_after_failure(self):
@@ -213,72 +220,15 @@ class EngineTests(unittest.TestCase):
             self.assertTrue(app.clickShop())
         adb.assert_not_called()
 
-    def test_home_navigation_taps_matched_target_once_then_verifies(self):
-        app = self.make_engine()
-        app.navigation.shop_visible.side_effect = [False, False, True]
-        app.navigation.menu_target.return_value = (86, 548)
-        with patch.object(engine.subprocess, 'run') as adb, patch.object(engine.time, 'sleep'):
-            self.assertTrue(app.clickShop())
-        adb.assert_called_once_with(['NEVER-RUN-ADB','shell','input','tap','86','548'],check=True)
-
-    def test_unknown_home_never_taps(self):
-        app = self.make_engine()
-        app.navigation.shop_visible.return_value = False
-        app.navigation.menu_target.return_value = None
-        with patch.object(engine.subprocess, 'run') as adb, patch.object(engine.time, 'monotonic', side_effect=[0, 61]):
-            with self.assertRaisesRegex(RuntimeError, 'No navigation tap'):
-                app.clickShop()
-        adb.assert_not_called()
-
-    def test_recognition_failure_reports_setup_without_refresh_or_traceback(self):
-        failure = engine.NavigationSetupRequired('No navigation tap sent. Use setup.')
-        with patch.object(engine, 'E7ADBShopRefresh', side_effect=failure), contextlib.redirect_stdout(io.StringIO()) as output:
-            self.assertFalse(engine.run_refresh_engine(budget=12))
-        self.assertIn('E7GUI_SETUP_REQUIRED ',output.getvalue())
-        self.assertNotIn('Traceback',output.getvalue())
-        with patch.object(engine, 'E7ADBShopRefresh', side_effect=RuntimeError('other failure')):
-            with self.assertRaisesRegex(RuntimeError,'other failure'):
-                engine.run_refresh_engine(budget=12)
-
-    def test_hidden_ui_waits_then_follows_recognized_menu(self):
-        app = self.make_engine()
-        app.navigation.shop_visible.side_effect = [False, False, True]
-        app.navigation.menu_target.side_effect = [None, (86,548)]
-        with patch.object(engine.subprocess, 'run') as adb, patch.object(engine.time, 'sleep') as sleep, contextlib.redirect_stdout(io.StringIO()) as output:
-            self.assertTrue(app.clickShop())
-        self.assertIn('Waiting for visible game controls.', output.getvalue())
-        self.assertEqual(sleep.call_args_list, [unittest.mock.call(1.0), unittest.mock.call(.25)])
-        adb.assert_called_once_with(['NEVER-RUN-ADB','shell','input','tap','86','548'],check=True)
-
-    def test_user_opens_shop_during_wait_without_navigation_tap(self):
-        app = self.make_engine()
-        app.navigation.shop_visible.side_effect = [False, True]
-        app.navigation.menu_target.return_value = None
-        with patch.object(engine.subprocess, 'run') as adb, patch.object(engine.time, 'sleep'):
-            self.assertTrue(app.clickShop())
-        adb.assert_not_called()
-
-    def test_stop_during_ui_wait_sends_no_taps_or_extra_capture(self):
-        app = self.make_engine()
-        app.navigation.shop_visible.return_value = False
-        app.navigation.menu_target.return_value = None
-        def stop(_): app.loop_active = False
-        with patch.object(engine.subprocess, 'run') as adb, patch.object(engine.time, 'sleep', side_effect=stop), patch.object(app, 'takeScreenshot', return_value='fake') as capture:
-            self.assertFalse(app.clickShop())
-        adb.assert_not_called()
-        capture.assert_called_once()
-
-    def test_wrong_page_after_navigation_aborts_without_retry(self):
-        app = self.make_engine()
-        app.navigation.shop_visible.return_value = False
-        app.navigation.menu_target.return_value = (86, 548)
-        with patch.object(engine.subprocess, 'run') as adb, patch.object(engine.time, 'sleep'), patch.object(engine.time, 'monotonic', side_effect=[0,0,9]):
-            with self.assertRaisesRegex(RuntimeError, 'Stopped before purchasing'):
-                app.clickShop()
-        self.assertEqual(adb.call_count, 1)
+    def test_normal_adb_and_mouse_use_the_same_observed_home_flow(self):
+        from e7_mouse_refresh import E7MouseShopRefresh
+        from e7_shop_flow import ObservedShopFlow
+        self.assertIs(engine.E7ADBShopRefresh.clickShop,ObservedShopFlow.clickShop)
+        self.assertIs(E7MouseShopRefresh.clickShop,ObservedShopFlow.clickShop)
 
     def test_buy_and_refresh_reject_wrong_screen_before_tap(self):
         app = self.make_engine()
+        app._item=object()
         app.navigation.require_shop.side_effect = RuntimeError('Wrong screen')
         with patch.object(engine.subprocess, 'run') as adb:
             with self.assertRaisesRegex(RuntimeError, 'Wrong screen'):

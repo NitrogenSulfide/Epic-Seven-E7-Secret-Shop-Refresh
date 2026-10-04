@@ -31,11 +31,16 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(calls, [['adb.exe','-s','fixture-device','exec-out','screencap','-p']])
         self.assertEqual((self.captures/'home.png').read_bytes(), data.getvalue())
 
-    def test_wrong_resolution_is_rejected_without_writing(self):
-        data = io.BytesIO(); Image.new('RGB',(1280,720)).save(data,format='PNG')
-        with self.assertRaisesRegex(ValueError, '1920'):
+    def test_unsupported_resolution_is_rejected_without_writing(self):
+        data = io.BytesIO(); Image.new('RGB',(1280,600)).save(data,format='PNG')
+        with self.assertRaisesRegex(ValueError, '16:9'):
             capture_frame('adb','fixture',self.captures/'home.png',runner=lambda *a,**k:SimpleNamespace(returncode=0,stdout=data.getvalue()))
         self.assertFalse((self.captures/'home.png').exists())
+
+    def test_supported_smaller_resolution_is_preserved_for_reference_preparation(self):
+        data=io.BytesIO();Image.new('RGB',(1280,720)).save(data,format='PNG')
+        capture_frame('adb','fixture',self.captures/'home.png',runner=lambda *a,**k:SimpleNamespace(returncode=0,stdout=data.getvalue()))
+        self.assertEqual((self.captures/'home.png').read_bytes(),data.getvalue())
 
     def test_failed_capture_does_not_overwrite_previous_image(self):
         image = self.captures/'home.png'; image.write_bytes(b'old private capture')

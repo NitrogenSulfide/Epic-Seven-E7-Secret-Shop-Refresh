@@ -1,4 +1,14 @@
-0.1.0 · First release preview (rc50)
+0.1.0 · First release preview (rc51)
+
+rc51
+• Normal Mouse and ADB sessions share home entry, currency detection, scrolling
+  and confirmation checks. Idle home controls can be revealed in either mode.
+• Normal ADB captures support landscape 16:9 sizes from 640 × 360 and map
+  observed targets back to Android coordinates. Calibration remains 1920 × 1080.
+• Confirmation OCR filters dimmed inventory text and rejects conflicting items
+  or prices. Captured game bounds remain fixed during a session.
+• Added shared-transport regressions for hidden controls, varied sizes, both
+  currencies, repeated refreshes, rejected dialogs and Stop.
 
 rc50
 • A brief visibility loss before mouse-down now discards the prepared action,

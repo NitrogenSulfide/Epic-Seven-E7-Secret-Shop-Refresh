@@ -8,6 +8,26 @@ This local candidate has not been published. Automated checks and the owner's
 reports about earlier candidates are separate from verification of these exact
 download bytes. Insufficient-currency live checks remain deferred.
 
+rc51 consolidates normal ADB and Mouse actions in `e7_shop_flow.py`. The
+capture/input transports remain separate. Both modes use observed home controls,
+one bounded idle-UI reveal attempt, verified shop markers, currency rows and
+fresh confirmation checks. Wallpaper itself does not authorize a shop action.
+Known modal/loading text blocks the reveal attempt; arbitrary artwork cannot
+provide a universal guarantee of hidden-UI recognition.
+
+`e7_frame.py` normalizes landscape 16:9 captures of at least 640 × 360. ADB taps
+and drags map back to captured Android coordinates, including detected bars.
+The initial crop stays fixed through modal dimming. Changing capture geometry
+during a run stops input. Debug/calibration retains its original 1920 × 1080
+requirement and separate overlay path. Native STOVE has no ADB transport.
+
+Confirmation OCR uses word bounds and foreground brightness to exclude dimmed
+shop rows. Intended summon name and gold price must agree; contradictory items
+or prices reject the confirmation. Refresh requires its operation prompt and
+rejects costs other than three. Shared fake-transport tests and saved-screen
+replays do not constitute live validation of these exact release bytes.
+The older candidate notes below describe their behavior at the time.
+
 The stop-key loop sleeps 20 ms between checks instead of continuously polling.
 The engine flushes `E7GUI_STATS` JSON after a completed buy sequence and refresh.
 Counts describe engine-completed actions, not an independent reading of game

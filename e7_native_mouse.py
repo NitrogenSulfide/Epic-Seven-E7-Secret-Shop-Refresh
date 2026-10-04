@@ -154,6 +154,7 @@ class WindowsMouse:
         self.sender = sender or self._send
         self.view = None
         self._google_view_bounds = None
+        self._view_bounds = None
         self.session_active = False
         self.pause_revision = 0
 
@@ -210,14 +211,15 @@ class WindowsMouse:
         if image.size != (width,height) or max(hi-lo for lo,hi in image.getextrema()) < 12:
             raise MouseStopped('The client capture is blank or has the wrong size. Mouse session stopped.')
         google_emulator = 'google play games' in self.target.title.lower()
-        if google_emulator and self._google_view_bounds is not None:
+        if self._view_bounds is not None:
             # Dialogs dim the game, so its dark pixels cannot re-establish the
             # custom header boundary. Keep the verified startup crop while the
             # window identity and physical client rectangle remain unchanged.
-            bounds = self._google_view_bounds
+            bounds = self._view_bounds
             image = image.crop(bounds)
         else:
             image,bounds = game_view(image,google_emulator=google_emulator)
+            self._view_bounds = bounds
             if google_emulator:
                 self._google_view_bounds = bounds
         left,top = before.rectangle[:2]

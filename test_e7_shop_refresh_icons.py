@@ -38,25 +38,30 @@ def icon_size(hwnd,kind):
         if info.mask:gdi.DeleteObject(info.mask)
         if info.color:gdi.DeleteObject(info.color)
 
-with tempfile.TemporaryDirectory() as temp:
-    root=Path(temp)
-    with patch.object(gui.RefreshGui,'refresh_devices',lambda _:None), patch.object(gui.RefreshGui,'_schedule_native_icon',lambda *args:None), patch.object(gui,'CONFIG_FILE',root/'config.ini'),patch.object(gui,'GUI_CONFIG_FILE',root/'gui.ini'),patch.object(gui,'HISTORY_FILE',root/'history.csv'):
-        app=gui.RefreshGui()
-    app.update()
-    hwnd=user.GetAncestor(app.winfo_id(),2)
-    report=dict(before=dict(big=icon_size(hwnd,1),small=icon_size(hwnd,0)))
-    app._apply_native_icon()
-    app.update()
-    assert app._native_icons is not None,app.raw_output
-    report['after']=dict(dpi=app._native_icons.dpi,big=icon_size(hwnd,1),small=icon_size(hwnd,0))
-    for dpi,big,small in [(96,32,16),(120,40,20),(144,48,24),(192,64,32),(288,96,48)]:
-        replacement=WindowIcons(hwnd,(gui.ASSET_DIR/'shopkeeper-v2.ico').read_bytes(),dpi=dpi)
-        app._native_icons.close()
-        app._native_icons=replacement
-        assert icon_size(hwnd,1)==[big,big]
-        assert icon_size(hwnd,0)==[small,small]
-    report['dpi_checks']='96, 120, 144, 192, 288: exact native icon dimensions verified.'
-    app.destroy()
-print(json.dumps(report,indent=2))
-if len(sys.argv) > 1:
-    Path(sys.argv[1]).write_text(json.dumps(report,indent=2),encoding='utf-8')
+def main():
+    with tempfile.TemporaryDirectory() as temp:
+        root=Path(temp)
+        with patch.object(gui.RefreshGui,'refresh_devices',lambda _:None), patch.object(gui.RefreshGui,'_schedule_native_icon',lambda *args:None), patch.object(gui,'CONFIG_FILE',root/'config.ini'),patch.object(gui,'GUI_CONFIG_FILE',root/'gui.ini'),patch.object(gui,'HISTORY_FILE',root/'history.csv'):
+            app=gui.RefreshGui()
+        app.update()
+        hwnd=user.GetAncestor(app.winfo_id(),2)
+        report=dict(before=dict(big=icon_size(hwnd,1),small=icon_size(hwnd,0)))
+        app._apply_native_icon()
+        app.update()
+        assert app._native_icons is not None,app.raw_output
+        report['after']=dict(dpi=app._native_icons.dpi,big=icon_size(hwnd,1),small=icon_size(hwnd,0))
+        for dpi,big,small in [(96,32,16),(120,40,20),(144,48,24),(192,64,32),(288,96,48)]:
+            replacement=WindowIcons(hwnd,(gui.ASSET_DIR/'shopkeeper-v2.ico').read_bytes(),dpi=dpi)
+            app._native_icons.close()
+            app._native_icons=replacement
+            assert icon_size(hwnd,1)==[big,big]
+            assert icon_size(hwnd,0)==[small,small]
+        report['dpi_checks']='96, 120, 144, 192, 288: exact native icon dimensions verified.'
+        app.destroy()
+    print(json.dumps(report,indent=2))
+    if len(sys.argv) > 1:
+        Path(sys.argv[1]).write_text(json.dumps(report,indent=2),encoding='utf-8')
+
+
+if __name__ == "__main__":
+    main()
