@@ -13,7 +13,7 @@ import cv2
 from PIL import Image, ImageDraw
 import E7ADBShopRefresh as adb_engine
 from e7_windows_capture import GameWindow
-from e7_native_mouse import WindowsMouse, MouseStopped, Input, verify_native_target, physical_pixel_coordinates, process_is_elevated, require_mouse_permissions, pointer_glide
+from e7_native_mouse import WindowsMouse, MouseStopped, MouseRecheckRequired, Input, verify_native_target, physical_pixel_coordinates, process_is_elevated, require_mouse_permissions, pointer_glide
 from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons, home_menu_target, home_icon_target, native_home_control_target, hidden_home_matches, reframed_home_matches, idle_home_candidate, currency_button, IncompleteCurrencyRow, inspect_mouse_items
 from e7_mouse_confirmation import confirmation_matches
 
@@ -451,9 +451,23 @@ class TransportTests(unittest.TestCase):
     def test_resumed_focus_cannot_send_a_previously_prepared_click(self):
         self.mouse.screenshot(); self.backend.unobstructed.side_effect = [False,True]
         with patch('e7_native_mouse.time.sleep'):
-            with self.assertRaisesRegex(MouseStopped,'restart to recognize'):
+            with self.assertRaisesRegex(MouseRecheckRequired,'Rechecking'):
                 self.mouse.click(436,994)
         self.sender.assert_not_called()
+
+    def test_visibility_failure_after_mouse_down_is_terminal_not_retryable(self):
+        api=self.prepare_input_api();flags=[]
+        def send(count,event,size):
+            flag=event._obj.value.mouse.flags;flags.append(flag)
+            if flag==2:self.backend.unobstructed.return_value=False
+            return 1
+        api.SendInput.side_effect=send
+        with patch('e7_native_mouse.time.sleep') as sleep:
+            with self.assertRaises(MouseStopped) as caught:
+                self.mouse._send((-1920,1030),'click',0)
+        self.assertNotIsInstance(caught.exception,MouseRecheckRequired)
+        self.assertEqual(flags[-2:],[2,4])
+        self.assertNotIn(.1,[call.args[0] for call in sleep.call_args_list])
 
     def test_native_interior_sampling_ignores_border_coverage_and_checks_real_target(self):
         from e7_windows_capture import WindowsCapture
@@ -1104,6 +1118,78 @@ class NativeEngineTests(unittest.TestCase):
                 self.assertEqual(app.read_confirmation_text.call_count,3)
                 self.assertEqual(app.mouse.click.call_count,1)
                 app._save_confirmation_failure.assert_not_called()
+
+    def test_refresh_rechecks_shop_after_undelivered_click_visibility_failure(self):
+        app=self.make_engine();state=['shop'];attempts=[0]
+        app.mouse.screenshot.side_effect=lambda:Image.fromarray(shop() if state[0]=='shop' else dialog())
+        def click(x,y):
+            attempts[0]+=1
+            if attempts[0]==1:raise MouseRecheckRequired('temporary coverage')
+            state[0]='confirm' if y>900 else 'shop'
+        app.mouse.click.side_effect=click
+        with patch('e7_mouse_refresh.time.sleep'):
+            self.assertTrue(app.clickRefresh())
+        self.assertEqual(attempts[0],3)
+        self.assertEqual(app.navigation.require_shop.call_count,2)
+
+    def test_confirmation_recovery_rereads_prompt_and_does_not_reclick_refresh(self):
+        for changed in (False,True):
+            with self.subTest(changed=changed):
+                app=self.make_engine();state=['shop'];attempts=[]
+                app.mouse.screenshot.side_effect=lambda:Image.fromarray(shop() if state[0]=='shop' else dialog())
+                valid='Use Skystone to refresh? Cancel Confirm'
+                app.read_confirmation_text=Mock(side_effect=[valid,valid]+(['Cancel Buy Covenant Bookmarks 184,000']*8 if changed else [valid,valid]))
+                def click(x,y):
+                    attempts.append(y)
+                    if len(attempts)==2:raise MouseRecheckRequired('temporary coverage')
+                    state[0]='confirm' if y>900 else 'shop'
+                app.mouse.click.side_effect=click
+                with patch('e7_mouse_refresh.time.sleep'):
+                    if changed:
+                        with patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,1,1,2,3,7]),self.assertRaises(MouseStopped):
+                            app.clickRefresh()
+                    else:self.assertTrue(app.clickRefresh())
+                self.assertEqual(sum(y>900 for y in attempts),1)
+                self.assertEqual(len(attempts),2 if changed else 3)
+                self.assertGreaterEqual(app.read_confirmation_text.call_count,3)
+
+    def test_home_menu_recovery_recognizes_new_target_before_click(self):
+        app=self.make_engine();state=['home'];targets=iter([(84,498),(84,498),(90,499),(90,499)])
+        app.navigation.shop_visible.side_effect=lambda _:state[0]=='shop'
+        app._home_menu_target=Mock(side_effect=lambda _:next(targets))
+        def click(x,y):
+            if app.mouse.click.call_count==1:raise MouseRecheckRequired('temporary coverage')
+            state[0]='shop'
+        app.mouse.click.side_effect=click
+        with patch('e7_mouse_refresh.time.sleep'):
+            self.assertTrue(app.clickShop())
+        self.assertEqual([call.args for call in app.mouse.click.call_args_list],[(84,498),(90,499)])
+        self.assertEqual(app._home_menu_target.call_count,4)
+
+    def test_repeated_visibility_failure_is_bounded_and_stop_is_not_retried(self):
+        app=self.make_engine();app.mouse.click.side_effect=MouseRecheckRequired('temporary coverage')
+        with self.assertRaisesRegex(MouseStopped,'three recognition'):
+            app.clickRefresh()
+        self.assertEqual(app.mouse.click.call_count,3)
+        app=self.make_engine()
+        def stop(*_):
+            app.loop_active=False
+            raise MouseRecheckRequired('temporary coverage')
+        app.mouse.click.side_effect=stop
+        self.assertFalse(app.clickRefresh())
+        self.assertEqual(app.mouse.click.call_count,1)
+
+    def test_scroll_recovery_requires_a_fresh_shop_before_retry(self):
+        app=self.make_engine();app.mouse.drag.side_effect=[MouseRecheckRequired('temporary coverage'),None]
+        with patch('e7_mouse_refresh.time.sleep'):
+            app.swipe(1200,808,1200,392)
+        self.assertEqual(app.mouse.drag.call_count,2)
+        app.navigation.require_shop.assert_called_once()
+        app=self.make_engine();app.mouse.drag.side_effect=MouseRecheckRequired('temporary coverage')
+        app.navigation.require_shop.side_effect=MouseStopped('not the shop')
+        with self.assertRaisesRegex(MouseStopped,'not the shop'):
+            app.swipe(1200,808,1200,392)
+        self.assertEqual(app.mouse.drag.call_count,1)
 
     def test_stop_during_rejected_confirmation_text_never_retries_or_clicks(self):
         app=self.make_engine();app.mouse.screenshot.return_value=Image.fromarray(dialog())

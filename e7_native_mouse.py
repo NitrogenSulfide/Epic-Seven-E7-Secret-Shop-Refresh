@@ -16,6 +16,10 @@ class MouseStopped(RuntimeError):
     pass
 
 
+class MouseRecheckRequired(MouseStopped):
+    """Visibility returned before mouse-down; discard the prepared action."""
+
+
 def pointer_glide(start, end, scale=1, *, duration=None):
     """Physical points with eased timing, scaled to the game's displayed size."""
     distance = math.dist(start,end)/max(scale,.1)
@@ -169,13 +173,13 @@ class WindowsMouse:
             target_visible = point is None or self.backend.point_visible(current,point)
             if visible and target_visible:
                 if deadline is not None:
-                    if action:
-                        raise MouseStopped('Focus or target visibility changed after preparing this click. No input sent; restart to recognize the current screen.')
                     print('E7GUI_MOUSE_RESUMED',flush=True)
+                    if action:
+                        raise MouseRecheckRequired('Focus or target visibility changed before input. Rechecking the current screen before another action.')
                 return current
             if held:
                 # Never wait for focus to return while holding a drag button.
-                raise MouseStopped('Game focus or drag visibility changed. Mouse session stopped.')
+                raise MouseStopped('Game focus or input visibility changed. Mouse session stopped.')
             reason = ('The selected game lost focus or its view is covered.' if not visible else
                       'The mouse target is covered by another window.')
             problem = getattr(self.backend,'visibility_problem','')
@@ -184,6 +188,9 @@ class WindowsMouse:
             if deadline is None:
                 self.pause_revision += 1
                 print('E7GUI_MOUSE_PAUSED '+json.dumps({'reason':reason}),flush=True)
+                details=getattr(self.backend,'visibility_details',None)
+                if isinstance(details,dict):
+                    print('E7GUI_MOUSE_COVERAGE '+json.dumps(details),flush=True)
                 deadline = time.monotonic()+10
             if time.monotonic() >= deadline:
                 raise MouseStopped(reason+' No input sent while paused; focus did not return within 10 seconds.')
@@ -317,4 +324,6 @@ class WindowsMouse:
                 released = api.SendInput(1,ctypes.byref(up),ctypes.sizeof(Input)) == 1
         if not released:
             raise MouseStopped('Windows did not accept mouse-up. Session stopped.')
-        self.guard(action=True,point=end if kind == 'drag' else point)
+        # Input was already delivered. Never retry this action if its visibility
+        # changes after mouse-down, even after the button has been released.
+        self.guard(action=True,point=end if kind == 'drag' else point,held=True)

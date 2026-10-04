@@ -1,4 +1,11 @@
-0.1.0 · First release preview (rc49)
+0.1.0 · First release preview (rc50)
+
+rc50
+• A brief visibility loss before mouse-down now discards the prepared action,
+  recognizes the current home/shop/dialog again and resumes without replaying
+  a stale click. Repeated failures remain bounded; covered views block input.
+• Visibility changes after mouse-down remain terminal, preventing duplicate
+  refreshes or purchases. Coverage diagnostics include the reported window.
 
 rc49
 • Mouse confirmations recheck the intended action, item/cost and observed

@@ -1,5 +1,6 @@
 """Visible Windows game implementation of the shared shop refresh loop."""
 import argparse
+from functools import wraps
 import json
 import math
 import random
@@ -14,7 +15,7 @@ import cv2
 import numpy as np
 from PIL import Image
 from E7ADBShopRefresh import E7ADBShopRefresh, E7Inventory, E7Item
-from e7_native_mouse import WindowsMouse, MouseStopped
+from e7_native_mouse import WindowsMouse, MouseStopped, MouseRecheckRequired
 from e7_windows_capture import GameWindow, game_view
 from e7_mouse_confirmation import read_confirmation_text, read_ui_text, confirmation_matches
 from e7_shop_navigation import create_navigator
@@ -298,6 +299,24 @@ def confirmation_button(rgb, operation, before):
     return None
 
 
+def recheck_mouse_action(action):
+    """Retry only undelivered input, through the action's full recognition path."""
+    @wraps(action)
+    def checked(self,*args,**kwargs):
+        for attempt in range(3):
+            try:
+                return action(self,*args,**kwargs)
+            except MouseRecheckRequired:
+                if not self.loop_active:
+                    return False
+                if attempt==2:
+                    raise MouseStopped('Game visibility repeatedly changed before input. No action retried beyond three recognition attempts.')
+                print('Navigation: Visibility restored; discarding the prepared action and rechecking the current screen.',flush=True)
+                if action.__name__=='swipe':
+                    self.navigation.require_shop(self.takeScreenshot())
+    return checked
+
+
 class E7MouseShopRefresh(E7ADBShopRefresh):
     def __init__(self, target, *, transport=None, **settings):
         if settings.get('debug'):
@@ -333,6 +352,7 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
     def tap(self,x,y):
         self.mouse.click(x,y)
 
+    @recheck_mouse_action
     def swipe(self,x1,y1,x2,y2):
         varied = self.random_offset
         duration = random.uniform(.28,.36) if varied else .32
@@ -345,6 +365,7 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
         dx,dy = self.generateOffset()
         return max(-12,min(12,dx*.16)),max(-6,min(6,dy*.24))
 
+    @recheck_mouse_action
     def clickShop(self):
         deadline = time.monotonic()+30
         revealed = False
@@ -506,6 +527,7 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
     def _confirm(self,operation,before):
         deadline = time.monotonic()+5
         text_rejected = False
+        visibility_rechecks = 0
         while self.loop_active and time.monotonic()<deadline:
             time.sleep(self.generateTapDelay())
             if not self.loop_active:
@@ -540,7 +562,17 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
                     saved = self._save_confirmation_failure(operation,before,validated=prior)
                     detail = ' A private dialog crop was saved for diagnosis.' if saved else ''
                     raise MouseStopped('The confirmation changed while being read. No confirmation click sent.'+detail)
-                self._click_button(current)
+                try:
+                    self._click_button(current)
+                except MouseRecheckRequired:
+                    if not self.loop_active:
+                        return False
+                    visibility_rechecks += 1
+                    if visibility_rechecks>=3:
+                        raise MouseStopped('Game visibility repeatedly changed before confirmation. No confirmation click sent.')
+                    print('Navigation: Visibility restored; reading the confirmation again before clicking.',flush=True)
+                    deadline = time.monotonic()+5
+                    continue
                 break
         else:
             if not self.loop_active:
@@ -580,6 +612,7 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
         except OSError:
             return False
 
+    @recheck_mouse_action
     def clickBuy(self,pos):
         if pos is None or not self.loop_active or self._item is None:
             return False
@@ -597,6 +630,7 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
         self._click_button(self._item_button)
         return self._confirm('buy',before)
 
+    @recheck_mouse_action
     def clickRefresh(self):
         if not self.loop_active:
             return False
