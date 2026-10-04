@@ -22,7 +22,7 @@ black-bar crop); normalized recognition points map back to desktop coordinates.
 Google Play Games windows can additionally crop an observed mostly black custom
 title bar when the remaining image fits the game aspect ratio. No fixed toolbar
 height is assumed. Home/shop recognition is required before input, including
-hover; unknown emulator screens receive none. The GUI requires window mouse v5
+hover; unknown emulator screens receive none. The GUI requires window mouse v6
 so an older STOVE-only engine cannot be used accidentally.
 The native preflight checks process elevation: a normal app cannot control an
 elevated game. It stops with a Run as administrator instruction before activation.
@@ -232,3 +232,10 @@ The Google client crop is established by the initial screenshot and reused while
 window identity and physical client bounds remain unchanged. Confirmation dimming
 cannot shift that crop. Real moves/resizes still stop before input; dialog text
 and button stability checks still apply.
+
+rc39 recognizes the thin light top edge on restored Google windows before
+locating the dark custom title bar. The header can occupy up to 20% of a small
+client, but its remaining game area must still fit 16:9 and be at least 640 by
+360. A maximum eight-pixel edge may precede it; colored toolbars are rejected.
+Private known hidden-home matching additionally accepts native-home/google-hidden.png,
+without replacing native-home/hidden.png. These references stay outside ZIPs.

@@ -99,13 +99,18 @@ def game_view(image, *, google_emulator=False):
         # Google's custom title bar is inside its client rectangle. Identify
         # the mostly black band in pixels; never assume a DPI-specific height.
         gray = image.convert('L')
-        top = 0
-        for y in range(min(round(height*.09), height)):
+        # Restored windows can have a thin light frame above the dark header.
+        # Skip only that small edge; a colored toolbar is not a dark header.
+        def dark_row(y):
             histogram = gray.crop((0,y,width,y+1)).histogram()
-            if sum(histogram[:25])/width < .80:
+            return sum(histogram[:25])/width >= .80
+        start = next((y for y in range(min(8,height)) if dark_row(y)), None)
+        top = 0
+        for y in range(start if start is not None else 0, min(round(height*.20), height)):
+            if start is None or not dark_row(y):
                 break
             top = y+1
-        if 8 <= top <= height*.09 and height-top >= 360 and abs(width/(height-top)-16/9) <= .03:
+        if 8 <= top <= height*.20 and height-top >= 360 and abs(width/(height-top)-16/9) <= .03:
             return image.crop((0,top,width,height)), (0,top,width,height)
     bounds = image.convert('L').point(lambda value: 255 if value > 12 else 0).getbbox()
     if bounds:

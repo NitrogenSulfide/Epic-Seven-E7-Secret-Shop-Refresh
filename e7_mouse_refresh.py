@@ -58,16 +58,21 @@ def home_icon_target(rgb,caption):
     return left+(x1+x2)/2,top+(y1+y2)/2
 
 
-def hidden_home_matches(frame, reference=Path('adb-assets/native-home/hidden.png')):
+def hidden_home_matches(frame, reference=None):
     """A private known home view permits one click to reveal hidden controls."""
-    if not reference.is_file():
-        return False
-    saved = cv2.imdecode(np.frombuffer(reference.read_bytes(),dtype=np.uint8),cv2.IMREAD_GRAYSCALE)
-    if saved is None:
-        return False
-    saved = cv2.resize(saved,(1920,1080),interpolation=cv2.INTER_AREA)
-    difference = cv2.absdiff(frame,saved)
-    return float(difference.mean()) <= 10 and float(np.quantile(difference,.95)) <= 28
+    references = (reference,) if reference is not None else (
+        Path('adb-assets/native-home/hidden.png'),Path('adb-assets/native-home/google-hidden.png'))
+    for reference in references:
+        if not reference.is_file():
+            continue
+        saved = cv2.imdecode(np.frombuffer(reference.read_bytes(),dtype=np.uint8),cv2.IMREAD_GRAYSCALE)
+        if saved is None:
+            continue
+        saved = cv2.resize(saved,(1920,1080),interpolation=cv2.INTER_AREA)
+        difference = cv2.absdiff(frame,saved)
+        if float(difference.mean()) <= 10 and float(np.quantile(difference,.95)) <= 28:
+            return True
+    return False
 
 
 class IncompleteCurrencyRow(MouseStopped):

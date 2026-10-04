@@ -567,6 +567,18 @@ class NativeEngineTests(unittest.TestCase):
             self.assertFalse(hidden_home_matches(popup,path))
             self.assertFalse(hidden_home_matches(np.full_like(frame,50),path))
 
+    def test_default_hidden_home_checks_google_without_replacing_native_reference(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);folder=root/'adb-assets/native-home';folder.mkdir(parents=True)
+            native=np.random.default_rng(11).integers(30,230,(1080,1920),dtype=np.uint8)
+            google=np.random.default_rng(23).integers(30,230,(1080,1920),dtype=np.uint8)
+            Image.fromarray(native).save(folder/'hidden.png')
+            Image.fromarray(google).save(folder/'google-hidden.png')
+            with patch('e7_mouse_refresh.Path',side_effect=lambda name:root/name):
+                self.assertTrue(hidden_home_matches(native))
+                self.assertTrue(hidden_home_matches(google))
+                self.assertFalse(hidden_home_matches(np.full_like(google,50)))
+
     def test_constructor_uses_mouse_capture_without_adb(self):
         mouse = Mock(); mouse.screenshot.return_value = Image.fromarray(shop())
         with patch.object(adb_engine.subprocess,'run') as adb:

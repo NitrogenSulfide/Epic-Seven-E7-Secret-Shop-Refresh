@@ -567,7 +567,7 @@ class GuiTests(unittest.TestCase):
         self.app._apply_mouse_windows([target],'')
         self.fake.write_text('print("E7GUI_STARTED",flush=True)\nprint(\'E7GUI_STATS {"refreshes":4,"skystone_spent":12,"covenant":0,"mystic":0,"friendship":0}\',flush=True)\nprint("---Result---\\nCovenant bookmark:0\\nMystic medal:0\\nSkystone spent:12",flush=True)\n')
         self.fake.with_suffix('.sha256').write_text(hashlib.sha256(self.fake.read_bytes()).hexdigest())
-        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v5; tap timing v2')), \
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v6; tap timing v2')), \
                 patch.object(gui,'activate_native_target',return_value=target) as activate, \
                 patch.object(gui,'check_connection') as adb,patch.object(gui,'launch_engine',wraps=gui.launch_engine) as launch:
             self.start_fake()
@@ -585,15 +585,15 @@ class GuiTests(unittest.TestCase):
 
     def test_old_engine_cannot_launch_adb_when_mouse_is_selected(self):
         self.choose_mouse_fixture(); self.app.control_mode.set('Mouse'); self.app._change_control_mode()
-        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v4; tap timing v2')), \
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v5; tap timing v2')), \
                 patch.object(gui,'activate_native_target') as activate,patch.object(gui,'launch_engine') as launch:
             self.app.start_refresh()
         activate.assert_not_called(); launch.assert_not_called()
-        self.assertIn('matching rc38',self.app.connection_warning)
+        self.assertIn('matching rc39',self.app.connection_warning)
 
     def test_permission_mismatch_is_explained_before_engine_launch(self):
         self.choose_mouse_fixture();self.app.control_mode.set('Mouse');self.app._change_control_mode()
-        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v5; tap timing v2')),patch.object(gui,'activate_native_target',side_effect=ValueError('Epic Seven is running as administrator. Reopen with Run as administrator.')),patch.object(gui,'launch_engine') as launch:
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v6; tap timing v2')),patch.object(gui,'activate_native_target',side_effect=ValueError('Epic Seven is running as administrator. Reopen with Run as administrator.')),patch.object(gui,'launch_engine') as launch:
             self.app.start_refresh()
         launch.assert_not_called()
         self.assertIn('Run as administrator',self.app.connection_warning)
@@ -605,7 +605,7 @@ class GuiTests(unittest.TestCase):
         reason='The selected game lost focus. No input sent.'
         self.fake.write_text('print("E7GUI_STARTED",flush=True)\nprint(\'E7GUI_MOUSE_STOPPED {"reason":"The selected game lost focus. No input sent."}\',flush=True)\nprint("---Result---\\nSkystone spent:0",flush=True)\n')
         self.fake.with_suffix('.sha256').write_text(hashlib.sha256(self.fake.read_bytes()).hexdigest())
-        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v5; tap timing v2')),patch.object(gui,'activate_native_target',return_value=target):
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v6; tap timing v2')),patch.object(gui,'activate_native_target',return_value=target):
             self.start_fake()
             self.pump_until(lambda:self.app.status.get()=='Needs attention' and self.app.process.poll() is not None)
             self.pump_until(lambda:self.app._finalized_run_id==self.app.run_id)

@@ -20,7 +20,7 @@ Epic Seven and a **1920 × 1080** Android display. Other emulators are unverifie
 The original upstream source and Git history are preserved, alongside the GUI,
 launchers, tests, sounds and icon. The first public preview is **0.1.0-rc20**.
 
-The local **rc38** candidate includes **Control mode → Mouse** for visible
+The local **rc39** candidate includes **Control mode → Mouse** for visible
 Epic Seven windows, including Google Play Games Developer Emulator and STOVE.
 Other discovered emulator windows can use the same transport but remain unverified.
 **Start Refresh** brings the selected game forward, opens its recognized
@@ -51,10 +51,12 @@ Mouse mode verifies the selected window and process, then requires recognized
 game controls before sending input. An emulator launcher or unknown screen gets
 no pointer movements or clicks. Keep the English home controls or shop visible;
 plain symmetric black bars and Google's observed dark title bar can be cropped.
-Other emulator toolbars are not guessed.
+Restored Google windows may have a thin light frame above the dark title bar;
+that frame is handled at smaller sizes too. Other emulator toolbars are not guessed.
 The Google crop stays fixed for the session so confirmation dimming cannot
-change its bounds; moving or resizing the window still stops input.
-Google developer-emulator live refreshes and purchases in rc38 remain unverified.
+change its bounds; moving or resizing the window still stops input. Resize
+before pressing Start. An already open Secret Shop does not require visiting home.
+Google developer-emulator live refreshes and purchases in rc39 remain unverified.
 ADB mode remains available. **Mouse (preview)** is an optional read-only capture
 check; regular Google Play Games and STOVE preview capture remain supported.
 See [Mouse instructions](release/SETUP.md#mouse-automation--experimental-native-stove).
