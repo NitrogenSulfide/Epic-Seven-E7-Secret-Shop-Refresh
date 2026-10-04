@@ -18,7 +18,7 @@ from e7_windows_capture import GameWindow
 from e7_mouse_confirmation import read_confirmation_text, read_ui_text, confirmation_matches
 
 
-def home_menu_target(result):
+def home_menu_target(result,rgb=None):
     """Locate the observed home menu text, including rescaled native layouts."""
     if not any(label in result['text'].lower() for label in ('sanctuary','epic pass','event')):
         return None
@@ -31,7 +31,29 @@ def home_menu_target(result):
         box = (min(a[0],b[0]),min(a[1],b[1]),max(a[2],b[2]),max(a[3],b[3]))
         if 0 <= box[0] < box[2] <= 360 and 210 <= box[1] < box[3] <= 850 and abs(a[1]-b[1]) < 25:
             choices.append(((box[0]+box[2])/2,(box[1]+box[3])/2))
-    return choices[0] if len(choices)==1 else None
+    if len(choices)!=1:
+        return None
+    return home_icon_target(rgb,choices[0]) if rgb is not None else choices[0]
+
+
+def home_icon_target(rgb,caption):
+    # Native STOVE captions are not the icon's clickable surface. Use the OCR
+    # caption only to find the observed bright icon directly above it.
+    x,y=caption
+    left,top=max(0,round(x-55)),max(0,round(y-90))
+    crop=rgb[top:round(y-18),left:round(x+55)]
+    if not crop.size:
+        return None
+    mask=np.where((crop.min(axis=2)>170)&(crop.max(axis=2).astype(int)-crop.min(axis=2)<65),255,0).astype('uint8')
+    count,_,stats,_=cv2.connectedComponentsWithStats(mask)
+    components=[(cx,cy,width,height) for cx,cy,width,height,area in stats[1:count] if area>=12]
+    if not 2<=len(components)<=8:
+        return None
+    x1=min(box[0] for box in components);y1=min(box[1] for box in components)
+    x2=max(box[0]+box[2] for box in components);y2=max(box[1]+box[3] for box in components)
+    if not (30<=x2-x1<=100 and 30<=y2-y1<=72):
+        return None
+    return left+(x1+x2)/2,top+(y1+y2)/2
 
 
 def hidden_home_matches(frame, reference=Path('adb-assets/native-home/hidden.png')):
@@ -65,7 +87,23 @@ def confirmation_button(rgb, operation, before):
         return None
     choices = [box for box in green_buttons(rgb,(800,400,1450,1000))
                if (box[0]+box[2])/2 >= 1020]
-    return choices[0] if len(choices) == 1 else None
+    if len(choices)==1:
+        return choices[0]
+    if choices:
+        return None
+    # Native STOVE uses a blue Confirm button. Locate its label rather than
+    # assuming the green ADB skin; require a paired left-hand Cancel label.
+    result=read_ui_text(rgb,(500,260,1450,950))
+    confirms=[word['box'] for word in result.get('words',[]) if word['text'].lower()=='confirm']
+    cancels=[word['box'] for word in result.get('words',[]) if word['text'].lower()=='cancel']
+    if len(confirms)!=1 or len(cancels)!=1:
+        return None
+    confirm,cancel=confirms[0],cancels[0]
+    if (1000<=confirm[0]<confirm[2]<=1350 and 500<=confirm[1]<confirm[3]<=930
+            and cancel[2]<confirm[0] and abs(cancel[1]-confirm[1])<25
+            and 15<=confirm[3]-confirm[1]<=60 and 50<=confirm[2]-confirm[0]<=180):
+        return tuple(confirm)
+    return None
 
 
 class E7MouseShopRefresh(E7ADBShopRefresh):
@@ -117,7 +155,7 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
             target = self.navigation.menu_target(frame)
             if target is None:
                 result = self.read_navigation_text(self._rgb)
-                target = home_menu_target(result)
+                target = home_menu_target(result,self._rgb)
             else:
                 result = None
             if not self.loop_active:

@@ -18,6 +18,8 @@ rc31 adds a native STOVE Mouse transport around this same loop. The selected
 EpicSeven.exe process, window identity, client geometry and foreground visibility
 are checked before input. Capture keeps the full native client (or clearly bounded
 black-bar crop); normalized recognition points map back to desktop coordinates.
+The native preflight checks process elevation: a normal app cannot control an
+elevated game. It stops with a Run as administrator instruction before activation.
 Mouse mode brings the game forward once after Start, does not resize it, uses
 verified cursor movement, an 80 ms button hold and wheel scrolling. Native capture samples the client
 interior; each action checks its exact destination. Focus/coverage changes pause
@@ -25,12 +27,12 @@ input for up to 10 seconds; resumed capture discards stale frames and renews rec
 Item detection is restricted to the shop icon column; Buy and confirmation clicks
 use observed button bounds. Refresh uses the recognized label. Confirmation text
 is read locally using Windows' built-in English OCR and must match the intended
-item/price or three-skystone refresh. Unexpected, changed or unreadable dialogs
+item/price or the native "Use Skystone to refresh?" prompt for the fixed three-skystone refresh. Native blue Confirm labels require an observed paired Cancel label; green confirmation buttons remain supported. Unexpected, changed or unreadable dialogs
 stop before confirmation. Debug/calibration remains an ADB feature. No ADB call
-is made by a Mouse session. Native live behavior remains unverified.
+is made by a Mouse session. An elevated live check opened native Secret Shop from home and completed one refresh costing three Skystone without purchases. Native purchases, long runs and frozen-GUI Start remain unverified.
 
 Native home entry supplements menu templates with observed OCR word bounds and
-home labels. A private known hidden-home reference permits one reveal click; no
+home labels. The observed bright icon above the native caption is the click target; the caption itself is not clickable. A private known hidden-home reference permits one reveal click; no
 home image is shipped in the public package. Native pause/stop events carry a
 reason rather than claiming a Stop key was pressed. The GUI saves private native
 session diagnostics under `runtime/mouse-session-logs`. Missing confirmations save only central before/after crops under `runtime/mouse-failures`. STOP on stdin cancels the native loop before forced job termination; button release runs on interrupted clicks and parent cleanup.

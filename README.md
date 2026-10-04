@@ -26,8 +26,8 @@ Secret Shop menu, buys detected Covenant/Mystic items, scrolls and refreshes usi
 your actual pointer and the existing budget, delay, counters and Stop key.
 Leave the PC alone while it runs. Focus or coverage changes pause input for up to
 10 seconds; changed geometry or a stale prepared click stops the session.
-The first live Mouse session remains unverified; begin with a supervised 12-skystone
-trial. Unexpected confirmations stop the run before a confirmation click.
+A supervised elevated check opened the native shop from home and refreshed once
+for three Skystone. Native purchases and long runs remain unverified. Unexpected confirmations stop the run before a confirmation click.
 ADB mode remains available. **Mouse (preview)** is an optional read-only capture
 check; regular Google Play Games and STOVE preview capture remain supported.
 See [Mouse instructions](release/SETUP.md#mouse-automation--experimental-native-stove).
@@ -37,7 +37,7 @@ and shows the selected capture size and preparation steps. The countdown starts
 a readiness check; the app then waits for you to switch to the unobstructed game.
 **Cancel preview** remains available. Native STOVE shop recognition succeeded
 in an owner-run rc27 preview. The new Mouse session has fake/offline checks;
-native live actions still need a supervised check.
+native purchases and long runs still need supervised checks.
 Plain symmetric black letterboxing is cropped before recognition; a maximized
 client area is not required to have exactly the same aspect ratio as the game.
 Wider native STOVE views are preserved without cropping or stretching the
