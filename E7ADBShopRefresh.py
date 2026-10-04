@@ -184,7 +184,7 @@ class E7ADBShopRefresh:
                 self.showOffsetArea(x1, y1, "Please check if red rectangle is in a scrollable area", "start scroll area")    
 
             xoff, yoff = self.generateOffset()
-            adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'swipe', str(x1+xoff), str(y1+yoff), str(x1+xoff), str(y2+yoff)])
+            self.swipe(x1+xoff,y1+yoff,x1+xoff,y2+yoff)
             #wait for action to complete
             time.sleep(1)
 
@@ -315,6 +315,12 @@ class E7ADBShopRefresh:
         return None
 
     #macro
+    def tap(self,x,y):
+        subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x), str(y)], check=True)
+
+    def swipe(self,x1,y1,x2,y2):
+        subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'swipe', str(x1), str(y1), str(x2), str(y2)])
+
     def clickShop(self):
         # Hidden home controls cannot be distinguished from other pages by
         # wallpaper. Wait for verified UI rather than guessing a wake-up tap.
@@ -343,7 +349,7 @@ class E7ADBShopRefresh:
         x, y = target
         print('Navigation: Opening the recognized Secret Shop menu.', flush=True)
         # Navigation is deterministic: no randomized offset or legacy fallback.
-        subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x), str(y)], check=True)
+        self.tap(x,y)
         deadline = time.monotonic() + 8
         last_screenshot = screenshot
         while self.loop_active and time.monotonic() < deadline:
@@ -371,7 +377,7 @@ class E7ADBShopRefresh:
 
         if not self.loop_active:
             return False
-        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x+xoff), str(y+yoff)], check=True)
+        self.tap(x+xoff,y+yoff)
         time.sleep(self.tap_sleep)
 
         #confirm
@@ -384,7 +390,7 @@ class E7ADBShopRefresh:
 
         if not self.loop_active:
             return False
-        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x+xoff), str(y+yoff)], check=True)
+        self.tap(x+xoff,y+yoff)
         time.sleep(self.tap_sleep)
         #loading sleep
         time.sleep(1)
@@ -403,7 +409,7 @@ class E7ADBShopRefresh:
 
         if not self.loop_active:
             return False
-        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x+xoff), str(y+yoff)], check=True)
+        self.tap(x+xoff,y+yoff)
         time.sleep(self.tap_sleep)
 
         if not self.loop_active: return False
@@ -417,7 +423,7 @@ class E7ADBShopRefresh:
 
         if not self.loop_active:
             return False
-        adb_process = subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x+xoff), str(y+yoff)], check=True)
+        self.tap(x+xoff,y+yoff)
         time.sleep(self.tap_sleep)
         return True
 
@@ -456,6 +462,22 @@ def run_refresh_engine(**settings):
 
 
 if __name__ == '__main__':
+    if sys.argv[1:2] == ['--check-mouse-confirmation']:
+        import argparse
+        from e7_mouse_confirmation import read_confirmation_text, confirmation_matches
+        parser = argparse.ArgumentParser(description='Read a saved confirmation offline; no input, ADB or spending.')
+        parser.add_argument('--check-mouse-confirmation',required=True)
+        parser.add_argument('--operation',choices=('refresh','buy'),required=True)
+        parser.add_argument('--item-name',choices=('Covenant bookmark','Mystic medal'))
+        args = parser.parse_args()
+        with Image.open(args.check_mouse_confirmation) as image:
+            rgb = np.asarray(image.convert('RGB').resize((1920,1080),Image.Resampling.LANCZOS))
+        matches = confirmation_matches(read_confirmation_text(rgb),args.operation,args.item_name)
+        print(json.dumps(dict(read_only=True,text_matches=matches,operation=args.operation)))
+        sys.exit(0 if matches else 2)
+    if sys.argv[1:2] == ['--mouse-session']:
+        from e7_mouse_refresh import run_mouse_session
+        sys.exit(run_mouse_session(sys.argv[1:]))
     if sys.argv[1:2] == ['--preview-mouse-frame']:
         import argparse
         from pathlib import Path
@@ -480,7 +502,7 @@ if __name__ == '__main__':
         print('Private Secret Shop references prepared and checked offline.')
         sys.exit(0)
     if sys.argv[1:] == ['--verify']:
-        print('E7 engine: live counters v1; verified shop navigation v3; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
+        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
         sys.exit(0)
     if sys.argv[1:2] == ['--check-navigation-frame']:
         import argparse

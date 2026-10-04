@@ -76,7 +76,15 @@ offsets; alternate-input/calibration fixtures are explicit exceptions.
 
 ## Review, live game and publication
 
-Mouse mode remains preview-only in rc28. Test selected-window capture with fake Win32
+rc29 introduces real native STOVE Mouse input around the shared loop. Test the
+selected EpicSeven.exe process, coordinate mapping, single-batch clicks, wheel
+scrolling, focus/geometry loss, Stop between actions, same-item/price confirmation,
+changed dialogs, insufficient-currency rejection and a 12-skystone/four-refresh
+fake run. Verify Windows OCR on synthetic dialog frames and compiled offline CLI
+checks. Actual confirmation layout, pointer input and spending require a separate
+authorized live trial. The optional preview remains read-only.
+
+Test selected-window capture with fake Win32
 metadata and a fake grabber: changed identity, focus, geometry, obstruction,
 aspect ratio, blank images and negative monitor coordinates. Confirm cancellation,
 stale-result handling, mode switching and the offline-only engine command.
@@ -91,7 +99,7 @@ Verify readiness waiting without activation/input, timeout, cancellation while
 waiting/grabbing and stale-result handling. A delayed user focus change must
 continue to the read-only preview; Stop/close must prevent a waiting capture.
 Use saved frames to check annotations. Actual Google Play/STOVE capture remains
-a separate user-run check. Do not add input or claim live refreshing support until
+a separate user-run check. Do not claim verified live refreshing support until
 window/process identity, focus-loss stops, purchase confirmation and budget/stop
 behavior have been implemented and verified for the exact candidate.
 

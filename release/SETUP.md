@@ -96,11 +96,31 @@ If home controls fade, click the game once or open the shop. The app waits up to
 Theme backgrounds and currency artwork are included in the EXE's image support;
 the sun/moon button switches between the supplied day/night artwork.
 
-## Mouse preview — experimental
+## Mouse automation — experimental native STOVE
 
-This checks capture and recognition before adding mouse controls for the regular
-Google Play Games or native STOVE client. Neither client has passed live Mouse
-mode testing yet. No ADB connection is needed for this preview.
+Open English Epic Seven in STOVE. Choose **Control mode → Mouse**, select its
+window and check your budget, delay and Stop key. Press **Start Refresh**. The app
+brings the game forward, opens the recognized Secret Shop menu, buys detected
+Covenant/Mystic items, scrolls and refreshes using your actual mouse pointer.
+Leave the PC alone while it runs. Your Stop key and Stop Session remain available;
+losing focus, covering, moving or resizing the game stops the session.
+The game keeps its current size. Mouse requires normal settings; turn off Debug.
+If home controls are hidden, click the game once to reveal them, as in ADB mode.
+An unknown screen does not receive guessed navigation clicks.
+
+The app checks each confirmation before clicking it and stops on unexpected text
+or an insufficient-currency message. Keep English confirmation text readable.
+Live counters describe completed action sequences rather than balance readings.
+Native live actions have not yet passed an owner test. Begin with a supervised
+12-skystone trial, then check one refresh, Stop and the chosen Stop key.
+Save Settings retains your control mode and other preferences. Reopening the app
+scans that mode without starting a session. ADB remains the fresh-install default.
+No ADB connection is made by a Mouse session.
+
+## Mouse preview — optional read-only check
+
+This checks capture and recognition in regular Google Play Games or native STOVE.
+It is optional and does not start automation. No ADB connection is needed.
 
 1. Open English Epic Seven, reveal its home controls or open Secret Shop manually.
    Keep its game view, at least 640 × 360 pixels, visible and unobstructed.
@@ -125,7 +145,8 @@ mode. **Cancel preview** cancels the countdown/window wait and ignores late prev
 and reports, including the original client capture for troubleshooting, stay
 private under `runtime/mouse-previews`; keep them out of shared
 ZIPs. A closed, covered, unfocused, moved or blank window fails with an explanation.
-The app opens in ADB mode each time; switching back preserves your ADB address.
+Fresh settings use ADB mode; saved settings retain your mode. Switching back
+preserves your ADB address.
 
 ## Updates and troubleshooting
 

@@ -1,5 +1,6 @@
 import importlib.util
 import hashlib
+import json
 import math
 import os
 from pathlib import Path
@@ -436,6 +437,47 @@ class GuiTests(unittest.TestCase):
         self.app._drain_log_queue()
         self.assertEqual(self.app.connection_warning,'')
         self.assertIn('Mouse preview only',self.app.home_ui_hint.get())
+
+    def test_real_mouse_start_uses_native_cli_and_same_settings_without_adb(self):
+        target = self.choose_mouse_fixture()
+        self.app.control_mode.set('Mouse'); self.app._change_control_mode()
+        self.app._apply_mouse_windows([target],'')
+        self.fake.write_text('print("E7GUI_STARTED",flush=True)\nprint(\'E7GUI_STATS {"refreshes":4,"skystone_spent":12,"covenant":0,"mystic":0,"friendship":0}\',flush=True)\nprint("---Result---\\nCovenant bookmark:0\\nMystic medal:0\\nSkystone spent:12",flush=True)\n')
+        self.fake.with_suffix('.sha256').write_text(hashlib.sha256(self.fake.read_bytes()).hexdigest())
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='native mouse v1')), \
+                patch.object(gui,'activate_native_target',return_value=target) as activate, \
+                patch.object(gui,'check_connection') as adb,patch.object(gui,'launch_engine',wraps=gui.launch_engine) as launch:
+            self.start_fake()
+            self.pump_until(lambda:self.app.status.get()=='Finished')
+        args = launch.call_args.args[0]
+        self.assertIn('--mouse-session',args)
+        self.assertEqual(json.loads(args[args.index('--mouse-session')+1])['handle'],target.handle)
+        self.assertEqual(args[args.index('--budget')+1],'12.0')
+        self.assertEqual(args[args.index('--stop-key')+1],'`')
+        self.assertEqual(args[args.index('--random-offset')+1],'yes')
+        activate.assert_called_once(); adb.assert_not_called()
+        self.assertEqual(self.app.spent.get(),'12')
+        self.assertEqual(self.app.start_button.cget('text'),'Start Refresh')
+
+    def test_old_engine_cannot_launch_adb_when_mouse_is_selected(self):
+        self.choose_mouse_fixture(); self.app.control_mode.set('Mouse'); self.app._change_control_mode()
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='older engine')), \
+                patch.object(gui,'activate_native_target') as activate,patch.object(gui,'launch_engine') as launch:
+            self.app.start_refresh()
+        activate.assert_not_called(); launch.assert_not_called()
+        self.assertIn('matching rc29',self.app.connection_warning)
+
+    def test_saved_mouse_mode_restores_without_starting_session(self):
+        self.app.control_mode.set('Mouse'); self.app._change_control_mode()
+        self.app.save_settings()
+        self.app.control_mode.set('ADB')
+        with patch.object(gui,'activate_native_target') as activate,patch.object(gui,'launch_engine') as launch:
+            self.app.destroy()
+            self.app = gui.RefreshGui()
+        self.assertEqual(self.app.control_mode.get(),'Mouse')
+        self.assertEqual(self.app.start_button.cget('text'),'Start Refresh')
+        self.assertEqual(self.app.device_box.cget('textvariable'),str(self.app.mouse_target))
+        activate.assert_not_called(); launch.assert_not_called()
 
     def test_credits_first_launch_dismissal_and_startup_opt_in_persist(self):
         with patch.object(self.app,'winfo_viewable',return_value=True), patch.object(self.app,'_show_about') as show:
