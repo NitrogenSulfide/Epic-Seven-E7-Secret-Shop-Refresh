@@ -75,6 +75,15 @@ class Input(ctypes.Structure):
     _fields_ = [('kind',w.DWORD),('value',InputUnion)]
 
 
+def release_native_button():
+    """Release the owned native session's button after forced engine termination."""
+    api = ctypes.WinDLL('user32',use_last_error=True)
+    api.SendInput.argtypes = [w.UINT,ctypes.POINTER(Input),ctypes.c_int]
+    api.SendInput.restype = w.UINT
+    release = Input(0,InputUnion(mouse=MouseInput(0,0,0,4,0,0)))
+    return api.SendInput(1,ctypes.byref(release),ctypes.sizeof(Input)) == 1
+
+
 class WindowsMouse:
     def __init__(self, target, active, *, backend=None, grabber=None, lookup=process_name, sender=None):
         if ImageGrab is None and grabber is None:
@@ -90,6 +99,7 @@ class WindowsMouse:
         self.sender = sender or self._send
         self.view = None
         self.session_active = False
+        self.pause_revision = 0
 
     def guard(self, *, action=False, point=None):
         deadline = None
@@ -117,6 +127,7 @@ class WindowsMouse:
             if not visible and isinstance(problem,str) and problem:
                 reason = problem
             if deadline is None:
+                self.pause_revision += 1
                 print('E7GUI_MOUSE_PAUSED '+json.dumps({'reason':reason}),flush=True)
                 deadline = time.monotonic()+10
             if time.monotonic() >= deadline:
@@ -124,9 +135,15 @@ class WindowsMouse:
             time.sleep(.1)
 
     def screenshot(self):
-        before = self.guard()
-        image = self.grabber(bbox=before.rectangle,all_screens=True).convert('RGB')
-        self.guard()
+        for _ in range(3):
+            before = self.guard()
+            revision = self.pause_revision
+            image = self.grabber(bbox=before.rectangle,all_screens=True).convert('RGB')
+            self.guard()
+            if revision == self.pause_revision:
+                break
+        else:
+            raise MouseStopped('Game visibility repeatedly changed during capture. No input sent.')
         width,height = before.rectangle[2]-before.rectangle[0],before.rectangle[3]-before.rectangle[1]
         if image.size != (width,height) or max(hi-lo for lo,hi in image.getextrema()) < 12:
             raise MouseStopped('The client capture is blank or has the wrong size. Mouse session stopped.')
@@ -164,20 +181,50 @@ class WindowsMouse:
         api = self.backend.user
         api.GetSystemMetrics.argtypes = [ctypes.c_int]; api.GetSystemMetrics.restype = ctypes.c_int
         api.SendInput.argtypes = [w.UINT,ctypes.POINTER(Input),ctypes.c_int]; api.SendInput.restype = w.UINT
+        api.GetCursorPos.argtypes = [ctypes.POINTER(w.POINT)]; api.GetCursorPos.restype = w.BOOL
+        api.SetCursorPos.argtypes = [ctypes.c_int,ctypes.c_int]; api.SetCursorPos.restype = w.BOOL
         left,top,width,height = [api.GetSystemMetrics(key) for key in (76,77,78,79)]
         x,y = point
         if width < 2 or height < 2 or not (left <= x < left+width and top <= y < top+height):
             raise MouseStopped('Mouse target is outside the desktop. No input sent.')
-        move = MouseInput(round((x-left)*65535/(width-1)),round((y-top)*65535/(height-1)),0,0xC001,0,0)
-        events = [Input(0,InputUnion(mouse=move))]
-        if kind == 'click':
-            events.extend(Input(0,InputUnion(mouse=MouseInput(0,0,0,flag,0,0))) for flag in (2,4))
-        elif kind == 'wheel':
-            events.append(Input(0,InputUnion(mouse=MouseInput(0,0,data & 0xffffffff,0x800,0,0))))
+        movement = Input(0,InputUnion(mouse=MouseInput(
+            round((x-left)*65535/(width-1)),round((y-top)*65535/(height-1)),0,0xC001,0,0)))
         self.guard(action=True,point=point)
-        batch = (Input*len(events))(*events)
-        if api.SendInput(len(events),batch,ctypes.sizeof(Input)) != len(events):
-            # Release after a partial click insertion; never leave the button held.
-            release = Input(0,InputUnion(mouse=MouseInput(0,0,0,4,0,0)))
-            api.SendInput(1,ctypes.byref(release),ctypes.sizeof(Input))
-            raise MouseStopped('Windows did not accept the Mouse input. Session stopped.')
+        # Verify delivery separately from acceptance: Windows can accept a batch
+        # without the pointer reaching the intended game location.
+        if api.SendInput(1,ctypes.byref(movement),ctypes.sizeof(Input)) != 1:
+            raise MouseStopped('Windows did not accept the pointer movement. No click sent.')
+        time.sleep(.05)
+        cursor = w.POINT()
+        positioned = api.GetCursorPos(ctypes.byref(cursor)) and max(abs(cursor.x-x),abs(cursor.y-y)) <= 3
+        if not positioned:
+            self.guard(action=True,point=point)
+            if not api.SetCursorPos(x,y):
+                raise MouseStopped(f'Windows accepted the mouse movement but did not move the pointer; direct placement also failed (Windows error {ctypes.get_last_error()}). No click sent.')
+            time.sleep(.05)
+            if not api.GetCursorPos(ctypes.byref(cursor)) or max(abs(cursor.x-x),abs(cursor.y-y)) > 3:
+                raise MouseStopped('Windows did not place the pointer on the game target. No click sent.')
+        self.guard(action=True,point=point)
+        print('E7GUI_MOUSE_INPUT '+json.dumps(dict(action=kind,target=list(point),pointer=[cursor.x,cursor.y])),flush=True)
+        if kind == 'move':
+            return
+        if kind == 'wheel':
+            event = Input(0,InputUnion(mouse=MouseInput(0,0,data & 0xffffffff,0x800,0,0)))
+            if api.SendInput(1,ctypes.byref(event),ctypes.sizeof(Input)) != 1:
+                raise MouseStopped('Windows did not accept the scroll. Session stopped.')
+            return
+        down = Input(0,InputUnion(mouse=MouseInput(0,0,0,2,0,0)))
+        up = Input(0,InputUnion(mouse=MouseInput(0,0,0,4,0,0)))
+        try:
+            if api.SendInput(1,ctypes.byref(down),ctypes.sizeof(Input)) != 1:
+                raise MouseStopped('Windows did not accept mouse-down. Session stopped.')
+            # Leave the button down across several game frames instead of sending
+            # both edges in one batch. Stop/focus changes still always release it.
+            time.sleep(.08)
+        finally:
+            released = api.SendInput(1,ctypes.byref(up),ctypes.sizeof(Input)) == 1
+            if not released:
+                released = api.SendInput(1,ctypes.byref(up),ctypes.sizeof(Input)) == 1
+        if not released:
+            raise MouseStopped('Windows did not accept mouse-up. Session stopped.')
+        self.guard(action=True,point=point)

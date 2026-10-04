@@ -5,7 +5,10 @@ import math
 import re
 from pathlib import Path
 import subprocess
+import sys
+import threading
 import time
+import uuid
 import cv2
 import numpy as np
 from PIL import Image
@@ -60,10 +63,8 @@ def confirmation_button(rgb, operation, before):
     # Shop Buy buttons are excluded; a single centered acknowledgement is excluded.
     if np.mean(cv2.absdiff(rgb[300:920,550:1400],before[300:920,550:1400])) < 4:
         return None
-    x,y = (1090,760) if operation == 'buy' else (1119,692)
-    choices = [box for box in green_buttons(rgb,(850,500,1450,930))
-               if box[0] < x < box[2] and box[1] < y < box[3]
-               and (box[0]+box[2])/2 >= 1020]
+    choices = [box for box in green_buttons(rgb,(800,400,1450,1000))
+               if (box[0]+box[2])/2 >= 1020]
     return choices[0] if len(choices) == 1 else None
 
 
@@ -71,7 +72,8 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
     def __init__(self, target, *, transport=None, **settings):
         if settings.get('debug'):
             raise ValueError('Mouse mode uses normal settings. Debug/calibration remains available in ADB mode.')
-        self.mouse = transport or WindowsMouse(target,lambda:self.loop_active)
+        self._stop_requested = threading.Event()
+        self.mouse = transport or WindowsMouse(target,lambda:self.loop_active and not self._stop_requested.is_set())
         self._rgb = None
         self._item = None
         self._item_name = None
@@ -79,12 +81,22 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
         self.read_navigation_text = lambda rgb:read_ui_text(rgb,(0,180,420,920))
         super().__init__(**settings)
 
+    def request_stop(self):
+        self._stop_requested.set()
+        self.loop_active = False
+
+    def start(self):
+        if not self._stop_requested.is_set():
+            super().start()
+
     def checkScreenDimension(self):
         # Capture the actual client and normalize only the recognition frame.
         self.takeScreenshot()
 
     def takeScreenshot(self):
+        revision = getattr(self.mouse,'pause_revision',None)
         image = self.mouse.screenshot().resize((1920,1080),Image.Resampling.LANCZOS)
+        self._capture_resumed = isinstance(revision,int) and revision != self.mouse.pause_revision
         self._rgb = np.asarray(image)
         return cv2.cvtColor(self._rgb,cv2.COLOR_RGB2GRAY)
 
@@ -144,7 +156,10 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
             time.sleep(.25)
             if not self.loop_active:
                 return False
-            if self.navigation.shop_visible(self.takeScreenshot()):
+            frame = self.takeScreenshot()
+            if self._capture_resumed:
+                deadline = time.monotonic()+8
+            if self.navigation.shop_visible(frame):
                 print('Navigation: Secret Shop screen verified.',flush=True)
                 return True
         if not self.loop_active:
@@ -187,6 +202,8 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
             if not self.loop_active:
                 return False
             self.takeScreenshot()
+            if self._capture_resumed:
+                deadline = time.monotonic()+5
             box = confirmation_button(self._rgb,operation,before)
             if box is not None:
                 text = self.read_confirmation_text(self._rgb)
@@ -208,18 +225,36 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
         else:
             if not self.loop_active:
                 return False
-            raise MouseStopped(f'The {operation} confirmation was not recognized. No confirmation click sent.')
+            saved = self._save_confirmation_failure(operation,before)
+            detail = ' A private dialog crop was saved for diagnosis.' if saved else ''
+            raise MouseStopped(f'The {operation} confirmation was not recognized. No confirmation click sent.'+detail)
         deadline = time.monotonic()+5
         while self.loop_active and time.monotonic()<deadline:
             time.sleep(self.tap_sleep)
             if not self.loop_active:
                 return False
             frame = self.takeScreenshot()
+            if self._capture_resumed:
+                deadline = time.monotonic()+5
             if confirmation_button(self._rgb,operation,before) is None and self.navigation.shop_visible(frame):
                 return True
         if not self.loop_active:
             return False
         raise MouseStopped('The shop did not return after confirmation. Stopped before another action.')
+
+    def _save_confirmation_failure(self,operation,before):
+        # Keep only central game crops, excluding the account/currency header.
+        # These private runtime files are never part of the release package.
+        try:
+            folder = Path('mouse-failures')/uuid.uuid4().hex
+            folder.mkdir(parents=True)
+            Image.fromarray(before[260:1000,500:1450]).save(folder/'before.png')
+            Image.fromarray(self._rgb[260:1000,500:1450]).save(folder/'dialog.png')
+            (folder/'failure.json').write_text(json.dumps(dict(operation=operation,
+                confirmation_clicked=False,normalized_size=[1920,1080])),encoding='utf-8')
+            return True
+        except OSError:
+            return False
 
     def clickBuy(self,pos):
         if pos is None or not self.loop_active or self._item is None:
@@ -268,6 +303,8 @@ def run_mouse_session(arguments):
         target = GameWindow(int(data['handle']),int(data['pid']),str(data['title']),tuple(data['rectangle']))
         app = E7MouseShopRefresh(target,budget=args.budget,tap_sleep=args.delay,
                                 stop_refresh_key=args.stop_key,random_offset=args.random_offset=='yes',debug=False)
+        if sys.stdin is not None:
+            threading.Thread(target=listen_for_stop,args=(sys.stdin,app),daemon=True).start()
         print('E7GUI_STARTED',flush=True)
         app.start()
         return 0
@@ -281,3 +318,14 @@ def run_mouse_session(arguments):
     except (ValueError,RuntimeError,OSError,subprocess.SubprocessError) as error:
         print('E7GUI_MOUSE_STOPPED '+json.dumps({'reason':f'Mouse session stopped. {error}'}),flush=True)
         return 3
+
+
+def listen_for_stop(stream,app):
+    """The owning GUI sends STOP before falling back to job termination."""
+    try:
+        for line in stream:
+            if line.strip() == 'STOP':
+                break
+        app.request_stop()  # EOF also means the controlling GUI went away.
+    except (OSError,ValueError):
+        app.request_stop()
