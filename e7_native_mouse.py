@@ -13,6 +13,14 @@ class MouseStopped(RuntimeError):
     pass
 
 
+def physical_pixel_coordinates(*, api=None):
+    api = api or ctypes.WinDLL('user32',use_last_error=True)
+    api.SetThreadDpiAwarenessContext.argtypes = [w.HANDLE]
+    api.SetThreadDpiAwarenessContext.restype = w.HANDLE
+    if not api.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4)):
+        raise ValueError('Could not use physical display coordinates. No Mouse input sent.')
+
+
 def process_name(pid):
     api = ctypes.WinDLL('kernel32', use_last_error=True)
     api.OpenProcess.argtypes = [w.DWORD, w.BOOL, w.DWORD]; api.OpenProcess.restype = w.HANDLE
@@ -69,6 +77,10 @@ class WindowsMouse:
     def __init__(self, target, active, *, backend=None, grabber=None, lookup=process_name, sender=None):
         if ImageGrab is None and grabber is None:
             raise ValueError('Mouse mode needs Pillow. Use the bundled player EXE.')
+        if backend is None:
+            # This owned engine thread uses physical pixels across monitor scales.
+            # Pillow capture and Win32 input must use the same coordinate space.
+            physical_pixel_coordinates()
         self.backend = backend or WindowsCapture()
         self.target = verify_native_target(target,backend=self.backend,lookup=lookup)
         self.active = active
