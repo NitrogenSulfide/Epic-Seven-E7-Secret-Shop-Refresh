@@ -1,4 +1,10 @@
-0.1.0 · First release preview (rc47)
+0.1.0 · First release preview (rc48)
+
+rc48
+• Mouse confirmation retries incomplete OCR within its existing five-second
+  wait. Item, cost and fresh-dialog checks still precede the confirmation click.
+• Text mismatches and changing confirmations now save private dialog crops,
+  as missing buttons already did, to support diagnosis without guessing.
 
 rc47
 • Hidden-home reveal tolerates animated, dark or sparse wallpapers and

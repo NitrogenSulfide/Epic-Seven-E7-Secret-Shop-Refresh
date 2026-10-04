@@ -505,6 +505,7 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
 
     def _confirm(self,operation,before):
         deadline = time.monotonic()+5
+        text_rejected = False
         while self.loop_active and time.monotonic()<deadline:
             time.sleep(self.generateTapDelay())
             if not self.loop_active:
@@ -516,7 +517,11 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
             if box is not None:
                 text = self.read_confirmation_text(self._rgb)
                 if not confirmation_matches(text,operation,self._item_name):
-                    raise MouseStopped('The confirmation does not match the intended shop action. No confirmation click sent.')
+                    # Buttons can become readable before the prompt finishes
+                    # appearing. Re-capture within the same bounded wait; never
+                    # weaken item/cost validation or reuse a rejected OCR result.
+                    text_rejected = True
+                    continue
                 if not self.loop_active:
                     return False
                 # OCR may take time. Re-capture and require the same dialog and
@@ -527,7 +532,9 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
                     return False
                 current = confirmation_button(self._rgb,operation,before)
                 if current != box or np.mean(cv2.absdiff(self._rgb[260:950,500:1450],prior[260:950,500:1450])) > 3:
-                    raise MouseStopped('The confirmation changed while being read. No confirmation click sent.')
+                    saved = self._save_confirmation_failure(operation,before)
+                    detail = ' A private dialog crop was saved for diagnosis.' if saved else ''
+                    raise MouseStopped('The confirmation changed while being read. No confirmation click sent.'+detail)
                 self._click_button(box)
                 break
         else:
@@ -535,6 +542,8 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
                 return False
             saved = self._save_confirmation_failure(operation,before)
             detail = ' A private dialog crop was saved for diagnosis.' if saved else ''
+            if text_rejected:
+                raise MouseStopped('The confirmation does not match the intended shop action. No confirmation click sent.'+detail)
             raise MouseStopped(f'The {operation} confirmation was not recognized. No confirmation click sent.'+detail)
         deadline = time.monotonic()+5
         while self.loop_active and time.monotonic()<deadline:

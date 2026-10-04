@@ -91,6 +91,13 @@ covering STOVE's observed 455-pixel combined gold-price/Buy button. List and
 refresh-button limits stay at 450. Intended-item/price text checks and fresh
 dialog agreement remain required before any confirmation click.
 
+rc48 re-captures incomplete confirmation text within the existing five-second
+wait, instead of treating the first mismatch as final. Item/cost checks remain
+unchanged; a rejected text result never authorizes input. Persistent mismatch
+and changing dialogs save the same private central crops as missing buttons.
+Full-flow saved-screen regressions exercise actual confirmation OCR for both
+Google and STOVE, including a constructed partial-prompt transition.
+
 In rc5, `e7_shop_navigation.py` replaces the original three fixed menu taps with
 recognition of a private Secret Shop text reference. It sends at most one
 navigation tap, waits up to eight seconds for the shop title and Refresh label,
