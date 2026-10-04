@@ -483,7 +483,7 @@ class TransportTests(unittest.TestCase):
 
 class NativeEngineTests(unittest.TestCase):
     def setUp(self):
-        self.ocr_patch=patch('e7_mouse_refresh.read_ui_text',return_value=dict(text='',words=[]))
+        self.ocr_patch=patch('e7_shop_flow.read_ui_text',return_value=dict(text='',words=[]))
         self.ui_ocr=self.ocr_patch.start();self.addCleanup(self.ocr_patch.stop)
 
     def make_engine(self):
@@ -495,7 +495,8 @@ class NativeEngineTests(unittest.TestCase):
         app.refresh_count = 0; app.stop_refresh_key = '`'
         app.generateOffset = lambda:(0,0)
         app._rgb = shop(); app._item = None; app._item_name = None
-        app.read_confirmation_text = lambda _:'Cancel Confirm Refresh Secret Shop 3 Skystone Covenant bookmark 184,000 Mystic medal 280,000'
+        app.read_confirmation_text = lambda _: ('Use Skystone to refresh? Cancel Confirm' if app._item_name is None else
+            'Cancel Buy Covenant Bookmarks 184,000' if app._item_name=='Covenant bookmark' else 'Cancel Buy Mystic Medals 280,000')
         app.read_navigation_text = Mock(return_value=dict(text='',words=[]))
         app.mouse = Mock()
         app._save_confirmation_failure=Mock(return_value=False)
@@ -608,7 +609,7 @@ class NativeEngineTests(unittest.TestCase):
         app.navigation.menu_target.side_effect=[None,(97,635),(97,635)]
         visible=shop();visible[561:590,75:95]=230;visible[565:600,105:125]=230
         app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (shop(),shop(),visible,visible,shop())]
-        with patch('e7_mouse_refresh.hidden_home_matches',return_value=True),patch('e7_mouse_refresh.time.sleep'):
+        with patch('e7_shop_flow.hidden_home_matches',return_value=True),patch('e7_mouse_refresh.time.sleep'):
             self.assertTrue(app.clickShop())
         app.mouse.move.assert_not_called()
         self.assertEqual([call.args for call in app.mouse.click.call_args_list],[(960,540),(100,580.5)])
@@ -622,7 +623,7 @@ class NativeEngineTests(unittest.TestCase):
         app.navigation.shop_visible.side_effect=[False,False,False,True]
         app.navigation.menu_target.side_effect=[None,None,(97,635),(97,635)]
         self.ui_ocr.return_value=dict(text='eii -._nr.or decorative wallpaper',words=[])
-        with patch('e7_mouse_refresh.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'):
+        with patch('e7_shop_flow.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'):
             self.assertTrue(app.clickShop())
         self.assertEqual([call.args for call in app.mouse.click.call_args_list],[(960,540),(100,580.5)])
         app.mouse.move.assert_not_called()
@@ -634,7 +635,7 @@ class NativeEngineTests(unittest.TestCase):
         app.navigation.shop_visible.return_value=False
         app.navigation.menu_target.return_value=None
         self.ui_ocr.return_value=dict(text='',words=[])
-        with patch('e7_mouse_refresh.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,0,31]):
+        with patch('e7_shop_flow.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,0,31]):
             with self.assertRaises(MouseStopped): app.clickShop()
         app.mouse.click.assert_called_once_with(960,540)
         self.assertEqual(app.refresh_count,0)
@@ -662,7 +663,7 @@ class NativeEngineTests(unittest.TestCase):
         app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (artwork,visible,visible,visible,shop())]
         app.navigation.shop_visible.side_effect=[False,False,False,True]
         app.navigation.menu_target.side_effect=[None,(97,635),(97,635),(97,635)]
-        with patch('e7_mouse_refresh.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'):
+        with patch('e7_shop_flow.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'):
             self.assertTrue(app.clickShop())
         app.mouse.click.assert_called_once_with(100,580.5)
 
@@ -672,7 +673,7 @@ class NativeEngineTests(unittest.TestCase):
         app.navigation.shop_visible.return_value=False
         app.navigation.menu_target.return_value=None
         self.ui_ocr.side_effect=[dict(text='',words=[]),dict(text='Cancel Confirm',words=[])]
-        with patch('e7_mouse_refresh.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,31]):
+        with patch('e7_shop_flow.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,31]):
             with self.assertRaises(MouseStopped): app.clickShop()
         app.mouse.click.assert_not_called()
 
@@ -704,7 +705,7 @@ class NativeEngineTests(unittest.TestCase):
 
     def test_home_failure_saves_only_menu_crop_and_actual_ocr(self):
         app=self.make_engine();app._last_home_ocr=dict(text='sanctuary',words=[])
-        with tempfile.TemporaryDirectory() as temp,patch('e7_mouse_refresh.Path',side_effect=lambda path:Path(temp)/path):
+        with tempfile.TemporaryDirectory() as temp,patch('e7_shop_flow.Path',side_effect=lambda path:Path(temp)/path):
             self.assertTrue(E7MouseShopRefresh._save_home_failure(app,True))
             folders=list((Path(temp)/'mouse-failures').iterdir());self.assertEqual(len(folders),1)
             with Image.open(folders[0]/'home-menu.png') as image:self.assertEqual(image.size,(420,740))
@@ -715,7 +716,7 @@ class NativeEngineTests(unittest.TestCase):
     def test_unknown_screen_sends_no_pointer_input(self):
         app=self.make_engine(); app.navigation.shop_visible.return_value=False
         app.navigation.menu_target.return_value=None
-        with patch('e7_mouse_refresh.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,0,31]):
+        with patch('e7_shop_flow.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,0,31]):
             with self.assertRaisesRegex(MouseStopped,'home Secret Shop menu'):
                 app.clickShop()
         app.mouse.click.assert_not_called()
@@ -756,7 +757,7 @@ class NativeEngineTests(unittest.TestCase):
             google=np.random.default_rng(23).integers(30,230,(1080,1920),dtype=np.uint8)
             Image.fromarray(native).save(folder/'hidden.png')
             Image.fromarray(google).save(folder/'google-hidden.png')
-            with patch('e7_mouse_refresh.Path',side_effect=lambda name:root/name):
+            with patch('e7_shop_flow.Path',side_effect=lambda name:root/name):
                 self.assertTrue(hidden_home_matches(native))
                 self.assertTrue(hidden_home_matches(google))
                 self.assertFalse(hidden_home_matches(np.full_like(google,50)))
@@ -924,7 +925,7 @@ class NativeEngineTests(unittest.TestCase):
                 with Image.open(folder/'validated.png') as saved:
                     self.assertEqual(saved.size,(950,740))
                 self.assertFalse(json.loads((folder/'failure.json').read_text())['confirmation_clicked'])
-                with patch('e7_mouse_refresh.Path.mkdir',side_effect=OSError('read only')):
+                with patch('e7_shop_flow.Path.mkdir',side_effect=OSError('read only')):
                     self.assertFalse(E7MouseShopRefresh._save_confirmation_failure(app,'refresh',shop()))
             finally: os.chdir(previous)
 
@@ -1229,7 +1230,7 @@ class NativeEngineTests(unittest.TestCase):
                 box=tuple(v+(1 if reads[0]%2==0 else 0) for v in box)
                 observed.append(box)
             return box
-        with patch('e7_mouse_refresh.confirmation_button',side_effect=button),patch('e7_mouse_refresh.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
+        with patch('e7_shop_flow.confirmation_button',side_effect=button),patch('e7_mouse_refresh.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
             app.refreshShop()
         self.assertEqual(app.refresh_count,2)
         self.assertEqual(app.mouse.click.call_count,4)
@@ -1255,7 +1256,7 @@ class NativeEngineTests(unittest.TestCase):
 
     def test_large_confirmation_button_movement_is_not_clicked(self):
         app=self.make_engine();app.mouse.screenshot.return_value=Image.fromarray(dialog())
-        with patch('e7_mouse_refresh.confirmation_button',side_effect=[(1040,650,1290,740),(1060,650,1310,740)]),patch('e7_mouse_refresh.time.sleep'):
+        with patch('e7_shop_flow.confirmation_button',side_effect=[(1040,650,1290,740),(1060,650,1310,740)]),patch('e7_mouse_refresh.time.sleep'):
             with self.assertRaisesRegex(MouseStopped,'changed while'):
                 app._confirm('refresh',shop())
         app.mouse.click.assert_not_called()

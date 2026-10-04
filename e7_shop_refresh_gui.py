@@ -264,7 +264,7 @@ class RefreshGui(tk.Tk):
         self._history_signature = None
         self.status = tk.StringVar(value="Ready")
         self.detail = tk.StringVar(value="Open Epic Seven’s Secret Shop, then start a session.")
-        self.home_ui_hint = tk.StringVar(value="Hidden UI? Click the game once before Start.")
+        self.home_ui_hint = tk.StringVar(value="Start from home or Secret Shop; idle home controls are revealed automatically.")
         self.home_ui_hint_dismissed = False
         self.setting_notice = tk.StringVar(value="")
         self.device_notice = tk.StringVar(value="Checking ADB devices…")
@@ -495,7 +495,7 @@ class RefreshGui(tk.Tk):
     def _update_home_ui_hint(self, *_):
         waiting = self.status.get() in ('Waiting for game','Waiting for game window')
         reminder = ('Click the game once to reveal controls and continue.' if waiting else
-                    'Hidden UI? Click the game once before Start.')
+                    'Start from home or Secret Shop; idle controls are revealed automatically.')
         if not self.adb_hint_dismissed.get() and not waiting:
             reminder = 'Use an emulator with ADB enabled.'
         if self.control_mode.get() == 'Mouse':
@@ -1292,7 +1292,7 @@ class RefreshGui(tk.Tk):
         self.progress_text.set('Preparing Mouse input…' if mouse_target else "Connecting and preparing the engine…")
         self.status.set("Starting")
         self.detail.set('Mouse session is starting. Leave the game in front and the pointer alone.' if mouse_target else
-                        "Preparing your session. Open the Secret Shop at 1920 × 1080.")
+                        "Preparing your session. Keep Epic Seven at home or in Secret Shop.")
         self._set_controls(True)
         self._event(f"Starting on {mouse_target.title if mouse_target else settings.device} · budget {settings.budget:,.0f} skystone.")
         arguments = [str(ENGINE_EXE)]

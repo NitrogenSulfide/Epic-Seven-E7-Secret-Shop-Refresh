@@ -12,7 +12,7 @@ Epic Seven Secret Shop Refresh engine.
 3. Follow the app's first-use recognition setup, check your budget, then press **Start refresh**.
 
 Initially tested with **Google Play Games on PC Developer Emulator**, English
-Epic Seven and a **1920 × 1080** Android display. Other emulators are unverified.
+Epic Seven. Normal sessions support a landscape **16:9 game view, at least 640 × 360**. ADB calibration still requires 1920 × 1080. Other emulators are unverified.
 [Easy setup guide](release/SETUP.md) · [Release page and optional source](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.1.0-rc20)
 
 ## Project and development notes
@@ -20,7 +20,7 @@ Epic Seven and a **1920 × 1080** Android display. Other emulators are unverifie
 The original upstream source and Git history are preserved, alongside the GUI,
 launchers, tests, sounds and icon. The first public preview is **0.1.0-rc20**.
 
-The local **rc50** candidate includes **Control mode → Mouse** for visible
+The local **rc51** candidate includes **Control mode → Mouse** for visible
 Epic Seven windows, including Google Play Games Developer Emulator and STOVE.
 Other discovered emulator windows can use the same transport but remain unverified.
 **Start Refresh** brings the selected game forward, opens its recognized
@@ -55,10 +55,10 @@ and shop actions still require recognized controls. Start from home or the shop;
 plain symmetric black bars and Google's observed dark title bar can be cropped.
 Restored Google windows may have a thin light frame above the dark title bar;
 that frame is handled at smaller sizes too. Other emulator toolbars are not guessed.
-The Google crop stays fixed for the session so confirmation dimming cannot
+The detected game crop stays fixed for the session so confirmation dimming cannot
 change its bounds; moving or resizing the window still stops input. Resize
 before pressing Start. An already open Secret Shop does not require visiting home.
-Google developer-emulator live refreshes and purchases in rc50 remain unverified.
+The three supported combinations are Mouse + STOVE, Mouse + Google Play Games Developer Emulator, and ADB + that Google emulator. ADB does not control native STOVE. Normal sessions share home/shop recognition and confirmation validation. Offline regressions cover saved wallpapers, varied sizes and repeated refreshes; live verification of these exact rc51 bytes remains incomplete.
 ADB mode remains available. Mouse preview has been removed; saved preview
 preferences load as Mouse without starting a session. The window selector
 keeps your selection across rescans and shows the game capture size.

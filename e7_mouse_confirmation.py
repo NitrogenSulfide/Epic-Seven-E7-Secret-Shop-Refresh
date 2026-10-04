@@ -7,6 +7,7 @@ import re
 import subprocess
 import tempfile
 from PIL import Image
+import numpy as np
 
 
 def read_ui_text(rgb, region):
@@ -40,7 +41,19 @@ def read_ui_text(rgb, region):
 
 
 def read_confirmation_text(rgb):
-    return read_ui_text(rgb,(500,260,1450,950))['text']
+    result=read_ui_text(rgb,(500,260,1450,950))
+    # The foreground prompt/product/buttons are bright; the shop behind the
+    # translucent modal is dimmed. Keep OCR word bounds and verify their ink,
+    # instead of combining background inventory text with the intended price.
+    foreground=[]
+    for word in result.get('words',[]):
+        x1,y1,x2,y2=(int(value) for value in word['box'])
+        crop=rgb[max(0,y1):min(rgb.shape[0],y2),max(0,x1):min(rgb.shape[1],x2)]
+        if not crop.size:continue
+        brightness=crop.max(axis=2)
+        if np.quantile(brightness,.90)>=135 and np.quantile(brightness,.95)>=155:
+            foreground.append(word['text'])
+    return ' '.join(foreground).lower()
 
 
 def confirmation_matches(text,operation,item_name=None):
@@ -53,10 +66,15 @@ def confirmation_matches(text,operation,item_name=None):
         native_prompt=bool(re.search(r'\buse\s+skystone\s+to\s+refresh\??',text))
         # STOVE's dialog omits the amount; its exact operation prompt confirms
         # the game's fixed three-skystone Refresh. Reject contradictory numbers.
-        numbers=re.findall(r'\b\d+\b',text)
-        return 'refresh' in text and 'skystone' in text and (bool(re.search(r'\b3\b',text)) or (native_prompt and not numbers))
+        numbers=re.findall(r'\b\d[\d,.\u00a0]*\b',text)
+        if re.search(r'\b(buy|purchase|covenant|mystic)\b',text):return False
+        if any(re.sub(r'[, .\u00a0]','',number)!='3' for number in numbers):return False
+        return 'refresh' in text and 'skystone' in text and (bool(numbers) or native_prompt)
     if operation != 'buy' or item_name not in ('Covenant bookmark','Mystic medal'):
         return False
-    item,price = ('covenant','184000') if item_name == 'Covenant bookmark' else ('mystic','280000')
-    numbers = re.sub(r'[, .\u00a0]','',text)
-    return item in text and price in numbers
+    item,noun,price,other = ('covenant','bookmarks?','184000','mystic') if item_name == 'Covenant bookmark' else ('mystic','medals?','280000','covenant')
+    if re.search(r'\b'+other+r'\b|\brefresh\b',text):return False
+    if not re.search(r'\b'+item+r'\s+'+noun+r'\b',text):return False
+    numbers=[re.sub(r'[, .\u00a0]','',number) for number in re.findall(r'\b\d[\d,.\u00a0]*\b',text)]
+    amounts=[number for number in numbers if int(number)>=1000]
+    return bool(amounts) and all(number==price for number in amounts)

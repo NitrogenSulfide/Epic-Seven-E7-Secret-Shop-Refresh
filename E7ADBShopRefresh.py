@@ -15,6 +15,10 @@ import configparser
 import json
 import math
 from e7_shop_navigation import create_navigator, NavigationSetupRequired, prepare_references
+from e7_shop_flow import ObservedShopFlow
+from e7_mouse_confirmation import read_confirmation_text,read_ui_text
+from e7_native_mouse import MouseStopped
+from e7_frame import normalize_game_frame
 
 class E7Item:
     def __init__(self, image=None, price=0, count=0):
@@ -84,8 +88,8 @@ class E7Inventory:
             data.extend(self.getCount())
             writer.writerow(data)
 
-class E7ADBShopRefresh:
-    def __init__(self, tap_sleep:float = 0.3, budget=None, ip_port=None, stop_refresh_key='esc', random_offset = False, debug=False, tap_jitter=None):
+class E7ADBShopRefresh(ObservedShopFlow):
+    def __init__(self, tap_sleep:float = 0.3, budget=None, ip_port=None, stop_refresh_key='esc', random_offset = False, debug=False, tap_jitter=None, adb_runner=None):
         if budget is not None:
             if isinstance(budget, bool) or not math.isfinite(float(budget)) or int(budget) != float(budget) or int(budget) < 3:
                 raise ValueError('Skystone budget must be a whole number of at least 3.')
@@ -110,9 +114,15 @@ class E7ADBShopRefresh:
         self.refresh_count = 0
         self.keyboard_thread = threading.Thread(target=self.checkKeyPress)
         self.adb_path = os.path.join('adb-assets','platform-tools', 'adb')
+        self._adb_runner=adb_runner or subprocess.run
         self.storage = E7Inventory()
         self.screenwidth = 1920
         self.screenheight = 1080
+        self._rgb = None
+        self._item = self._item_name = None
+        self._adb_geometry = None
+        self.read_confirmation_text = read_confirmation_text
+        self.read_navigation_text = lambda rgb:read_ui_text(rgb,(0,180,420,920))
         self.checkScreenDimension()
         self.navigation = create_navigator('adb-assets')
 
@@ -241,28 +251,37 @@ class E7ADBShopRefresh:
         print('Skystone spent:', self.refresh_count*3)
 
     def checkScreenDimension(self):
-        adb_process = subprocess.run([self.adb_path] + self.device_args + ['exec-out', 'screencap','-p'], stdout=subprocess.PIPE)
-        byte_image = BytesIO(adb_process.stdout)
-        pil_image = Image.open(byte_image)
-        pil_image = np.array(pil_image)
-        y, x, _ = pil_image.shape
-        # self.screenwidth = x
-        # self.screenheight = y
-        if self.screenwidth != x or self.screenheight != y:
-            print(f'current dimension {x} x {y} does not match {self.screenwidth} x {self.screenheight}')
-            input('press enter to exit...')
-            sys.exit(0)
+        self.takeScreenshot()
+        if self.debug and self._adb_geometry.source_size!=(1920,1080):
+            raise ValueError('ADB calibration requires a 1920 x 1080 Android display.')
 
     def takeScreenshot(self):
-        adb_process = subprocess.run([self.adb_path] + self.device_args + ['exec-out', 'screencap','-p'], stdout=subprocess.PIPE)
-        img_array = np.frombuffer(adb_process.stdout, dtype=np.uint8)
-        screenshot = cv2.imdecode(img_array, cv2.IMREAD_GRAYSCALE)
-        # ims = cv2.resize(screenshot, (960, 540))
-        # cv2.imshow('image window', ims)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
-        return screenshot
-    
+        result=getattr(self,'_adb_runner',subprocess.run)([self.adb_path]+self.device_args+['exec-out','screencap','-p'],
+                              stdout=subprocess.PIPE,check=True,timeout=10)
+        raw=cv2.imdecode(np.frombuffer(result.stdout,dtype=np.uint8),cv2.IMREAD_COLOR)
+        if raw is None:
+            raise MouseStopped('ADB returned an unreadable game capture. No input sent.')
+        previous=getattr(self,'_adb_geometry',None)
+        if previous is not None and previous.source_size!=(raw.shape[1],raw.shape[0]) and self.loop_active:
+            raise MouseStopped('The Android game viewport changed. Restart at the chosen resolution.')
+        if np.ptp(raw)<12:
+            raise MouseStopped('ADB returned a blank game capture. No input sent.')
+        rgb,geometry=normalize_game_frame(Image.fromarray(cv2.cvtColor(raw,cv2.COLOR_BGR2RGB)),
+                                         bounds=previous.bounds if previous is not None and previous.source_size==(raw.shape[1],raw.shape[0]) else None)
+        if previous is not None and previous!=geometry and self.loop_active:
+            raise MouseStopped('The Android game viewport changed. Restart at the chosen resolution.')
+        self._rgb,self._adb_geometry,self._capture_resumed=rgb,geometry,False
+        return cv2.cvtColor(rgb,cv2.COLOR_RGB2GRAY)
+
+    def findItemPosition(self,frame,template):
+        return self._calibration_findItemPosition(frame,template) if getattr(self,'debug',False) else super().findItemPosition(frame,template)
+
+    def clickBuy(self,pos):
+        return self._calibration_clickBuy(pos) if getattr(self,'debug',False) else super().clickBuy(pos)
+
+    def clickRefresh(self):
+        return self._calibration_clickRefresh() if getattr(self,'debug',False) else super().clickRefresh()
+
     def showOffsetArea(self, x, y, imshow_title = "Debug", text_desc = ''):
 
         #Grab a color image
@@ -323,7 +342,7 @@ class E7ADBShopRefresh:
             return (generate_x_offset, generate_y_offset)
         return (0, 0)
 
-    def findItemPosition(self, screen_image, item_image):
+    def _calibration_findItemPosition(self, screen_image, item_image):
         result = cv2.matchTemplate(screen_image, item_image, cv2.TM_CCOEFF_NORMED)
         loc = np.where(result >= 0.75)
         
@@ -336,56 +355,24 @@ class E7ADBShopRefresh:
         return None
 
     #macro
+    def _device_point(self,x,y):
+        geometry=getattr(self,'_adb_geometry',None)
+        if geometry is None:
+            raise MouseStopped('Capture the Android game before input.')
+        return geometry.point(x,y)
+
     def tap(self,x,y):
-        subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'tap', str(x), str(y)], check=True)
+        if not self.loop_active:return
+        x,y=self._device_point(x,y)
+        getattr(self,'_adb_runner',subprocess.run)([self.adb_path]+self.device_args+['shell','input','tap',str(x),str(y)],check=True,timeout=10)
 
     def swipe(self,x1,y1,x2,y2):
-        subprocess.run([self.adb_path] + self.device_args + ['shell', 'input', 'swipe', str(x1), str(y1), str(x2), str(y2)])
+        if not self.loop_active:return
+        x1,y1=self._device_point(x1,y1);x2,y2=self._device_point(x2,y2)
+        duration=random.uniform(.28,.36) if self.random_offset else .32
+        getattr(self,'_adb_runner',subprocess.run)([self.adb_path]+self.device_args+['shell','input','swipe',str(x1),str(y1),str(x2),str(y2),str(round(duration*1000))],check=True,timeout=10)
 
-    def clickShop(self):
-        # Hidden home controls cannot be distinguished from other pages by
-        # wallpaper. Wait for verified UI rather than guessing a wake-up tap.
-        deadline = None
-        if not self.loop_active:
-            return False
-        screenshot = self.takeScreenshot()
-        while self.loop_active:
-            if self.navigation.shop_visible(screenshot):
-                print('Navigation: Secret Shop screen verified; already open.', flush=True)
-                return self.loop_active
-            target = self.navigation.menu_target(screenshot)
-            if target is not None:
-                break
-            if deadline is None:
-                print('Navigation: Waiting for visible game controls. Click the game to reveal its UI, or open Secret Shop manually. No taps or spending while waiting (up to 60 seconds).', flush=True)
-                deadline = time.monotonic() + 60
-            if time.monotonic() >= deadline:
-                raise NavigationSetupRequired('Game controls remained unrecognized for 60 seconds. No navigation tap sent. Reveal the UI or use the recognition setup helper.')
-            time.sleep(1.0)
-            if not self.loop_active:
-                return False
-            screenshot = self.takeScreenshot()
-        if not self.loop_active:
-            return False
-        x, y = target
-        print('Navigation: Opening the recognized Secret Shop menu.', flush=True)
-        # Navigation is deterministic: no randomized offset or legacy fallback.
-        self.tap(x,y)
-        deadline = time.monotonic() + 8
-        last_screenshot = screenshot
-        while self.loop_active and time.monotonic() < deadline:
-            time.sleep(.25)
-            if not self.loop_active:
-                return False
-            last_screenshot = self.takeScreenshot()
-            if self.navigation.shop_visible(last_screenshot):
-                print('Navigation: Secret Shop screen verified.', flush=True)
-                return True
-        if not self.loop_active:
-            return False
-        raise NavigationSetupRequired('Secret Shop could not be verified after the navigation tap (' + self.navigation.verification_details(last_screenshot) + '). Stopped before purchasing or refreshing. Use the recognition setup helper.')
-
-    def clickBuy(self, pos):
+    def _calibration_clickBuy(self, pos):
         if pos is None or not self.loop_active:
             return False
         self.navigation.require_shop(self.takeScreenshot())
@@ -417,7 +404,7 @@ class E7ADBShopRefresh:
         time.sleep(1)
         return True
     
-    def clickRefresh(self):
+    def _calibration_clickRefresh(self):
         if not self.loop_active:
             return False
         self.navigation.require_shop(self.takeScreenshot())
@@ -475,11 +462,19 @@ def saveConfigFile(tap_sleep, budget, stop_refresh_key, random_offset, tap_jitte
     print('Setting saved')
 
 def run_refresh_engine(**settings):
+    app=None;started=time.time()
     try:
         app = E7ADBShopRefresh(**settings)
         app.start()
     except NavigationSetupRequired as error:
         print('E7GUI_SETUP_REQUIRED ' + str(error), flush=True)
+        return False
+    except MouseStopped as error:
+        print('E7GUI_MOUSE_STOPPED '+json.dumps({'reason':str(error)}),flush=True)
+        if app is not None:
+            app.reportLiveStats()
+            app.storage.writeToCSV(time.time()-started,app.refresh_count*3)
+            app.printResult()
         return False
     return True
 
@@ -576,7 +571,7 @@ if __name__ == '__main__':
     print('Epic Seven Shop Refresh with ADB')
     print('Before launching this application')
     print('Make sure Epic Seven is opened and that ADB is turned on')
-    print('Ingame resolution should be set to 1920 x 1080')
+    print('Use an English landscape 16:9 game view, at least 640 x 360. ADB calibration requires 1920 x 1080.')
     print('(relaunch this application if the above conditions are not met)')
     print()
     print('It is normal for adb to take a few second to respond')
