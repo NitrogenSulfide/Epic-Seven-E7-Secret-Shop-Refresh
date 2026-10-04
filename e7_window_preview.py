@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import time
 import tkinter as tk
 from tkinter import ttk
 try:
@@ -114,17 +115,39 @@ def game_view(image):
                      'Try full screen or a game window with plain black borders.')
 
 
-def capture_selected(target, destination, *, backend=None, grabber=None):
+def wait_for_window(target, cancel, *, timeout=20, backend=None, now=time.monotonic):
+    """Wait for the user to bring the selected game forward; never activate it."""
+    backend = backend or WindowsCapture()
+    deadline = now()+timeout
+    while not cancel.is_set():
+        current = backend.inspect(target.handle)
+        if current.pid != target.pid or current.title != target.title:
+            raise ValueError('The selected window changed. Scan and select it again.')
+        if backend.unobstructed(current):
+            return current
+        remaining = deadline-now()
+        if remaining <= 0:
+            raise ValueError('The game window was not ready within 20 seconds. '
+                             'Click the selected game and minimize any windows covering it, then retry.')
+        cancel.wait(min(.15,remaining))
+    raise ValueError('Mouse preview cancelled. No screenshot was saved.')
+
+
+def capture_selected(target, destination, *, backend=None, grabber=None, cancel=None):
     if Image is None:
         raise ValueError('Mouse preview needs Pillow. Use the bundled player EXE.')
+    if cancel is not None and cancel.is_set():
+        raise ValueError('Mouse preview cancelled. No screenshot was saved.')
     backend = backend or WindowsCapture()
     before = backend.inspect(target.handle)
     if before.pid != target.pid or before.title != target.title:
         raise ValueError('The selected window changed. Scan and select it again.')
     width, height = before.rectangle[2]-before.rectangle[0], before.rectangle[3]-before.rectangle[1]
     if not backend.unobstructed(before):
-        raise ValueError('Click the selected game during the countdown and keep it unobstructed. No screenshot was saved.')
+        raise ValueError('The selected game is no longer in front or is partly covered. Click it and retry. No screenshot was saved.')
     image = (grabber or ImageGrab.grab)(bbox=before.rectangle, all_screens=True)
+    if cancel is not None and cancel.is_set():
+        raise ValueError('Mouse preview cancelled. No screenshot was saved.')
     after = backend.inspect(target.handle)
     if before != after or not backend.unobstructed(after):
         raise ValueError('The game moved or lost focus during capture. Try again. No screenshot was saved.')

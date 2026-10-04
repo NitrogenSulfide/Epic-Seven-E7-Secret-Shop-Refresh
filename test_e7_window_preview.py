@@ -5,12 +5,13 @@ from pathlib import Path
 import subprocess
 import tempfile
 import sys
+import threading
 import unittest
 from unittest.mock import Mock
 from PIL import Image, ImageDraw
 import cv2
 import numpy as np
-from e7_window_preview import GameWindow, capture_selected, analyze_capture, game_view
+from e7_window_preview import GameWindow, capture_selected, analyze_capture, game_view, wait_for_window
 from e7_mouse_analysis import inspect_mouse_frame
 import test_e7_shop_navigation as navigation_tests
 
@@ -39,6 +40,34 @@ class CaptureTests(unittest.TestCase):
         self.grabber.assert_called_once_with(bbox=self.target.rectangle,all_screens=True)
         self.assertTrue(self.destination.exists())
         self.assertEqual(self.backend.unobstructed.call_count,2)
+
+    def test_wait_until_user_game_is_ready_without_input(self):
+        self.backend.unobstructed.side_effect=[False,False,True]
+        cancel=Mock();cancel.is_set.return_value=False
+        self.assertEqual(wait_for_window(self.target,cancel,backend=self.backend),self.target)
+        self.assertEqual(cancel.wait.call_count,2)
+        self.grabber.assert_not_called()
+
+    def test_wait_timeout_cancel_and_changed_window_do_not_capture(self):
+        cancel=threading.Event();cancel.set()
+        with self.assertRaisesRegex(ValueError,'cancelled'):
+            wait_for_window(self.target,cancel,backend=self.backend)
+        self.backend.inspect.assert_not_called()
+        cancel.clear();self.backend.unobstructed.return_value=False
+        with self.assertRaisesRegex(ValueError,'20 seconds'):
+            wait_for_window(self.target,cancel,backend=self.backend,now=Mock(side_effect=[0,21]))
+        self.backend.inspect.return_value=GameWindow(123,999,'Epic Seven',self.target.rectangle)
+        with self.assertRaisesRegex(ValueError,'window changed'):
+            wait_for_window(self.target,cancel,backend=self.backend)
+        self.grabber.assert_not_called()
+
+    def test_cancel_during_image_grab_saves_nothing(self):
+        cancel=threading.Event()
+        def grab(**kwargs):
+            cancel.set();return self.image
+        with self.assertRaisesRegex(ValueError,'cancelled'):
+            capture_selected(self.target,self.destination,backend=self.backend,grabber=grab,cancel=cancel)
+        self.assertFalse(self.destination.exists())
 
     def test_stove_maximized_letterbox_uses_game_view_and_screen_offset(self):
         game=Image.new('RGB',(3590,2019),(40,60,80))

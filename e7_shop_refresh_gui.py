@@ -22,7 +22,7 @@ from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon
 from e7_about import AboutDialog
 from e7_setup import missing_references, has_builtin_references, RecognitionSetup
 from e7_connection import check_connection, ConnectionCheck
-from e7_window_preview import WindowsCapture, capture_selected, analyze_capture, MousePreviewDialog
+from e7_window_preview import WindowsCapture, capture_selected, analyze_capture, MousePreviewDialog, wait_for_window
 
 PROJECT_DIR = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
 DEFAULT_ENGINE_DIR = Path.home() / "Downloads" / "E7 Secret Shop Refresh"
@@ -237,6 +237,7 @@ class RefreshGui(tk.Tk):
         self._mouse_preview_busy = False
         self._mouse_scan_busy = False
         self._preview_token = 0
+        self._preview_cancel = threading.Event()
         self.preview_window = None
         self.started_at = None
         self.stopping = False
@@ -405,7 +406,7 @@ class RefreshGui(tk.Tk):
         for name in ('TFrame', 'TLabel', 'TLabelframe', 'TLabelframe.Label', 'Large.TCheckbutton'):
             style.configure(name, background=bg, foreground=fg, bordercolor=border)
         style.configure('Muted.TLabel', foreground=muted)
-        style.configure('Status.TLabel', foreground=('#fbbf24' if dark else '#92400e') if self.status.get() == 'Waiting for game' else ('#60a5fa' if dark else '#2563eb'))
+        style.configure('Status.TLabel', foreground=('#fbbf24' if dark else '#92400e') if self.status.get() in ('Waiting for game','Waiting for game window') else ('#60a5fa' if dark else '#2563eb'))
         self._style_home_ui_banner()
         for name in ('TEntry', 'TCombobox'):
             style.configure(name, background=field, fieldbackground=field, foreground=fg, insertcolor=fg, bordercolor=border, lightcolor=border, darkcolor=border, arrowcolor=fg)
@@ -467,13 +468,15 @@ class RefreshGui(tk.Tk):
             self._append_log(f'Theme preference save failed: {exc}\n')
 
     def _update_home_ui_hint(self, *_):
-        waiting = self.status.get() == 'Waiting for game'
+        waiting = self.status.get() in ('Waiting for game','Waiting for game window')
         reminder = ('Click the game once to reveal controls and continue.' if waiting else
                     'Hidden UI? Click the game once before Start.')
         if not self.adb_hint_dismissed.get() and not waiting:
             reminder = 'Use an emulator with ADB enabled.'
         if self.control_mode.get() != 'ADB':
-            reminder = 'Mouse preview only · no clicks or spending.'
+            reminder = ('Click the selected game now. Waiting up to 20 seconds · no clicks or spending.'
+                        if self.status.get() == 'Waiting for game window' else
+                        'Mouse preview only · no clicks or spending.')
         self.home_ui_hint.set(self.connection_warning or reminder)
         self._style_home_ui_banner()
         dark = self.dark_mode.get()
@@ -1039,6 +1042,7 @@ class RefreshGui(tk.Tk):
         self._preview_token += 1
         token = self._preview_token
         self._mouse_preview_busy = True
+        self._preview_cancel = threading.Event()
         self._set_controls(True)
         self._set_connection_warning('')
         self.status.set('Preview countdown')
@@ -1051,16 +1055,20 @@ class RefreshGui(tk.Tk):
             self.detail.set(f'Click the selected game now. Capture in {seconds} seconds. No clicks or spending.')
             self.after(1000,lambda:self._mouse_preview_countdown(token,target,seconds-1))
             return
-        self.status.set('Reading game view')
-        self.detail.set('Capturing the selected game and marking recognized targets. No mouse actions.')
+        self.status.set('Waiting for game window')
+        self.detail.set('Click the selected game and keep it unobstructed. Waiting up to 20 seconds; no mouse actions.')
+        cancel = self._preview_cancel
         def preview():
             capture = report = None
             error = ''
             try:
+                wait_for_window(target,cancel)
                 folder = ENGINE_EXE.parent/'mouse-previews'/uuid.uuid4().hex
                 folder.mkdir(parents=True)
                 capture = folder/'capture.png'
-                capture_selected(target,capture)
+                capture_selected(target,capture,cancel=cancel)
+                if cancel.is_set():
+                    raise ValueError('Mouse preview cancelled.')
                 report = analyze_capture(ENGINE_EXE,ENGINE_EXE.parent,capture,folder/'preview.json')
             except (OSError,ValueError,RuntimeError,subprocess.SubprocessError) as exc:
                 error = str(exc)
@@ -1346,6 +1354,7 @@ class RefreshGui(tk.Tk):
 
     def stop_refresh(self):
         if self._mouse_preview_busy:
+            self._preview_cancel.set()
             self._preview_token += 1
             self._mouse_preview_busy = False
             self._set_controls(False)
@@ -1571,6 +1580,7 @@ class RefreshGui(tk.Tk):
             self.ev.set("Enter a valid budget to see the estimate.")
 
     def _close(self):
+        self._preview_cancel.set()
         self._preview_token += 1
         self._mouse_preview_busy = False
         self._connection_check_id += 1

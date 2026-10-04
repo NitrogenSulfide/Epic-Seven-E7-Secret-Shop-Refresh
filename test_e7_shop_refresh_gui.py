@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import threading
 import unittest
 import ctypes
 import shutil
@@ -298,12 +299,12 @@ class GuiTests(unittest.TestCase):
     def test_mouse_preview_captures_without_adb_or_refresh_session(self):
         target=self.choose_mouse_fixture()
         report=dict(read_only=True,state='home',targets=[dict(label='Secret Shop menu',point=[86,548])],detections=[])
-        def capture(window,path):
+        def capture(window,path,**kwargs):
             from PIL import Image,ImageDraw
             image=Image.new('RGB',(1920,1080),'#334155')
             ImageDraw.Draw(image).rectangle((50,500,150,580),outline='white',width=5)
             image.save(path)
-        with patch.object(gui,'capture_selected',side_effect=capture) as grab, patch.object(gui,'analyze_capture',return_value=report), \
+        with patch.object(gui,'capture_selected',side_effect=capture) as grab, patch.object(gui,'wait_for_window',return_value=target), patch.object(gui,'analyze_capture',return_value=report), \
                 patch.object(gui,'launch_engine') as launch, patch.object(gui,'check_connection') as adb:
             self.app.start_button.invoke()
             self.app._mouse_preview_countdown(self.app._preview_token,target,0)
@@ -325,6 +326,23 @@ class GuiTests(unittest.TestCase):
         capture.assert_not_called();launch.assert_not_called()
         self.assertIsNone(self.app.preview_window)
         self.assertEqual(self.app.status.get(),'Preview cancelled')
+
+    def test_mouse_waiting_can_be_cancelled_without_capture_or_engine(self):
+        target=self.choose_mouse_fixture();entered=threading.Event();exited=threading.Event()
+        def wait(window,cancel):
+            entered.set();cancel.wait(3);exited.set()
+            raise ValueError('Cancelled')
+        with patch.object(gui,'wait_for_window',side_effect=wait),patch.object(gui,'capture_selected') as capture, \
+                patch.object(gui,'analyze_capture') as analyze,patch.object(gui,'launch_engine') as launch:
+            self.app.start_button.invoke()
+            self.app._mouse_preview_countdown(self.app._preview_token,target,0)
+            self.pump_until(entered.is_set)
+            self.assertEqual(self.app.status.get(),'Waiting for game window')
+            self.assertIn('20 seconds',self.app.home_ui_hint.get())
+            self.app.stop_refresh();self.pump_until(exited.is_set)
+        capture.assert_not_called();analyze.assert_not_called();launch.assert_not_called()
+        self.assertEqual(self.app.status.get(),'Preview cancelled')
+        self.assertIsNone(self.app.preview_window)
 
     def test_mouse_scan_results_and_switch_back_preserve_adb_choice(self):
         before=self.app._device_address()
