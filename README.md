@@ -21,7 +21,9 @@ at least 640 × 360. ADB calibration requires a 1920 × 1080 Android display.
 
 Mouse uses your actual pointer: leave the PC alone while it runs, keep the game
 visible and resize before Start. If the game runs as administrator, the app needs
-the same permission. ADB works through the selected emulator and lets you use
+the same permission. The upcoming v0.1.1 offers a restart through Windows' permission
+prompt when needed; v0.1.0 users can right-click the EXE → **Run as administrator**.
+ADB works through the selected emulator and lets you use
 your PC pointer normally. Native STOVE cannot use ADB.
 
 The app reveals idle home controls, recognizes the Secret Shop menu, buys detected

@@ -1,3 +1,11 @@
+0.1.1 · Administrator restart
+
+• Mouse Start detects an elevated game and offers to restart through Windows UAC.
+• Settings are saved before restarting. Select the game and press Start again;
+  reopening never starts a session automatically.
+• Cancelling UAC or a launch failure leaves the original app open with retry help.
+• ADB and non-elevated games do not request administrator permission.
+
 0.1.0 · First official release
 
 • Mouse automation for official STOVE and Google Play Games Developer Emulator.

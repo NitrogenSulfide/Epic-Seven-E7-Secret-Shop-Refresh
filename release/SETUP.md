@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.1.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,7 +14,7 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.1.zip'
 ```
 
 ## Emulator setup
@@ -126,10 +126,15 @@ Shop scrolling uses a short upward mouse drag. The same checkbox adds small
 position and timing variations while keeping the vertical travel consistent.
 Stop or lost focus releases the drag button immediately. Begin with a small
 supervised run to verify the new drag reaches the bottom shop items.
-If the game or emulator runs as administrator, right-click **E7 Secret Shop Refresh.exe**
-and choose **Run as administrator**, accepting the Windows prompt yourself.
-The app checks this permission mismatch before bringing the game forward.
-Normal game launches do not require an elevated refresh app.
+Open the app normally. If the selected game or emulator runs as administrator,
+**Start Refresh** offers to restart the app through Windows' administrator prompt.
+Choose Yes and accept Windows' prompt. Settings are saved first; after reopening,
+select your game and press Start Refresh again. Restarting does not start a session.
+Cancelling the prompt leaves the original app open without sending Mouse input;
+press Start Refresh to retry. You can also right-click the EXE and choose **Run as
+administrator**. The permission check happens before bringing the game forward.
+ADB and non-elevated games do not need this restart. The app checks the selected
+process rather than assuming every STOVE installation runs as administrator.
 Start from the English home screen or an already open Secret Shop. If no home
 controls are recognized, Mouse mode can click the game center once, wait briefly,
 then find the Secret Shop icon. No saved wallpaper is required. Animation,

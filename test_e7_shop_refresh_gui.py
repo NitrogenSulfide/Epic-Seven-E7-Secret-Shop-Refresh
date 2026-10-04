@@ -1,4 +1,5 @@
 import importlib.util
+import configparser
 import hashlib
 import json
 import math
@@ -577,6 +578,51 @@ class GuiTests(unittest.TestCase):
             self.app.start_refresh()
         launch.assert_not_called()
         self.assertIn('Run as administrator',self.app.connection_warning)
+
+    def test_verified_permission_mismatch_offers_restart_without_engine_input(self):
+        self.choose_mouse_fixture(); self.app.control_mode.set('Mouse'); self.app._change_control_mode()
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v6; tap timing v2')), \
+                patch.object(gui,'activate_native_target',side_effect=gui.MouseElevationRequired('Administrator needed.')), \
+                patch.object(gui.messagebox,'askyesno',return_value=False) as offer, \
+                patch.object(gui,'restart_as_administrator') as restart, patch.object(gui,'launch_engine') as launch:
+            self.app.start_refresh()
+        offer.assert_called_once(); restart.assert_not_called(); launch.assert_not_called()
+        self.assertTrue(self.app.winfo_exists())
+        self.assertIn('Administrator needed',self.app.connection_warning)
+
+    def test_administrator_restart_saves_settings_before_launch_and_closes_after_success(self):
+        self.app.control_mode.set('Mouse'); self.app.budget.set('99'); self.app.tap_jitter.set(.07)
+        settings = self.app._settings()
+        def launch(*args, **kwargs):
+            config = configparser.ConfigParser(); config.read(gui.CONFIG_FILE)
+            self.assertEqual(config['Settings']['budget'], '99')
+            self.assertIn('Mouse',gui.GUI_CONFIG_FILE.read_text())
+            self.assertIn('0.07',gui.GUI_CONFIG_FILE.read_text())
+            close.assert_not_called()
+        with patch.object(gui.messagebox,'askyesno',return_value=True), \
+                patch.object(gui,'restart_as_administrator',side_effect=launch) as restart, \
+                patch.object(self.app,'_close') as close, patch.object(gui,'launch_engine') as engine:
+            self.app._offer_administrator_restart(settings)
+        restart.assert_called_once_with(gui.APP_DIR,parent=self.app.winfo_id())
+        close.assert_called_once(); engine.assert_not_called()
+
+    def test_cancelled_or_failed_uac_keeps_app_open_with_retry_message(self):
+        for error, hint in ((gui.ElevationCancelled('Administrator prompt cancelled.'),'Start Refresh'),
+                            (OSError('Launch failed.'),'Run as administrator')):
+            with self.subTest(error=error), patch.object(gui.messagebox,'askyesno',return_value=True), \
+                    patch.object(gui,'restart_as_administrator',side_effect=error), \
+                    patch.object(self.app,'_close') as close, patch.object(gui,'launch_engine') as engine:
+                self.app._offer_administrator_restart(self.app._settings())
+                close.assert_not_called(); engine.assert_not_called()
+                self.assertTrue(self.app.winfo_exists())
+                self.assertIn(hint,self.app.connection_warning)
+
+    def test_failed_settings_save_does_not_request_uac_or_close_app(self):
+        with patch.object(gui.messagebox,'askyesno',return_value=True), \
+                patch.object(self.app,'save_settings',return_value=None), \
+                patch.object(gui,'restart_as_administrator') as restart, patch.object(self.app,'_close') as close:
+            self.app._offer_administrator_restart(self.app._settings())
+        restart.assert_not_called(); close.assert_not_called()
 
     def test_native_focus_failure_stays_visible_and_is_saved_without_stop_key_claim(self):
         target=self.choose_mouse_fixture()
