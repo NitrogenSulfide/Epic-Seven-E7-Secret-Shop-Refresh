@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc21.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc22.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,7 +14,7 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc21.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc22.zip'
 ```
 
 ## Emulator setup
@@ -29,7 +29,12 @@ acknowledgement is saved. The hidden-UI reminder returns when the app restarts.
 
 Select the connected emulator in the app. Google's documented endpoint is
 `localhost:6520`; see the [official connection guide](https://developer.android.com/games/playgames/pg-emulator#installing-a-game).
-If it is missing from Scan, run PowerShell inside the included `runtime` folder:
+Start checks the selected connection and can connect the entered ADB endpoint.
+With no usable connection, a red banner explains how to fix it; the engine does
+not launch. Start remains available to retry. Idle scans update every 10 seconds
+and do not connect or send game actions. An open emulator still needs ADB enabled
+and authorized; `offline` and `unauthorized` devices are not ready.
+If needed, run PowerShell inside the included `runtime` folder:
 
 ```powershell
 .\adb-assets\platform-tools\adb.exe connect localhost:6520

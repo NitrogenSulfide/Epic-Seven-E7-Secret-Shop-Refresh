@@ -203,3 +203,8 @@ users can press Start without first capturing screens. Saved private references
 remain supported, and startup recognition failure stops the engine before buys
 or refreshes, then offers the screenshot helper. Completing it requires another
 explicit Start. The published rc20 preview and its downloads above remain unchanged.
+
+rc22 adds a red warning for missing ADB connections and a bounded background
+connection check before engine launch. Start stays available to retry after the
+emulator opens. Offline/unauthorized or unselected devices cannot satisfy this
+check. The recognition timeout and guided fallback from rc21 are unchanged.
