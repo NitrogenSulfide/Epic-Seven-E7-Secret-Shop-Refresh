@@ -108,6 +108,16 @@ class CaptureTests(unittest.TestCase):
         full=Image.new('RGB',(1280,720));full.paste(game.crop((0,0,1280,700)),(0,20))
         self.assertEqual(game_view(full,google_emulator=True)[1],(0,0,1280,720))
 
+    def test_google_restored_border_and_small_window_keep_game_crop(self):
+        for width,header in ((1280,36),(1280,72),(800,72)):
+            height=round(width*9/16)
+            for border in (0,1,2):
+                with self.subTest(width=width,header=header,border=border):
+                    image=Image.new('RGB',(width,height+header))
+                    image.paste(Image.new('RGB',(width,height),(70,90,110)),(0,header))
+                    if border:ImageDraw.Draw(image).rectangle((0,0,width-1,border-1),fill=(120,130,145))
+                    self.assertEqual(game_view(image,google_emulator=True)[1],(0,header,width,height+header))
+
     def test_native_wide_client_is_saved_and_annotations_preserve_aspect(self):
         image=Image.new('RGB',(3840,2019),(40,60,80))
         ImageDraw.Draw(image).rectangle((50,50,250,250),fill='white')
