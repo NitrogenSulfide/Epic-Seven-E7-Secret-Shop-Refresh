@@ -84,6 +84,13 @@ fake run. Verify Windows OCR on synthetic dialog frames and compiled offline CLI
 checks. Actual confirmation layout, pointer input and spending require a separate
 authorized live trial. The optional preview remains read-only.
 
+rc30 adds interior visibility sampling and exact-target checks, bounded focus
+pauses, typed native stop reasons and private session diagnostics. Test saved
+English home frames with Windows OCR, native menu word bounds and constrained
+OCR spelling variants. Check that a private hidden-home reference permits one
+reveal click, while unrelated pages or a changed popup receive none. Verify Stop
+during a focus pause and cancellation of stale prepared clicks after focus returns.
+
 Test selected-window capture with fake Win32
 metadata and a fake grabber: changed identity, focus, geometry, obstruction,
 aspect ratio, blank images and negative monitor coordinates. Confirm cancellation,

@@ -2,6 +2,8 @@
 import argparse
 import json
 import math
+import re
+from pathlib import Path
 import subprocess
 import time
 import cv2
@@ -10,7 +12,35 @@ from PIL import Image
 from E7ADBShopRefresh import E7ADBShopRefresh
 from e7_native_mouse import WindowsMouse, MouseStopped
 from e7_windows_capture import GameWindow
-from e7_mouse_confirmation import read_confirmation_text, confirmation_matches
+from e7_mouse_confirmation import read_confirmation_text, read_ui_text, confirmation_matches
+
+
+def home_menu_target(result):
+    """Locate the observed home menu text, including rescaled native layouts."""
+    if not any(label in result['text'].lower() for label in ('sanctuary','epic pass','event')):
+        return None
+    words = result.get('words',[])
+    choices = []
+    for first,second in zip(words,words[1:]):
+        if re.sub('[^a-z]','',first['text'].lower()) != 'secret' or not re.fullmatch('sh[o0p]p',re.sub('[^a-z0-9]','',second['text'].lower())):
+            continue
+        a,b = first['box'],second['box']
+        box = (min(a[0],b[0]),min(a[1],b[1]),max(a[2],b[2]),max(a[3],b[3]))
+        if 0 <= box[0] < box[2] <= 360 and 210 <= box[1] < box[3] <= 850 and abs(a[1]-b[1]) < 25:
+            choices.append(((box[0]+box[2])/2,(box[1]+box[3])/2))
+    return choices[0] if len(choices)==1 else None
+
+
+def hidden_home_matches(frame, reference=Path('adb-assets/native-home/hidden.png')):
+    """A private known home view permits one click to reveal hidden controls."""
+    if not reference.is_file():
+        return False
+    saved = cv2.imdecode(np.frombuffer(reference.read_bytes(),dtype=np.uint8),cv2.IMREAD_GRAYSCALE)
+    if saved is None:
+        return False
+    saved = cv2.resize(saved,(1920,1080),interpolation=cv2.INTER_AREA)
+    difference = cv2.absdiff(frame,saved)
+    return float(difference.mean()) <= 10 and float(np.quantile(difference,.95)) <= 28
 
 
 def green_buttons(rgb, region):
@@ -46,6 +76,7 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
         self._item = None
         self._item_name = None
         self.read_confirmation_text = read_confirmation_text
+        self.read_navigation_text = lambda rgb:read_ui_text(rgb,(0,180,420,920))
         super().__init__(**settings)
 
     def checkScreenDimension(self):
@@ -62,6 +93,63 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
 
     def swipe(self,x1,y1,x2,y2):
         self.mouse.scroll(x1,y1)
+
+    def clickShop(self):
+        deadline = time.monotonic()+30
+        revealed = moved = False
+        while self.loop_active and time.monotonic()<deadline:
+            frame = self.takeScreenshot()
+            if self.navigation.shop_visible(frame):
+                print('Navigation: Secret Shop screen verified; already open.',flush=True)
+                return True
+            target = self.navigation.menu_target(frame)
+            if target is None:
+                result = self.read_navigation_text(self._rgb)
+                target = home_menu_target(result)
+            else:
+                result = None
+            if not self.loop_active:
+                return False
+            if target is not None:
+                prior = self._rgb.copy()
+                self.takeScreenshot()
+                if np.mean(cv2.absdiff(prior[180:920,:420],self._rgb[180:920,:420])) > 6:
+                    continue
+                print('Navigation: Opening the recognized Secret Shop menu.',flush=True)
+                self.tap(*target)
+                return self._wait_for_shop()
+            if not moved:
+                # Hover can restore a native client's idle UI without a click.
+                self.mouse.move(960,540)
+                moved = True
+                time.sleep(.5)
+                continue
+            if not revealed and hidden_home_matches(frame):
+                fresh = self.takeScreenshot()
+                if hidden_home_matches(fresh):
+                    print('Navigation: Revealing the recognized home screen controls.',flush=True)
+                    self.tap(960,540)
+                    revealed = True
+                    time.sleep(.5)
+                    continue
+            print('Navigation: Looking for the home Secret Shop menu. No shop action sent.',flush=True)
+            time.sleep(.5)
+        if not self.loop_active:
+            return False
+        raise MouseStopped('The home Secret Shop menu could not be recognized. Start from the English home screen or an already open Secret Shop.')
+
+    def _wait_for_shop(self):
+        deadline = time.monotonic()+8
+        while self.loop_active and time.monotonic()<deadline:
+            time.sleep(.25)
+            if not self.loop_active:
+                return False
+            if self.navigation.shop_visible(self.takeScreenshot()):
+                print('Navigation: Secret Shop screen verified.',flush=True)
+                return True
+        if not self.loop_active:
+            return False
+        raise MouseStopped('The Secret Shop did not open after selecting its menu. No refresh or purchase sent.')
 
     def findItemPosition(self,frame,template):
         region = frame[110:1080,760:1030]
@@ -184,12 +272,12 @@ def run_mouse_session(arguments):
         app.start()
         return 0
     except MouseStopped as error:
-        print(f'Shop refresh terminated! {error}',flush=True)
+        print('E7GUI_MOUSE_STOPPED '+json.dumps({'reason':str(error)}),flush=True)
         if app is not None:
             app.reportLiveStats()
             app.storage.writeToCSV(time.time()-started,app.refresh_count*3)
             app.printResult()
         return 0
     except (ValueError,RuntimeError,OSError,subprocess.SubprocessError) as error:
-        print(f'Error: Mouse session stopped. {error}',flush=True)
+        print('E7GUI_MOUSE_STOPPED '+json.dumps({'reason':f'Mouse session stopped. {error}'}),flush=True)
         return 3

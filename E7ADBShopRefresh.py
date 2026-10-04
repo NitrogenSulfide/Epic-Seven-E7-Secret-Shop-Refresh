@@ -462,6 +462,21 @@ def run_refresh_engine(**settings):
 
 
 if __name__ == '__main__':
+    if sys.argv[1:2] == ['--check-mouse-home']:
+        import argparse
+        from pathlib import Path
+        from e7_mouse_confirmation import read_ui_text
+        from e7_mouse_refresh import home_menu_target, hidden_home_matches
+        parser = argparse.ArgumentParser(description='Read a saved Mouse home frame offline; no input.')
+        parser.add_argument('--check-mouse-home',required=True)
+        parser.add_argument('--hidden-reference',type=Path)
+        args = parser.parse_args()
+        with Image.open(args.check_mouse_home) as image:
+            rgb = np.asarray(image.convert('RGB').resize((1920,1080),Image.Resampling.LANCZOS))
+        target = home_menu_target(read_ui_text(rgb,(0,180,420,920)))
+        hidden = args.hidden_reference is not None and hidden_home_matches(cv2.cvtColor(rgb,cv2.COLOR_RGB2GRAY),args.hidden_reference)
+        print(json.dumps(dict(read_only=True,state='home' if target else 'hidden-home' if hidden else 'unrecognized',target=target)))
+        sys.exit(0)
     if sys.argv[1:2] == ['--check-mouse-confirmation']:
         import argparse
         from e7_mouse_confirmation import read_confirmation_text, confirmation_matches
@@ -502,7 +517,7 @@ if __name__ == '__main__':
         print('Private Secret Shop references prepared and checked offline.')
         sys.exit(0)
     if sys.argv[1:] == ['--verify']:
-        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
+        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v2; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
         sys.exit(0)
     if sys.argv[1:2] == ['--check-navigation-frame']:
         import argparse

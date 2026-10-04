@@ -70,14 +70,22 @@ class WindowsCapture:
             raise OSError('Could not scan game windows.')
         return sorted(windows, key=lambda window: (window.title.lower(), window.pid, window.handle))
 
-    def unobstructed(self, target):
+    def point_visible(self, target, point):
+        return self.user.GetAncestor(self.user.WindowFromPoint(w.POINT(*point)), 2) == target.handle
+
+    def unobstructed(self, target, *, margin=None):
         u = self.user
+        self.visibility_problem = ''
         if u.GetAncestor(u.GetForegroundWindow(), 2) != target.handle:
+            self.visibility_problem = 'Epic Seven is no longer the foreground window.'
             return False
         left, top, right, bottom = target.rectangle
-        for x in (left+8, (left+right)//2, right-9):
-            for y in (top+8, (top+bottom)//2, bottom-9):
+        inset_x = 8 if margin is None else max(8,round((right-left)*margin))
+        inset_y = 8 if margin is None else max(8,round((bottom-top)*margin))
+        for x in (left+inset_x, (left+right)//2, right-inset_x-1):
+            for y in (top+inset_y, (top+bottom)//2, bottom-inset_y-1):
                 if u.GetAncestor(u.WindowFromPoint(w.POINT(x,y)), 2) != target.handle:
+                    self.visibility_problem = f'The game view is covered at client point {x-left}, {y-top}.'
                     return False
         return True
 
