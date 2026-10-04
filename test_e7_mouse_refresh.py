@@ -667,7 +667,8 @@ class NativeEngineTests(unittest.TestCase):
 
     def add_real_currencies(self,app):
         for filename,name,price in (('cov.png','Covenant bookmark',184000),('mys.png','Mystic medal',280000)):
-            template=adb_engine.cv2.imread(str(Path(adb_engine.__file__).parent/'adb-assets'/filename),0)
+            path=Path(adb_engine.__file__).parent/'adb-assets'/filename
+            template=adb_engine.cv2.imdecode(np.frombuffer(path.read_bytes(),dtype=np.uint8),adb_engine.cv2.IMREAD_GRAYSCALE)
             self.assertIsNotNone(template)
             app.storage.inventory[name]=adb_engine.E7Item(template,price)
 
