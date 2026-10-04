@@ -107,6 +107,10 @@ Leave the PC alone while it runs. Your Stop key and Stop Session remain availabl
 focus or coverage changes pause input for up to 10 seconds. Moving or resizing
 the game stops it. A prepared click is cancelled if focus changed before input.
 The game keeps its current size. Mouse requires normal settings; turn off Debug.
+If STOVE runs the game as administrator, right-click **E7 Secret Shop Refresh.exe**
+and choose **Run as administrator**, accepting the Windows prompt yourself.
+The app checks this permission mismatch before bringing the game forward.
+Normal game launches do not require an elevated refresh app.
 Start from the English home screen or an already open Secret Shop. Mouse mode
 locates the home Secret Shop label using templates and local Windows OCR. It first
 tries a hover to reveal idle controls. A locally saved known hidden-home image at
@@ -116,8 +120,9 @@ Unknown screens receive no guessed clicks.
 The app checks each confirmation before clicking it and stops on unexpected text
 or an insufficient-currency message. Keep English confirmation text readable.
 Live counters describe completed action sequences rather than balance readings.
-Native live actions have not yet passed an owner test. Begin with a supervised
-12-skystone trial, then check one refresh, Stop and the chosen Stop key.
+A supervised elevated check opened the native shop from home and completed one
+three-Skystone refresh without purchases. Native purchases and long runs remain
+unverified; begin with a small supervised budget and check Stop and your Stop key.
 Save Settings retains your control mode and other preferences. Reopening the app
 scans that mode without starting a session. ADB remains the fresh-install default.
 No ADB connection is made by a Mouse session.

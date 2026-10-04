@@ -467,6 +467,13 @@ class GuiTests(unittest.TestCase):
         activate.assert_not_called(); launch.assert_not_called()
         self.assertIn('matching rc31',self.app.connection_warning)
 
+    def test_permission_mismatch_is_explained_before_engine_launch(self):
+        self.choose_mouse_fixture();self.app.control_mode.set('Mouse');self.app._change_control_mode()
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='native mouse v3')),patch.object(gui,'activate_native_target',side_effect=ValueError('Epic Seven is running as administrator. Reopen with Run as administrator.')),patch.object(gui,'launch_engine') as launch:
+            self.app.start_refresh()
+        launch.assert_not_called()
+        self.assertIn('Run as administrator',self.app.connection_warning)
+
     def test_native_focus_failure_stays_visible_and_is_saved_without_stop_key_claim(self):
         target=self.choose_mouse_fixture()
         self.app.control_mode.set('Mouse');self.app._change_control_mode()

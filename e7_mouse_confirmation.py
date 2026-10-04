@@ -50,7 +50,11 @@ def confirmation_matches(text,operation,item_name=None):
     if 'cancel' not in text or not any(word in text for word in ('confirm','purchase','buy','refresh')):
         return False
     if operation == 'refresh':
-        return 'refresh' in text and 'skystone' in text and bool(re.search(r'\b3\b',text))
+        native_prompt=bool(re.search(r'\buse\s+skystone\s+to\s+refresh\??',text))
+        # STOVE's dialog omits the amount; its exact operation prompt confirms
+        # the game's fixed three-skystone Refresh. Reject contradictory numbers.
+        numbers=re.findall(r'\b\d+\b',text)
+        return 'refresh' in text and 'skystone' in text and (bool(re.search(r'\b3\b',text)) or (native_prompt and not numbers))
     if operation != 'buy' or item_name not in ('Covenant bookmark','Mystic medal'):
         return False
     item,price = ('covenant','184000') if item_name == 'Covenant bookmark' else ('mystic','280000')

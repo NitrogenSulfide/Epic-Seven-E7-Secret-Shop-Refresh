@@ -473,7 +473,7 @@ if __name__ == '__main__':
         args = parser.parse_args()
         with Image.open(args.check_mouse_home) as image:
             rgb = np.asarray(image.convert('RGB').resize((1920,1080),Image.Resampling.LANCZOS))
-        target = home_menu_target(read_ui_text(rgb,(0,180,420,920)))
+        target = home_menu_target(read_ui_text(rgb,(0,180,420,920)),rgb)
         hidden = args.hidden_reference is not None and hidden_home_matches(cv2.cvtColor(rgb,cv2.COLOR_RGB2GRAY),args.hidden_reference)
         print(json.dumps(dict(read_only=True,state='home' if target else 'hidden-home' if hidden else 'unrecognized',target=target)))
         sys.exit(0)

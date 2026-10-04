@@ -41,6 +41,35 @@ def process_name(pid):
         api.CloseHandle(handle)
 
 
+def process_is_elevated(pid=None, *, kernel=None, security=None):
+    kernel = kernel or ctypes.WinDLL('kernel32',use_last_error=True)
+    security = security or ctypes.WinDLL('advapi32',use_last_error=True)
+    kernel.GetCurrentProcess.restype = w.HANDLE
+    kernel.OpenProcess.argtypes = [w.DWORD,w.BOOL,w.DWORD]; kernel.OpenProcess.restype = w.HANDLE
+    kernel.CloseHandle.argtypes = [w.HANDLE]
+    security.OpenProcessToken.argtypes = [w.HANDLE,w.DWORD,ctypes.POINTER(w.HANDLE)]
+    security.OpenProcessToken.restype = w.BOOL
+    security.GetTokenInformation.argtypes = [w.HANDLE,ctypes.c_int,w.LPVOID,w.DWORD,ctypes.POINTER(w.DWORD)]
+    security.GetTokenInformation.restype = w.BOOL
+    process = kernel.GetCurrentProcess() if pid is None else kernel.OpenProcess(0x1000,False,pid)
+    token = w.HANDLE()
+    try:
+        elevated,size = w.DWORD(),w.DWORD()
+        if not process or not security.OpenProcessToken(process,8,ctypes.byref(token)) or not security.GetTokenInformation(token,20,ctypes.byref(elevated),4,ctypes.byref(size)):
+            raise ValueError('Could not verify game/app administrator permissions. No Mouse input sent.')
+        return bool(elevated.value)
+    finally:
+        if token:
+            kernel.CloseHandle(token)
+        if pid is not None and process:
+            kernel.CloseHandle(process)
+
+
+def require_mouse_permissions(target):
+    if process_is_elevated(target.pid) and not process_is_elevated():
+        raise ValueError('Epic Seven is running as administrator. Close this app and reopen it with Run as administrator, then press Start. Windows blocks normal apps from controlling an elevated game. No Mouse input sent.')
+
+
 def verify_native_target(target, *, backend=None, lookup=process_name):
     backend = backend or WindowsCapture()
     current = backend.inspect(target.handle)
@@ -54,6 +83,7 @@ def verify_native_target(target, *, backend=None, lookup=process_name):
 def activate_native_target(target):
     backend = WindowsCapture()
     current = verify_native_target(target,backend=backend)
+    require_mouse_permissions(current)
     backend.user.SetForegroundWindow.argtypes = [w.HWND]
     backend.user.SetForegroundWindow.restype = w.BOOL
     # Start is the user's authorization to bring this selected game forward.
@@ -89,6 +119,7 @@ class WindowsMouse:
         if ImageGrab is None and grabber is None:
             raise ValueError('Mouse mode needs Pillow. Use the bundled player EXE.')
         if backend is None:
+            require_mouse_permissions(target)
             # This owned engine thread uses physical pixels across monitor scales.
             # Pillow capture and Win32 input must use the same coordinate space.
             physical_pixel_coordinates()

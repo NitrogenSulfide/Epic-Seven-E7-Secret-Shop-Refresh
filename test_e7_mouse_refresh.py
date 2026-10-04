@@ -11,8 +11,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 import E7ADBShopRefresh as adb_engine
 from e7_windows_capture import GameWindow
-from e7_native_mouse import WindowsMouse, MouseStopped, Input, verify_native_target, physical_pixel_coordinates
-from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons, home_menu_target, hidden_home_matches
+from e7_native_mouse import WindowsMouse, MouseStopped, Input, verify_native_target, physical_pixel_coordinates, process_is_elevated, require_mouse_permissions
+from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons, home_menu_target, home_icon_target, hidden_home_matches
 from e7_mouse_confirmation import confirmation_matches
 
 
@@ -99,6 +99,33 @@ class TransportTests(unittest.TestCase):
         self.backend.inspect.return_value = GameWindow(123,999,'Epic Seven',self.target.rectangle)
         with self.assertRaisesRegex(ValueError,'changed'):
             verify_native_target(self.target,backend=self.backend,lookup=lambda _:'EpicSeven.exe')
+
+    def test_elevated_game_requires_matching_app_permissions_before_input(self):
+        with patch('e7_native_mouse.process_is_elevated',side_effect=[True,False]),self.assertRaisesRegex(ValueError,'Run as administrator'):
+            require_mouse_permissions(self.target)
+        with patch('e7_native_mouse.process_is_elevated',side_effect=[True,True]):
+            require_mouse_permissions(self.target)
+        with patch('e7_native_mouse.process_is_elevated',return_value=False) as check:
+            require_mouse_permissions(self.target)
+            check.assert_called_once_with(self.target.pid)
+        self.sender.assert_not_called()
+
+    def test_permission_token_handles_close_on_success_and_failure(self):
+        kernel,security=Mock(),Mock();kernel.OpenProcess.return_value=789
+        def open_token(process,access,token):
+            token._obj.value=321
+            return True
+        def information(token,kind,flag,size,result):
+            flag._obj.value=1
+            return True
+        security.OpenProcessToken.side_effect=open_token
+        security.GetTokenInformation.side_effect=information
+        self.assertTrue(process_is_elevated(456,kernel=kernel,security=security))
+        self.assertEqual(kernel.CloseHandle.call_count,2)
+        kernel.reset_mock();security.GetTokenInformation.side_effect=None;security.GetTokenInformation.return_value=False
+        with self.assertRaisesRegex(ValueError,'Could not verify'):
+            process_is_elevated(456,kernel=kernel,security=security)
+        self.assertEqual(kernel.CloseHandle.call_count,2)
 
     def prepare_input_api(self):
         self.mouse.screenshot()
@@ -231,6 +258,10 @@ class TransportTests(unittest.TestCase):
 
 
 class NativeEngineTests(unittest.TestCase):
+    def setUp(self):
+        self.ocr_patch=patch('e7_mouse_refresh.read_ui_text',return_value=dict(text='',words=[]))
+        self.ui_ocr=self.ocr_patch.start();self.addCleanup(self.ocr_patch.stop)
+
     def make_engine(self):
         app = E7MouseShopRefresh.__new__(E7MouseShopRefresh)
         app.loop_active,app.end_of_refresh = True,False
@@ -278,10 +309,17 @@ class NativeEngineTests(unittest.TestCase):
         app.navigation.shop_visible.side_effect=[False,True]
         app.navigation.menu_target.return_value=None
         app.read_navigation_text.return_value=dict(text='Sanctuary Secret Shop',words=[dict(text='secret',box=[20,620,100,650]),dict(text='shop',box=[110,620,175,650])])
+        frame=shop();frame[561:590,75:95]=230;frame[565:600,105:125]=230
+        app.mouse.screenshot.return_value=Image.fromarray(frame)
         with patch('e7_mouse_refresh.time.sleep'),patch.object(adb_engine.subprocess,'run') as adb:
             self.assertTrue(app.clickShop())
-        app.mouse.click.assert_called_once_with(97.5,635)
+        app.mouse.click.assert_called_once_with(100,580.5)
         adb.assert_not_called(); self.assertEqual(app.refresh_count,0)
+
+    def test_native_home_click_targets_observed_icon_and_rejects_missing_icon(self):
+        frame=shop();frame[475:510,51:73]=230;frame[480:523,79:108]=230
+        self.assertEqual(home_icon_target(frame,(79.5,549)),(79.5,499))
+        self.assertIsNone(home_icon_target(shop(),(79.5,549)))
 
     def test_hidden_known_home_is_revealed_once_then_menu_selected(self):
         app=self.make_engine()
@@ -325,6 +363,13 @@ class NativeEngineTests(unittest.TestCase):
         self.assertIsNone(confirmation_button(dialog(centered=True),'refresh',shop()))
         self.assertIsNotNone(confirmation_button(dialog(),'refresh',shop()))
         self.assertIsNotNone(confirmation_button(dialog('buy'),'buy',shop()))
+
+    def test_native_blue_confirm_uses_observed_label_and_paired_cancel(self):
+        frame=dialog();frame[650:740,1040:1290]=(30,60,120)
+        self.ui_ocr.return_value=dict(text='Use Skystone to refresh? Cancel Confirm',words=[dict(text='cancel',box=[768,677,852,704]),dict(text='confirm',box=[1063,676,1161,704])])
+        self.assertEqual(confirmation_button(frame,'refresh',shop()),(1063,676,1161,704))
+        self.ui_ocr.return_value['words'].pop(0)
+        self.assertIsNone(confirmation_button(frame,'refresh',shop()))
 
     def test_refresh_uses_recognized_label_then_observed_confirmation(self):
         app = self.make_engine()
@@ -464,6 +509,9 @@ class NativeEngineTests(unittest.TestCase):
     def test_confirmation_text_requires_matching_item_price_and_currency(self):
         self.assertTrue(confirmation_matches('Cancel Confirm Refresh 3 Skystone','refresh'))
         self.assertFalse(confirmation_matches('Cancel Confirm Refresh 30 Skystone','refresh'))
+        self.assertTrue(confirmation_matches('Use Skystone to refresh? Cancel Confirm','refresh'))
+        self.assertFalse(confirmation_matches('Use Skystone to refresh? 30 Cancel Confirm','refresh'))
+        self.assertFalse(confirmation_matches('Use Skystone to refresh? Not enough Skystone Cancel Confirm','refresh'))
         self.assertTrue(confirmation_matches('Cancel Confirm Covenant Bookmark 184,000','buy','Covenant bookmark'))
         self.assertFalse(confirmation_matches('Cancel Confirm Mystic Medal 184,000','buy','Covenant bookmark'))
         self.assertFalse(confirmation_matches('Cancel Confirm Covenant Bookmark 280,000','buy','Covenant bookmark'))
