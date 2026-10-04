@@ -20,7 +20,8 @@ from tkinter import font as tkfont, messagebox, ttk
 from e7_process import launch_engine
 from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon
 from e7_about import AboutDialog
-from e7_setup import missing_references, has_builtin_references, RecognitionSetup
+from e7_setup import missing_references, has_builtin_references, RecognitionSetup, verify_setup_engine
+from e7_native_mouse import activate_native_target
 from e7_connection import check_connection, ConnectionCheck
 from e7_window_preview import WindowsCapture, capture_selected, analyze_capture, MousePreviewDialog, wait_for_window
 
@@ -275,7 +276,10 @@ class RefreshGui(tk.Tk):
         self._fit_initial_window()
         self.bind('<Map>', self._schedule_native_icon, add='+')
         self._schedule_native_icon()
-        self.refresh_devices()
+        if self.control_mode.get() == 'ADB':
+            self.refresh_devices()
+        else:
+            self._change_control_mode()
         self.refresh_history()
         self.protocol("WM_DELETE_WINDOW", self._close)
         self.after(100, self._drain_log_queue)
@@ -473,7 +477,9 @@ class RefreshGui(tk.Tk):
                     'Hidden UI? Click the game once before Start.')
         if not self.adb_hint_dismissed.get() and not waiting:
             reminder = 'Use an emulator with ADB enabled.'
-        if self.control_mode.get() != 'ADB':
+        if self.control_mode.get() == 'Mouse':
+            reminder = 'Mouse mode uses your pointer · leave the PC alone while running. Your Stop key stays active.'
+        elif self.control_mode.get() != 'ADB':
             reminder = ('Click the selected game now. Waiting up to 20 seconds · no clicks or spending.'
                         if self.status.get() == 'Waiting for game window' else
                         'Mouse preview only · no clicks or spending.')
@@ -713,7 +719,7 @@ class RefreshGui(tk.Tk):
         mode_panel.columnconfigure(0,weight=1)
         ttk.Label(mode_panel,text='Control mode').grid(row=0,column=0,sticky='w')
         self.mode_box = ttk.Combobox(mode_panel,textvariable=self.control_mode,
-            values=('ADB','Mouse (preview)'),state='readonly',font=self.ui_font)
+            values=('ADB','Mouse','Mouse (preview)'),state='readonly',font=self.ui_font)
         self.mode_box.grid(row=1,column=0,sticky='ew',pady=(dp(4),0))
         self.mode_box.bind('<<ComboboxSelected>>',self._change_control_mode)
         self.settings_widgets.append(self.mode_box)
@@ -868,6 +874,8 @@ class RefreshGui(tk.Tk):
             self.credits_on_startup.set(parser.getboolean("GUI", "show_credits_on_startup", fallback=False))
             self.adb_hint_dismissed.set(parser.getboolean("GUI", "adb_hint_dismissed", fallback=False))
             self.device.set(parser.get("GUI", "device", fallback=self.device.get()))
+            mode = parser.get('GUI','control_mode',fallback='ADB')
+            self.control_mode.set(mode if mode in ('ADB','Mouse','Mouse (preview)') else 'ADB')
         except (OSError, ValueError, configparser.Error) as exc:
             self.setting_notice.set(f"Sound preference could not be read: {exc}")
 
@@ -884,6 +892,7 @@ class RefreshGui(tk.Tk):
         parser["GUI"]["show_credits_on_startup"] = str(self.credits_on_startup.get())
         parser["GUI"]["adb_hint_dismissed"] = str(self.adb_hint_dismissed.get())
         parser["GUI"]["device"] = self._device_address()
+        parser['GUI']['control_mode'] = self.control_mode.get()
         temp = GUI_CONFIG_FILE.with_suffix(".ini.tmp")
         with temp.open("w", encoding="utf-8") as fh:
             parser.write(fh)
@@ -913,9 +922,10 @@ class RefreshGui(tk.Tk):
         return "break"
 
     def _settings(self):
-        if len(self.connected_devices) > 1 and not self.device.get().strip():
+        if self.control_mode.get() == 'ADB' and len(self.connected_devices) > 1 and not self.device.get().strip():
             raise ValueError("Choose the emulator you want to use from the device list.")
-        return validate_settings(self._device_address(), self.budget.get(), self.tap_sleep.get(), self.stop_key.get(), self.random_offset.get(), self.debug_mode.get())
+        device = self._device_address() or ('native-mouse' if self.control_mode.get() != 'ADB' else '')
+        return validate_settings(device, self.budget.get(), self.tap_sleep.get(), self.stop_key.get(), self.random_offset.get(), self.debug_mode.get())
 
     def _device_address(self):
         value = self.device.get().strip()
@@ -1003,12 +1013,13 @@ class RefreshGui(tk.Tk):
                                   values=list(self.mouse_windows) if mouse else list(self.device_labels),
                                   state='readonly' if mouse else 'normal')
         self.target_label.configure(text='Game window' if mouse else 'Emulator / ADB device')
-        self.start_button.configure(text='Preview targets' if mouse else 'Start Refresh', state=tk.NORMAL)
+        self.start_button.configure(text='Preview targets' if self.control_mode.get() == 'Mouse (preview)' else 'Start Refresh', state=tk.NORMAL)
         self._set_connection_warning('')
         self.home_ui_hint_dismissed = False
         self.home_ui_banner.grid()
-        self.status.set('Mouse preview' if mouse else 'Ready')
-        self.detail.set('Open Secret Shop, press Preview targets, then switch to the selected game.' if mouse else
+        self.status.set('Mouse preview' if self.control_mode.get() == 'Mouse (preview)' else 'Ready')
+        self.detail.set('Press Start Refresh to bring the selected STOVE game forward and automate the shop.' if self.control_mode.get() == 'Mouse' else
+                        'Open Secret Shop, press Preview targets, then switch to the selected game.' if mouse else
                         'Open Epic Seven’s Secret Shop, then start a session.')
         if mouse:
             self._update_mouse_selection()
@@ -1025,9 +1036,10 @@ class RefreshGui(tk.Tk):
         target = self.mouse_windows.get(self.mouse_target.get())
         if target is not None:
             left, top, right, bottom = target.rectangle
-            self.device_notice.set(f'Selected: {target.title} · {right-left} × {bottom-top}\n'
-                                   'Open Secret Shop, then press Preview targets.\n'
-                                   'Switch to the game when the countdown starts.')
+            next_step = ('Press Start Refresh to open the shop and run.\nMouse mode uses your actual pointer.'
+                         if self.control_mode.get() == 'Mouse' else
+                         'Open Secret Shop, then press Preview targets.\nSwitch to the game when the countdown starts.')
+            self.device_notice.set(f'Selected: {target.title} · {right-left} × {bottom-top}\n'+next_step)
         elif self.mouse_windows:
             self.device_notice.set('Several game windows found. Choose the one to preview above.')
         else:
@@ -1202,7 +1214,10 @@ class RefreshGui(tk.Tk):
         self._show_recognition_setup()
 
     def start_refresh(self):
-        if self.control_mode.get() != 'ADB':
+        if self.control_mode.get() == 'Mouse':
+            self._start_mouse_refresh()
+            return
+        if self.control_mode.get() == 'Mouse (preview)':
             self._start_mouse_preview()
             return
         if self._checking_connection or (self.process and self.process.poll() is None):
@@ -1220,7 +1235,35 @@ class RefreshGui(tk.Tk):
             return
         self._start_connection_check(settings)
 
-    def _begin_refresh(self, settings):
+    def _start_mouse_refresh(self):
+        if self._mouse_preview_busy or self._checking_connection or (self.process and self.process.poll() is None):
+            return
+        if self.preview_window is not None and self.preview_window.winfo_exists():
+            self.preview_window.lift()
+            return
+        if self.setup_window is not None and self.setup_window.winfo_exists():
+            self.setup_window.lift()
+            return
+        target = self.mouse_windows.get(self.mouse_target.get())
+        try:
+            settings = self._settings()
+            if settings.debug:
+                raise ValueError('Turn off Debug / calibration for Mouse mode. ADB calibration remains available.')
+            if target is None:
+                raise ValueError('Select the native STOVE Epic Seven window first.')
+            verify_setup_engine(ENGINE_EXE)
+            check = subprocess.run([str(ENGINE_EXE),'--verify'],cwd=APP_DIR,capture_output=True,text=True,
+                                   timeout=15,creationflags=NO_WINDOW)
+            if check.returncode or 'native mouse v1' not in check.stdout:
+                raise ValueError('Real Mouse mode needs the matching rc29 or newer engine. Use the complete new player folder.')
+            target = activate_native_target(target)
+        except (ValueError,OSError,RuntimeError,subprocess.SubprocessError) as error:
+            self._set_connection_warning(str(error),reveal=True)
+            return
+        self._set_connection_warning('')
+        self._begin_refresh(settings,mouse_target=target)
+
+    def _begin_refresh(self, settings, *, mouse_target=None):
         if settings.debug:
             message = "Debug uses a fixed 100-skystone test budget, the Esc stop key, and randomized offsets. It includes Friendship Points when detected, and pauses BEFORE each click. Check each image, then press a key other than Esc in that image to continue. Buy and confirmation each have a pause. Continue?"
             if not messagebox.askyesno("Start calibration?", message, parent=self):
@@ -1252,13 +1295,20 @@ class RefreshGui(tk.Tk):
         for var in (self.spent, self.covenant, self.mystic, self.friendship):
             var.set("—")
         self.progress.configure(value=0)
-        self.progress_text.set("Connecting and preparing the engine…")
+        self.progress_text.set('Preparing Mouse input…' if mouse_target else "Connecting and preparing the engine…")
         self.status.set("Starting")
-        self.detail.set("Preparing your session. Open the Secret Shop at 1920 × 1080.")
+        self.detail.set('Mouse session is starting. Leave the game in front and the pointer alone.' if mouse_target else
+                        "Preparing your session. Open the Secret Shop at 1920 × 1080.")
         self._set_controls(True)
-        self._event(f"Starting on {settings.device} · budget {settings.budget:,.0f} skystone.")
+        self._event(f"Starting on {mouse_target.title if mouse_target else settings.device} · budget {settings.budget:,.0f} skystone.")
+        arguments = [str(ENGINE_EXE)]
+        if mouse_target is not None:
+            arguments += ['--mouse-session',json.dumps(dict(handle=mouse_target.handle,pid=mouse_target.pid,
+                          title=mouse_target.title,rectangle=mouse_target.rectangle)),
+                          '--budget',str(settings.budget),'--delay',str(settings.tap_sleep),
+                          '--stop-key',settings.stop_key,'--random-offset','yes' if settings.random_offset else 'no']
         try:
-            process, self.process_tree = launch_engine([str(ENGINE_EXE)], cwd=APP_DIR, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1, creationflags=NO_WINDOW)
+            process, self.process_tree = launch_engine(arguments, cwd=APP_DIR, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1, creationflags=NO_WINDOW)
         except OSError as exc:
             self.status.set("Failed")
             self.detail.set("The engine could not start. Check Diagnostics.")
@@ -1328,6 +1378,9 @@ class RefreshGui(tk.Tk):
 
     def _handle_line(self, line):
         if not line:
+            return
+        if line == 'E7GUI_STARTED':
+            self._engine_started()
             return
         if line.startswith('E7GUI_SETUP_REQUIRED '):
             if not self.stopping and not self.stop_key_pressed:
