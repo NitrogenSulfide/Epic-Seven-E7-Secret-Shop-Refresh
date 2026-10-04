@@ -21,10 +21,20 @@ black-bar crop); normalized recognition points map back to desktop coordinates.
 The native preflight checks process elevation: a normal app cannot control an
 elevated game. It stops with a Run as administrator instruction before activation.
 Mouse mode brings the game forward once after Start, does not resize it, uses
-verified cursor movement, an 80 ms button hold and wheel scrolling. rc32 adds
+verified cursor movement and an 80 ms click hold. rc32 adds
 an eased pointer glide lasting 0.12–0.38 seconds according to travel distance,
 scaled to the displayed game size. Stop and visibility are checked at each step;
-the configured tap delay still applies separately. Native capture samples the client
+the configured tap delay still applies separately. rc33 replaces wheel scrolling
+with an eased upward drag along the original ADB swipe's vertical distance.
+Randomization translates the swipe by at most ±12 horizontal / ±6 vertical
+normalized pixels, adds at most ±3 horizontal endpoint pixels, and varies the
+drag time from 0.28 to 0.36 seconds. With randomization off it uses a fixed
+0.32-second drag. A held drag releases immediately on Stop, focus/coverage loss,
+geometry change or input failure, with no focus-resumption wait while held.
+Drag endpoint delivery is checked before release; it never uses a placement
+fallback while held. Parent cleanup also releases after forced termination.
+Native drag scrolling has fake-input verification and still needs a live check.
+Native capture samples the client
 interior; each action checks its exact destination. Focus/coverage changes pause
 input for up to 10 seconds; resumed capture discards stale frames and renews recognition timeouts. Changed geometry or a stale prepared click stops it.
 Item detection is restricted to the shop icon column; Buy and confirmation clicks

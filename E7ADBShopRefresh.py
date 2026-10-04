@@ -183,7 +183,7 @@ class E7ADBShopRefresh:
             if self.debug:
                 self.showOffsetArea(x1, y1, "Please check if red rectangle is in a scrollable area", "start scroll area")    
 
-            xoff, yoff = self.generateOffset()
+            xoff, yoff = self.generateSwipeOffset()
             self.swipe(x1+xoff,y1+yoff,x1+xoff,y2+yoff)
             #wait for action to complete
             time.sleep(1)
@@ -294,6 +294,9 @@ class E7ADBShopRefresh:
         print('check image - find it in taskbar')
         cv2.waitKey(0)
         cv2.destroyAllWindows()
+
+    def generateSwipeOffset(self):
+        return self.generateOffset()
 
     def generateOffset(self):
         if self.random_offset:

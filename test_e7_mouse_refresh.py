@@ -83,8 +83,8 @@ class TransportTests(unittest.TestCase):
 
     def test_stop_key_state_stops_click_and_scroll(self):
         self.mouse.screenshot(); self.active = False
-        for action in (self.mouse.click,self.mouse.scroll):
-            with self.assertRaises(MouseStopped): action(960,540)
+        for action in (lambda:self.mouse.click(960,540),lambda:self.mouse.drag(1200,800,1200,390)):
+            with self.assertRaises(MouseStopped): action()
         self.sender.assert_not_called()
 
     def test_changed_pid_title_or_geometry_stops(self):
@@ -261,9 +261,81 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(self.mouse.grabber.call_count,2)
         self.sender.assert_not_called()
 
-    def test_scroll_sends_wheel_without_held_button(self):
-        self.mouse.screenshot(); self.mouse.scroll(1200,800)
-        self.assertEqual(self.sender.call_args.args[1:],('wheel',-1200))
+    def test_drag_maps_both_endpoints_on_negative_monitor(self):
+        self.mouse.screenshot();self.mouse.drag(1200,800,1202,390,duration=.3)
+        self.sender.assert_called_once_with(self.mouse._point(1200,800),'drag',(self.mouse._point(1202,390),.3))
+
+    def test_invalid_drag_endpoint_duration_or_covered_destination_sends_nothing(self):
+        self.mouse.screenshot()
+        for args,delay in (((1200,800,1200,-1),.3),((1200,800,1200,390),0),((1200,800,1200,390),float('nan'))):
+            with self.assertRaises(MouseStopped):self.mouse.drag(*args,duration=delay)
+        self.backend.point_visible.return_value=False
+        with patch('e7_native_mouse.time.monotonic',side_effect=[0,11]),patch('e7_native_mouse.time.sleep'):
+            with self.assertRaises(MouseStopped):self.mouse.drag(1200,800,1200,390)
+        self.sender.assert_not_called()
+
+    def drag_api(self):
+        api=self.prepare_input_api()
+        state=dict(pointer=(-1920,1030),held=False,moves=[],flags=[])
+        def position(pointer):
+            pointer._obj.x,pointer._obj.y=state['pointer']
+            return True
+        def send(count,event,size):
+            value=event._obj.value.mouse
+            state['flags'].append(value.flags)
+            if value.flags==2:state['held']=True
+            elif value.flags==4:state['held']=False
+            else:
+                state['pointer']=(round(-3840+value.dx*7679/65535),round(value.dy*2159/65535))
+                if state['held']:state['moves'].append(state['pointer'])
+            return 1
+        api.GetCursorPos.side_effect=position;api.SendInput.side_effect=send
+        return api,state,send
+
+    def test_drag_holds_during_eased_travel_then_releases_without_wheel(self):
+        api,state,_=self.drag_api()
+        with patch('e7_native_mouse.time.sleep'):
+            self.mouse._send((-1920,1030),'drag',((-1914,400),.32))
+        self.assertEqual(state['flags'].count(2),1)
+        self.assertEqual(state['flags'].count(4),1)
+        self.assertEqual(state['flags'][-1],4)
+        self.assertNotIn(0x800,state['flags'])
+        self.assertFalse(state['held'])
+        self.assertGreater(len(state['moves']),10)
+        self.assertLessEqual(max(abs(a-b) for a,b in zip(state['moves'][-1],(-1914,400))),1)
+        self.assertTrue(all(a[1]>=b[1] for a,b in zip(state['moves'],state['moves'][1:])))
+        api.SetCursorPos.assert_not_called()
+
+    def test_drag_stop_focus_geometry_or_input_failure_releases_immediately(self):
+        for failure in ('stop','focus','geometry','rejected','exception'):
+            with self.subTest(failure=failure):
+                self.active=True;self.backend.inspect.return_value=self.target;self.backend.unobstructed.return_value=True
+                api,state,send=self.drag_api()
+                def interrupted(count,event,size):
+                    accepted=send(count,event,size)
+                    if state['held'] and len(state['moves'])==3:
+                        if failure=='stop':self.active=False
+                        elif failure=='focus':self.backend.unobstructed.return_value=False
+                        elif failure=='geometry':self.backend.inspect.return_value=GameWindow(123,456,'Epic Seven',(0,0,3840,2019))
+                        elif failure=='rejected':return 0
+                        else:raise RuntimeError('interrupted')
+                    return accepted
+                api.SendInput.side_effect=interrupted
+                with patch('e7_native_mouse.time.sleep') as sleep,self.assertRaises((MouseStopped,RuntimeError)):
+                    self.mouse._send((-1920,1030),'drag',((-1914,400),.32))
+                self.assertEqual(state['flags'][-1],4)
+                self.assertFalse(state['held'])
+                self.assertEqual(len(state['moves']),3)
+                self.assertNotIn(.1,[call.args[0] for call in sleep.call_args_list])
+
+    def test_failed_drag_endpoint_verification_releases_without_teleport(self):
+        api,state,_=self.drag_api();position=api.GetCursorPos.side_effect
+        api.GetCursorPos.side_effect=lambda pointer:False if state['held'] else position(pointer)
+        with patch('e7_native_mouse.time.sleep'),self.assertRaisesRegex(MouseStopped,'endpoint'):
+            self.mouse._send((-1920,1030),'drag',((-1914,400),.32))
+        self.assertEqual(state['flags'][-1],4)
+        self.assertFalse(state['held'])
+        api.SetCursorPos.assert_not_called()
 
     def test_physical_pixel_context_failure_blocks_native_input(self):
         api = Mock(); api.SetThreadDpiAwarenessContext.return_value = None
@@ -322,6 +394,7 @@ class NativeEngineTests(unittest.TestCase):
         app = E7MouseShopRefresh.__new__(E7MouseShopRefresh)
         app.loop_active,app.end_of_refresh = True,False
         app.budget,app.tap_sleep,app.debug = 12,.3,False
+        app.random_offset=False
         app.screenwidth,app.screenheight = 1920,1080
         app.refresh_count = 0; app.stop_refresh_key = '`'
         app.generateOffset = lambda:(0,0)
@@ -560,10 +633,29 @@ class NativeEngineTests(unittest.TestCase):
         adb.assert_not_called()
         self.assertEqual(app.refresh_count,4)
         self.assertEqual(app.mouse.click.call_count,8)
-        self.assertEqual(app.mouse.scroll.call_count,5)
+        self.assertEqual(app.mouse.drag.call_count,5)
         stats = [json.loads(line.split(' ',1)[1]) for line in output.getvalue().splitlines() if line.startswith('E7GUI_STATS ')]
         self.assertEqual(stats[-1]['skystone_spent'],12)
         app.storage.writeToCSV.assert_called_once()
+
+    def test_native_swipe_preserves_vertical_coverage_with_small_variation(self):
+        app=self.make_engine();del app.generateOffset
+        app.x_offset,app.y_offset=75,25
+        for enabled in (False,True):
+            app.random_offset=enabled
+            with patch('E7ADBShopRefresh.random.randint',side_effect=[75,-25]),patch('e7_mouse_refresh.random.uniform',side_effect=[.36,-3]):
+                dx,dy=app.generateSwipeOffset()
+                app.swipe(1200+dx,808+dy,1200+dx,392+dy)
+            args=app.mouse.drag.call_args
+            self.assertEqual(args.args,(1212,802,1209,386) if enabled else (1200,808,1200,392))
+            self.assertEqual(args.kwargs,dict(duration=.36 if enabled else .32))
+            self.assertEqual(args.args[1]-args.args[3],416)
+
+    def test_adb_swipe_offsets_keep_the_existing_range(self):
+        app=adb_engine.E7ADBShopRefresh.__new__(adb_engine.E7ADBShopRefresh)
+        app.generateOffset=Mock(return_value=(75,-25))
+        self.assertEqual(app.generateSwipeOffset(),(75,-25))
+        app.generateOffset.assert_called_once()
 
     def test_insufficient_currency_or_wrong_confirmation_never_receives_second_click(self):
         for text in ('Not enough Skystone. Cancel Confirm Refresh 3 Skystone',

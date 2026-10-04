@@ -16,12 +16,12 @@ class MouseStopped(RuntimeError):
     pass
 
 
-def pointer_glide(start, end, scale=1):
+def pointer_glide(start, end, scale=1, *, duration=None):
     """Physical points with eased timing, scaled to the game's displayed size."""
     distance = math.dist(start,end)/max(scale,.1)
     if distance < 2:
         return [(end,0)]
-    duration = min(.38,max(.12,distance/3500))
+    duration = min(.38,max(.12,distance/3500)) if duration is None else duration
     steps = math.ceil(duration/.016)
     path = []
     for step in range(1,steps+1):
@@ -149,7 +149,7 @@ class WindowsMouse:
         self.session_active = False
         self.pause_revision = 0
 
-    def guard(self, *, action=False, point=None):
+    def guard(self, *, action=False, point=None, held=False):
         deadline = None
         while True:
             active = self.active()
@@ -169,6 +169,9 @@ class WindowsMouse:
                         raise MouseStopped('Focus or target visibility changed after preparing this click. No input sent; restart to recognize the current screen.')
                     print('E7GUI_MOUSE_RESUMED',flush=True)
                 return current
+            if held:
+                # Never wait for focus to return while holding a drag button.
+                raise MouseStopped('Game focus or drag visibility changed. Mouse session stopped.')
             reason = ('The selected game lost focus or its view is covered.' if not visible else
                       'The mouse target is covered by another window.')
             problem = getattr(self.backend,'visibility_problem','')
@@ -219,11 +222,13 @@ class WindowsMouse:
         self.guard(action=True,point=point)
         self.sender(point,'move',0)
 
-    def scroll(self,x,y):
-        point = self._point(x,y)
-        self.guard(action=True,point=point)
-        # A wheel event avoids leaving a held drag button if Stop kills the job.
-        self.sender(point,'wheel',-1200)
+    def drag(self,x1,y1,x2,y2, *, duration=.32):
+        start,end = self._point(x1,y1),self._point(x2,y2)
+        if not math.isfinite(duration) or not .2 <= duration <= .5:
+            raise MouseStopped('Invalid Mouse drag duration. No input sent.')
+        self.guard(action=True,point=start)
+        self.guard(action=True,point=end)
+        self.sender(start,'drag',(end,duration))
 
     def _send(self,point,kind,data):
         api = self.backend.user
@@ -235,24 +240,31 @@ class WindowsMouse:
         x,y = point
         if width < 2 or height < 2 or not (left <= x < left+width and top <= y < top+height):
             raise MouseStopped('Mouse target is outside the desktop. No input sent.')
+        if kind == 'drag':
+            end,duration = data
+            if not (left <= end[0] < left+width and top <= end[1] < top+height):
+                raise MouseStopped('Mouse drag ends outside the desktop. No input sent.')
+            self.guard(action=True,point=end)
         self.guard(action=True,point=point)
         cursor = w.POINT()
         if not api.GetCursorPos(ctypes.byref(cursor)):
             raise MouseStopped('Could not read the pointer position. No input sent.')
         scale = (self.view[2]-self.view[0])/1920 if self.view else 1
-        started = time.monotonic()
-        for destination,elapsed in pointer_glide((cursor.x,cursor.y),point,scale):
-            remaining = started+elapsed-time.monotonic()
-            if remaining > 0:
-                time.sleep(remaining)
-            # Check the final action target even while hovering toward it from
-            # outside the game. Stop/focus changes prevent any button-down.
-            self.guard(action=True,point=point)
-            px,py = destination
-            movement = Input(0,InputUnion(mouse=MouseInput(
-                round((px-left)*65535/(width-1)),round((py-top)*65535/(height-1)),0,0xC001,0,0)))
-            if api.SendInput(1,ctypes.byref(movement),ctypes.sizeof(Input)) != 1:
-                raise MouseStopped('Windows did not accept the pointer movement. No click sent.')
+        def travel(start,target, *, duration=None,held=False):
+            started = time.monotonic()
+            for destination,elapsed in pointer_glide(start,target,scale,duration=duration):
+                remaining = started+elapsed-time.monotonic()
+                if remaining > 0:
+                    time.sleep(remaining)
+                # Unheld approach can begin outside the game. A held drag
+                # checks every point and immediately cancels on lost focus.
+                self.guard(action=True,point=destination if held else target,held=held)
+                px,py = destination
+                movement = Input(0,InputUnion(mouse=MouseInput(
+                    round((px-left)*65535/(width-1)),round((py-top)*65535/(height-1)),0,0xC001,0,0)))
+                if api.SendInput(1,ctypes.byref(movement),ctypes.sizeof(Input)) != 1:
+                    raise MouseStopped('Windows did not accept the pointer movement. Session stopped.')
+        travel((cursor.x,cursor.y),point)
         # Verify delivery separately from acceptance: Windows can accept a batch
         # without the pointer reaching the intended game location.
         time.sleep(.05)
@@ -268,23 +280,27 @@ class WindowsMouse:
         print('E7GUI_MOUSE_INPUT '+json.dumps(dict(action=kind,target=list(point),pointer=[cursor.x,cursor.y])),flush=True)
         if kind == 'move':
             return
-        if kind == 'wheel':
-            event = Input(0,InputUnion(mouse=MouseInput(0,0,data & 0xffffffff,0x800,0,0)))
-            if api.SendInput(1,ctypes.byref(event),ctypes.sizeof(Input)) != 1:
-                raise MouseStopped('Windows did not accept the scroll. Session stopped.')
-            return
+        if kind == 'drag':
+            self.guard(action=True,point=end)
         down = Input(0,InputUnion(mouse=MouseInput(0,0,0,2,0,0)))
         up = Input(0,InputUnion(mouse=MouseInput(0,0,0,4,0,0)))
         try:
             if api.SendInput(1,ctypes.byref(down),ctypes.sizeof(Input)) != 1:
                 raise MouseStopped('Windows did not accept mouse-down. Session stopped.')
-            # Leave the button down across several game frames instead of sending
-            # both edges in one batch. Stop/focus changes still always release it.
-            time.sleep(.08)
+            if kind == 'drag':
+                time.sleep(.04)
+                travel(point,end,duration=duration,held=True)
+                time.sleep(.03)
+                self.guard(action=True,point=end,held=True)
+                if not api.GetCursorPos(ctypes.byref(cursor)) or max(abs(cursor.x-end[0]),abs(cursor.y-end[1])) > 3:
+                    raise MouseStopped('The drag did not reach its endpoint. Mouse session stopped.')
+            else:
+                # Hold a click across several game frames.
+                time.sleep(.08)
         finally:
             released = api.SendInput(1,ctypes.byref(up),ctypes.sizeof(Input)) == 1
             if not released:
                 released = api.SendInput(1,ctypes.byref(up),ctypes.sizeof(Input)) == 1
         if not released:
             raise MouseStopped('Windows did not accept mouse-up. Session stopped.')
-        self.guard(action=True,point=point)
+        self.guard(action=True,point=end if kind == 'drag' else point)

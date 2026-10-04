@@ -2,6 +2,7 @@
 import argparse
 import json
 import math
+import random
 import re
 from pathlib import Path
 import subprocess
@@ -142,7 +143,16 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
         self.mouse.click(x,y)
 
     def swipe(self,x1,y1,x2,y2):
-        self.mouse.scroll(x1,y1)
+        varied = self.random_offset
+        duration = random.uniform(.28,.36) if varied else .32
+        drift = random.uniform(-3,3) if varied else 0
+        # Preserve the original vertical travel so page-two scanning covers the
+        # same items. Only position, slight sideways drift and timing vary.
+        self.mouse.drag(x1,y1,x2+drift,y2,duration=duration)
+
+    def generateSwipeOffset(self):
+        dx,dy = self.generateOffset()
+        return max(-12,min(12,dx*.16)),max(-6,min(6,dy*.24))
 
     def clickShop(self):
         deadline = time.monotonic()+30
