@@ -322,7 +322,7 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
     def _confirm(self,operation,before):
         deadline = time.monotonic()+5
         while self.loop_active and time.monotonic()<deadline:
-            time.sleep(self.tap_sleep)
+            time.sleep(self.generateTapDelay())
             if not self.loop_active:
                 return False
             self.takeScreenshot()
@@ -354,7 +354,7 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
             raise MouseStopped(f'The {operation} confirmation was not recognized. No confirmation click sent.'+detail)
         deadline = time.monotonic()+5
         while self.loop_active and time.monotonic()<deadline:
-            time.sleep(self.tap_sleep)
+            time.sleep(self.generateTapDelay())
             if not self.loop_active:
                 return False
             frame = self.takeScreenshot()

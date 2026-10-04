@@ -129,6 +129,33 @@ prompt("press enter to exit...", "")
 
 
 class GuiTests(unittest.TestCase):
+    def test_randomization_labels_explain_recommendation_and_timing(self):
+        self.assertIn('(recommended)', self.app.random_check.cget('text'))
+        self.assertIn('(only in ADB mode)', self.app.debug_check.cget('text'))
+        self.assertIn('10%', self.app.tap_timing_hint.cget('text'))
+        self.assertIn('0.05', self.app.tap_timing_hint.cget('text'))
+
+    def test_mouse_disables_and_clears_debug_after_mode_change_and_session(self):
+        for mode in ('Mouse', 'Mouse (preview)'):
+            self.app.control_mode.set('ADB'); self.app._change_control_mode()
+            self.app.debug_check.invoke()
+            self.assertTrue(self.app.debug_mode.get())
+            self.app.control_mode.set(mode); self.app._change_control_mode()
+            self.assertFalse(self.app.debug_mode.get())
+            self.assertTrue(self.app.debug_check.instate(['disabled']))
+            self.app.debug_check.invoke()
+            self.assertFalse(self.app.debug_mode.get())
+            self.app._set_controls(True); self.app._set_controls(False)
+            self.assertTrue(self.app.debug_check.instate(['disabled']))
+        self.app.control_mode.set('ADB'); self.app._change_control_mode()
+        self.assertFalse(self.app.debug_check.instate(['disabled']))
+        self.app.debug_check.invoke()
+        self.assertTrue(self.app.debug_mode.get())
+        self.app._set_controls(True)
+        self.assertTrue(self.app.debug_check.instate(['disabled']))
+        self.app._set_controls(False)
+        self.assertFalse(self.app.debug_check.instate(['disabled']))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

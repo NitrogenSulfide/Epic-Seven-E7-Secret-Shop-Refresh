@@ -690,12 +690,14 @@ class RefreshGui(tk.Tk):
                 entry.bind("<KeyPress>", self._capture_stop_key)
             entry.grid(row=row+1, column=0, sticky="ew", pady=(dp(4), dp(8)))
             self.settings_widgets.append(entry)
-        random = ttk.Checkbutton(controls, text="Randomize tap offsets", variable=self.random_offset, style="Large.TCheckbutton")
-        random.grid(row=10, column=0, sticky="w")
-        debug = ttk.Checkbutton(controls, text="Debug / calibration mode", variable=self.debug_mode, style="Large.TCheckbutton")
-        debug.grid(row=11, column=0, sticky="w", pady=(6, 0))
-        self.settings_widgets.extend([random, debug])
-        ttk.Label(controls, text="Debug includes Friendship Points.\nPress a key (not Esc) in each image to continue.", style="Muted.TLabel", wraplength=dp(350)).grid(row=12, column=0, sticky="w", pady=(dp(4), dp(12)))
+        self.random_check = ttk.Checkbutton(controls, text="Randomize tap offsets (recommended)", variable=self.random_offset, style="Large.TCheckbutton")
+        self.random_check.grid(row=10, column=0, sticky="w")
+        self.tap_timing_hint = ttk.Label(controls, text="Also varies tap delay by up to 10%\n(max 0.05 seconds faster or slower).", style="Muted.TLabel", wraplength=dp(350))
+        self.tap_timing_hint.grid(row=11, column=0, sticky="w", pady=(dp(4), dp(6)))
+        self.debug_check = ttk.Checkbutton(controls, text="Debug / calibration mode\n(only in ADB mode)", variable=self.debug_mode, style="Large.TCheckbutton")
+        self.debug_check.grid(row=12, column=0, sticky="w")
+        self.settings_widgets.extend([self.random_check, self.debug_check])
+        ttk.Label(controls, text="Debug includes Friendship Points.\nPress a key (not Esc) in each image to continue.", style="Muted.TLabel", wraplength=dp(350)).grid(row=13, column=0, sticky="w", pady=(dp(4), dp(12)))
         self.start_button = ttk.Button(action_dock, text="Start Refresh", style="Accent.TButton", command=self.start_refresh)
         self.start_button.grid(row=0, column=0, sticky="ew", padx=(0, dp(4)))
         self.stop_button = ttk.Button(action_dock, text="Stop Session", command=self.stop_refresh, state=tk.DISABLED)
@@ -707,7 +709,7 @@ class RefreshGui(tk.Tk):
         self.sound_button.grid(row=2, column=0, columnspan=2, sticky="w", pady=(dp(6), 0))
         ttk.Label(action_dock, textvariable=self.setting_notice, style="Muted.TLabel", wraplength=dp(350)).grid(row=3, column=0, columnspan=2, sticky="w", pady=(dp(4), 0))
         estimate = ttk.LabelFrame(controls, text="Budget estimate", padding=dp(12))
-        estimate.grid(row=13, column=0, sticky="ew", pady=(dp(4), 0))
+        estimate.grid(row=14, column=0, sticky="ew", pady=(dp(4), 0))
         ttk.Label(estimate, textvariable=self.ev, wraplength=dp(320), justify=tk.LEFT).grid(sticky="w")
         ttk.Label(estimate, text="Statistical estimate; results vary.", style="Muted.TLabel", wraplength=dp(320)).grid(sticky="w", pady=(dp(8), 0))
         self.budget.trace_add("write", lambda *_: self._update_ev())
@@ -1012,6 +1014,7 @@ class RefreshGui(tk.Tk):
         self._connection_check_id += 1
         self._device_scan_busy = self._mouse_scan_busy = False
         mouse = self.control_mode.get() != 'ADB'
+        self._update_debug_availability()
         self.device_box.configure(textvariable=self.mouse_target if mouse else self.device,
                                   values=list(self.mouse_windows) if mouse else list(self.device_labels),
                                   state='readonly' if mouse else 'normal')
@@ -1612,9 +1615,16 @@ class RefreshGui(tk.Tk):
         self.refresh_history()
         self._offer_recognition_setup(self.run_id)
 
+    def _update_debug_availability(self, running=False):
+        mouse = self.control_mode.get() != 'ADB'
+        if mouse:
+            self.debug_mode.set(False)
+        self.debug_check.state(['disabled'] if running or mouse else ['!disabled'])
+
     def _set_controls(self, running):
         for widget in self.settings_widgets:
             widget.state(["disabled"] if running else ["!disabled"])
+        self._update_debug_availability(running)
         self.start_button.configure(state=tk.DISABLED if running else tk.NORMAL)
         self.stop_button.configure(state=tk.NORMAL if running else tk.DISABLED)
         if not running and self.control_mode.get() != 'ADB':

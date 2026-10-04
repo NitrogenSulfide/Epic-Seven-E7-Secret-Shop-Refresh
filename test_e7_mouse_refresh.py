@@ -589,6 +589,14 @@ class NativeEngineTests(unittest.TestCase):
             self.assertTrue(app.clickRefresh())
         self.assertEqual([call.args[0] for call in sleep.call_args_list],[.67,.67])
 
+    def test_mouse_confirmation_resamples_delay_for_each_tap(self):
+        app=self.make_engine();app.random_offset=True
+        app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (shop(),dialog(),dialog(),shop())]
+        with patch.object(adb_engine.random, 'uniform', side_effect=[-.03,.03]), patch('e7_mouse_refresh.time.sleep') as sleep:
+            self.assertTrue(app.clickRefresh())
+        self.assertEqual([round(call.args[0],2) for call in sleep.call_args_list],[.27,.33])
+        self.assertEqual(app.tap_sleep,.3)
+
     def test_missing_confirmation_stops_after_one_refresh_click(self):
         app = self.make_engine()
         with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,6]):

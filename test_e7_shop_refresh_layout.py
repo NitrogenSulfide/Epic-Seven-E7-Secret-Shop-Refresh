@@ -33,6 +33,9 @@ with tempfile.TemporaryDirectory() as temp:
             app.notebook.select(app.history_tab)
             settle(app)
         problems = []
+        for widget in (app.random_check, app.debug_check, app.tap_timing_hint):
+            if widget.winfo_reqwidth() > app.settings_controls.winfo_width():
+                problems.append('randomization/debug settings clipped')
         if app.device_button.winfo_width() < app.ui_font.measure('Scan') + app._dp(32):
             problems.append('Scan too narrow')
         device_gap = app.device_button.winfo_rootx() - (app.device_box.winfo_rootx() + app.device_box.winfo_width())
