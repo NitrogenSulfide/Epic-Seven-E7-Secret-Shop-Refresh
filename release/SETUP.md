@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc23.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc24.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,10 +14,13 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc23.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc24.zip'
 ```
 
 ## Emulator setup
+
+**ADB** remains the default mode for refreshing. **Mouse (preview)** is a separate
+experimental, read-only option described below; it cannot refresh or buy items.
 
 Use [Google Play Games on PC Developer Emulator](https://developer.android.com/games/playgames/emulator),
 English Epic Seven and a **1920 × 1080 Android display**. Native STOVE is unsupported;
@@ -92,6 +95,27 @@ If home controls fade, click the game once or open the shop. The app waits up to
 60 seconds without guessing a navigation tap; Stop remains available.
 Theme backgrounds and currency artwork are included in the EXE's image support;
 the sun/moon button switches between the supplied day/night artwork.
+
+## Mouse preview — experimental
+
+This checks capture and recognition before adding mouse controls for the regular
+Google Play Games or native STOVE client. Neither client has passed live Mouse
+mode testing yet. No ADB connection is needed for this preview.
+
+1. Open English Epic Seven, reveal its home controls or open Secret Shop manually.
+   Keep a 16:9 game view, at least 640 × 360 pixels, visible and unobstructed.
+2. Choose **Control mode → Mouse (preview)**, press **Scan** and select the game
+   window. Press **Preview targets**, then click the game during the three-second
+   countdown. Keep the window still until the capture finishes.
+3. Return to this app. Yellow markers show the recognized Secret Shop menu or
+   Refresh button; cyan boxes show detected Covenant/Mystic item icons in the
+   visible list. An unknown screen shows no guessed targets.
+
+The tool does not move the pointer, click, refresh, buy or install hooks in this
+mode. Stop cancels a pending countdown and ignores late preview results. Captures
+and reports stay private under `runtime/mouse-previews`; keep them out of shared
+ZIPs. A closed, covered, unfocused, moved or blank window fails with an explanation.
+The app opens in ADB mode each time; switching back preserves your ADB address.
 
 ## Updates and troubleshooting
 

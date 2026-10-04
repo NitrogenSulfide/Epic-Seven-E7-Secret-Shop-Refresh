@@ -20,6 +20,12 @@ Epic Seven and a **1920 × 1080** Android display. Other emulators are unverifie
 The original upstream source and Git history are preserved, alongside the GUI,
 launchers, tests, sounds and icon. The first public preview is **0.1.0-rc20**.
 
+The local **rc24** candidate adds **Control mode → Mouse (preview)** for checking
+capture and recognized targets in a selected Windows game window. It makes no
+mouse movements, clicks, refreshes or purchases; regular Google Play Games and
+STOVE compatibility remains unverified. ADB refreshing stays available as before.
+See [Mouse preview instructions](release/SETUP.md#mouse-preview--experimental).
+
 For a new user's beta setup, see [SETUP.md](release/SETUP.md). Players need only the combined player ZIP, with the GUI, matching engine,
 upstream ADB tools/item templates and a portable runtime configuration. A separate
 full source ZIP is available for developers; players do not need it. SHA-256s

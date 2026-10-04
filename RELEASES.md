@@ -12,7 +12,7 @@ Build only from a clean exact commit with an explicit private Python environment
 using engine-build-requirements.txt. Preserve earlier outputs:
 
 ```powershell
-.\.local-state\engine-build-venv\Scripts\python.exe -m unittest test_e7_connection test_e7_shop_refresh_gui.ProtocolTests test_e7_engine_location test_e7_live_engine test_e7_shop_navigation test_e7_setup -v
+.\.local-state\engine-build-venv\Scripts\python.exe -m unittest test_e7_window_preview test_e7_connection test_e7_shop_refresh_gui.ProtocolTests test_e7_engine_location test_e7_live_engine test_e7_shop_navigation test_e7_setup -v
 .\build_release_assets.ps1 -BuildPython .local-state\engine-build-venv\Scripts\python.exe -OutputDirectory C:\absolute\new\candidate-directory
 ```
 
@@ -30,7 +30,7 @@ Generate runtime/E7ADBShopRefresh.sha256 from the matching rebuilt binary.
 Omit historical CMD/PowerShell/C# launchers from the player ZIP; its only player
 entry point is the compiled GUI EXE. Preserve those files in source history.
 
-Exclude personal INIs, devices, logs/history, setup-captures, gui-navigation,
+Exclude personal INIs, devices, logs/history, setup-captures, mouse-previews, gui-navigation,
 private images/evidence, .git, .local-state, scratch, virtual environments and
 caches. Keep GPL, upstream authorship, asset provenance, ADB notices and bundled
 Python/Pillow/PyInstaller/Tcl/Tk dependency licences. Inspect all source-archive
@@ -75,6 +75,15 @@ after setup. Fresh normal tests use 12 skystones, 0.3 seconds, backtick and rand
 offsets; alternate-input/calibration fixtures are explicit exceptions.
 
 ## Review, live game and publication
+
+Mouse mode is preview-only in rc24. Test selected-window capture with fake Win32
+metadata and a fake grabber: changed identity, focus, geometry, obstruction,
+aspect ratio, blank images and negative monitor coordinates. Confirm cancellation,
+stale-result handling, mode switching and the offline-only engine command.
+Use saved frames to check annotations. Actual Google Play/STOVE capture remains
+a separate user-run check. Do not add input or claim live refreshing support until
+window/process identity, focus-loss stops, purchase confirmation and budget/stop
+behavior have been implemented and verified for the exact candidate.
 
 Automated tests, independent review, live-game checks and publication approval
 are separate gates. Give a requested independent reviewer the exact commit/base,
