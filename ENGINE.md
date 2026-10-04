@@ -21,11 +21,17 @@ black-bar crop); normalized recognition points map back to desktop coordinates.
 The native preflight checks process elevation: a normal app cannot control an
 elevated game. It stops with a Run as administrator instruction before activation.
 Mouse mode brings the game forward once after Start, does not resize it, uses
-verified cursor movement, an 80 ms button hold and wheel scrolling. Native capture samples the client
+verified cursor movement, an 80 ms button hold and wheel scrolling. rc32 adds
+an eased pointer glide lasting 0.12–0.38 seconds according to travel distance,
+scaled to the displayed game size. Stop and visibility are checked at each step;
+the configured tap delay still applies separately. Native capture samples the client
 interior; each action checks its exact destination. Focus/coverage changes pause
 input for up to 10 seconds; resumed capture discards stale frames and renews recognition timeouts. Changed geometry or a stale prepared click stops it.
 Item detection is restricted to the shop icon column; Buy and confirmation clicks
-use observed button bounds. Refresh uses the recognized label. Confirmation text
+use observed button bounds. Refresh uses the recognized label, with small offsets
+up to ±14 horizontal and ±7 vertical normalized pixels when randomization is
+enabled and its green button is observed. Otherwise it retains the label point.
+Confirmation text
 is read locally using Windows' built-in English OCR and must match the intended
 item/price or the native "Use Skystone to refresh?" prompt for the fixed three-skystone refresh. Native blue Confirm labels require an observed paired Cancel label; green confirmation buttons remain supported. Unexpected, changed or unreadable dialogs
 stop before confirmation. Debug/calibration remains an ADB feature. No ADB call

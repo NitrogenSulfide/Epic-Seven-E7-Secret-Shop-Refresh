@@ -318,8 +318,22 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
         if not points or any(abs(x-points[0][0])>8 or abs(y-points[0][1])>8 for x,y in points):
             raise MouseStopped('The Refresh target was not recognized. No click sent.')
         before = self._rgb.copy()
-        # The recognized label gives the point; this button is not randomized.
-        self.tap(*points[0])
+        x,y = points[0]
+        # Limit the vertical search to the recognized label: native background
+        # artwork can join the green mask above the actual Refresh button.
+        region = (120,max(890,round(y)-55),650,min(1080,round(y)+55))
+        boxes = [box for box in green_buttons(self._rgb,region)
+                 if box[0] < x < box[2] and box[1] < y < box[3]]
+        if len(boxes) == 1:
+            dx,dy = self.generateOffset()
+            # Refresh gets a smaller offset than Buy. Keep the recognized label
+            # as the anchor and stay inside the observed green button.
+            box = boxes[0]
+            margin_x = min(14,(x-box[0])/2,(box[2]-x)/2)
+            margin_y = min(7,(y-box[1])/2,(box[3]-y)/2)
+            x += max(-margin_x,min(margin_x,dx*.2))
+            y += max(-margin_y,min(margin_y,dy*.28))
+        self.tap(x,y)
         return self._confirm('refresh',before)
 
 

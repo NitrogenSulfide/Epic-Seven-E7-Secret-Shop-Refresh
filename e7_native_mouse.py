@@ -1,6 +1,7 @@
 """Native mouse transport. Inputs run only inside an explicitly started session."""
 import ctypes
 import json
+import math
 import time
 from ctypes import wintypes as w
 from pathlib import Path
@@ -13,6 +14,22 @@ from e7_windows_capture import WindowsCapture, game_view
 
 class MouseStopped(RuntimeError):
     pass
+
+
+def pointer_glide(start, end, scale=1):
+    """Physical points with eased timing, scaled to the game's displayed size."""
+    distance = math.dist(start,end)/max(scale,.1)
+    if distance < 2:
+        return [(end,0)]
+    duration = min(.38,max(.12,distance/3500))
+    steps = math.ceil(duration/.016)
+    path = []
+    for step in range(1,steps+1):
+        t = step/steps
+        eased = t*t*t*(10+t*(-15+6*t))
+        point = tuple(round(a+(b-a)*eased) for a,b in zip(start,end))
+        path.append((point,duration*t))
+    return path
 
 
 def physical_pixel_coordinates(*, api=None):
@@ -218,15 +235,27 @@ class WindowsMouse:
         x,y = point
         if width < 2 or height < 2 or not (left <= x < left+width and top <= y < top+height):
             raise MouseStopped('Mouse target is outside the desktop. No input sent.')
-        movement = Input(0,InputUnion(mouse=MouseInput(
-            round((x-left)*65535/(width-1)),round((y-top)*65535/(height-1)),0,0xC001,0,0)))
         self.guard(action=True,point=point)
+        cursor = w.POINT()
+        if not api.GetCursorPos(ctypes.byref(cursor)):
+            raise MouseStopped('Could not read the pointer position. No input sent.')
+        scale = (self.view[2]-self.view[0])/1920 if self.view else 1
+        started = time.monotonic()
+        for destination,elapsed in pointer_glide((cursor.x,cursor.y),point,scale):
+            remaining = started+elapsed-time.monotonic()
+            if remaining > 0:
+                time.sleep(remaining)
+            # Check the final action target even while hovering toward it from
+            # outside the game. Stop/focus changes prevent any button-down.
+            self.guard(action=True,point=point)
+            px,py = destination
+            movement = Input(0,InputUnion(mouse=MouseInput(
+                round((px-left)*65535/(width-1)),round((py-top)*65535/(height-1)),0,0xC001,0,0)))
+            if api.SendInput(1,ctypes.byref(movement),ctypes.sizeof(Input)) != 1:
+                raise MouseStopped('Windows did not accept the pointer movement. No click sent.')
         # Verify delivery separately from acceptance: Windows can accept a batch
         # without the pointer reaching the intended game location.
-        if api.SendInput(1,ctypes.byref(movement),ctypes.sizeof(Input)) != 1:
-            raise MouseStopped('Windows did not accept the pointer movement. No click sent.')
         time.sleep(.05)
-        cursor = w.POINT()
         positioned = api.GetCursorPos(ctypes.byref(cursor)) and max(abs(cursor.x-x),abs(cursor.y-y)) <= 3
         if not positioned:
             self.guard(action=True,point=point)

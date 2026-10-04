@@ -11,7 +11,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 import E7ADBShopRefresh as adb_engine
 from e7_windows_capture import GameWindow
-from e7_native_mouse import WindowsMouse, MouseStopped, Input, verify_native_target, physical_pixel_coordinates, process_is_elevated, require_mouse_permissions
+from e7_native_mouse import WindowsMouse, MouseStopped, Input, verify_native_target, physical_pixel_coordinates, process_is_elevated, require_mouse_permissions, pointer_glide
 from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons, home_menu_target, home_icon_target, hidden_home_matches
 from e7_mouse_confirmation import confirmation_matches
 
@@ -27,6 +27,25 @@ def dialog(operation='refresh',centered=False):
     left = 830 if centered else 1040
     frame[top:top+90,left:left+250] = (20,110,40)
     return frame
+
+
+class PointerGlideTests(unittest.TestCase):
+    def test_path_eases_without_overshooting_and_reaches_exact_target(self):
+        path = pointer_glide((-1920,200),(-200,1000))
+        points = [(-1920,200)]+[point for point,_ in path]
+        self.assertEqual(points[-1],(-200,1000))
+        distances = [np.linalg.norm(np.subtract(b,a)) for a,b in zip(points,points[1:])]
+        self.assertLess(distances[0],max(distances)/4)
+        self.assertLess(distances[-1],max(distances)/4)
+        self.assertLess(max(distances),200)
+        self.assertTrue(all(a[0]<=b[0] and a[1]<=b[1] for a,b in zip(points,points[1:])))
+        self.assertTrue(all(0<t<=.38 for _,t in path))
+
+    def test_display_scale_preserves_duration_and_stationary_target_is_immediate(self):
+        normal = pointer_glide((0,0),(1200,800))
+        large = pointer_glide((0,0),(2400,1600),2)
+        self.assertEqual([t for _,t in normal],[t for _,t in large])
+        self.assertEqual(pointer_glide((-200,100),(-200,100)),[((-200,100),0)])
 
 
 class TransportTests(unittest.TestCase):
@@ -149,7 +168,9 @@ class TransportTests(unittest.TestCase):
         api.SetCursorPos.assert_not_called()
 
     def test_failed_movement_blocks_down_and_confirmation(self):
-        api=self.prepare_input_api();api.GetCursorPos.side_effect=None
+        api=self.prepare_input_api();position=api.GetCursorPos.side_effect
+        reads=iter((True,False))
+        api.GetCursorPos.side_effect=lambda pointer:position(pointer) if next(reads) else False
         api.SetCursorPos.return_value=False
         with patch('e7_native_mouse.time.sleep'),self.assertRaisesRegex(MouseStopped,'No click sent'):
             self.mouse._send((-1920,1030),'click',0)
@@ -157,13 +178,15 @@ class TransportTests(unittest.TestCase):
 
     def test_direct_position_fallback_must_reach_the_target(self):
         api=self.prepare_input_api();position=api.GetCursorPos.side_effect
-        api.GetCursorPos.side_effect=[False,False]
+        reads=iter((True,False,False))
+        api.GetCursorPos.side_effect=lambda pointer:position(pointer) if next(reads) else False
         with patch('e7_native_mouse.time.sleep'),self.assertRaisesRegex(MouseStopped,'place the pointer'):
             self.mouse._send((-1920,1030),'click',0)
         api.SetCursorPos.assert_called_once_with(-1920,1030)
         self.assertEqual(api.SendInput.call_count,1)
         api.reset_mock();api.GetSystemMetrics.side_effect=[-3840,0,7680,2160]
-        api.GetCursorPos.side_effect=lambda pointer:position(pointer) if api.SetCursorPos.called else False
+        reads=iter((True,False,True))
+        api.GetCursorPos.side_effect=lambda pointer:position(pointer) if next(reads) else False
         with patch('e7_native_mouse.time.sleep'):
             self.mouse._send((-1920,1030),'click',0)
         self.assertEqual(api.SendInput.call_count,3)
@@ -188,6 +211,39 @@ class TransportTests(unittest.TestCase):
         with patch('e7_native_mouse.time.sleep'),self.assertRaisesRegex(MouseStopped,'mouse-down'):
             self.mouse._send((-1920,1030),'click',0)
         self.assertEqual(api.SendInput.call_count,3)
+
+    def test_click_glides_before_down_and_stop_during_glide_sends_no_click(self):
+        for stop in (False,True):
+            self.active=True
+            api=self.prepare_input_api();target_position=api.GetCursorPos.side_effect
+            calls=[]
+            def position(pointer):
+                if not calls:
+                    pointer._obj.x,pointer._obj.y=-3700,100
+                    return True
+                return target_position(pointer)
+            def send(count,event,size):
+                value=event._obj.value.mouse
+                calls.append((value.flags,value.dx,value.dy))
+                if stop and len(calls)==3: self.active=False
+                return 1
+            api.GetCursorPos.side_effect=position;api.SendInput.side_effect=send
+            with patch('e7_native_mouse.time.sleep'):
+                if stop:
+                    with self.assertRaises(MouseStopped): self.mouse._send((-1920,1030),'click',0)
+                    self.assertEqual([flag for flag,_,_ in calls],[0xC001]*3)
+                else:
+                    self.mouse._send((-1920,1030),'click',0)
+                    self.assertGreater(len(calls),10)
+                    self.assertEqual([flag for flag,_,_ in calls[-2:]],[2,4])
+                    self.assertTrue(all(flag==0xC001 for flag,_,_ in calls[:-2]))
+                    self.assertLess(calls[0][1],calls[-3][1])
+
+    def test_unreadable_initial_cursor_sends_no_input(self):
+        api=self.prepare_input_api();api.GetCursorPos.side_effect=None;api.GetCursorPos.return_value=False
+        with self.assertRaisesRegex(MouseStopped,'read the pointer'):
+            self.mouse._send((-1920,1030),'click',0)
+        api.SendInput.assert_not_called()
 
     def test_failed_release_is_retried_before_returning(self):
         api=self.prepare_input_api();api.SendInput.side_effect=[1,1,0,1]
@@ -380,6 +436,40 @@ class NativeEngineTests(unittest.TestCase):
         self.assertEqual(app.mouse.click.call_args_list[0].args,(436,994))
         self.assertEqual(app.mouse.click.call_args_list[1].args,(1165,695))
         self.assertEqual(app.refresh_count,0)  # Only the shared loop increments.
+
+    def test_refresh_offset_is_small_bounded_and_respects_randomization_setting(self):
+        for enabled in (False,True):
+            for offset in (-75,75):
+                app=self.make_engine();del app.generateOffset
+                app.random_offset=enabled;app.x_offset=75;app.y_offset=25
+                frame=shop();frame[950:1040,300:580]=(20,110,40)
+                app.mouse.screenshot.return_value=Image.fromarray(frame)
+                app._confirm=Mock(return_value=True)
+                with patch('E7ADBShopRefresh.random.randint',side_effect=[offset,25]):
+                    self.assertTrue(app.clickRefresh())
+                x,y=app.mouse.click.call_args.args
+                self.assertEqual((x,y),(436,994) if not enabled else (436+(14 if offset>0 else -14),1001))
+
+    def test_refresh_without_observed_button_keeps_verified_label_point(self):
+        app=self.make_engine();app.generateOffset=lambda:(75,25)
+        app._confirm=Mock(return_value=True)
+        self.assertTrue(app.clickRefresh())
+        app.mouse.click.assert_called_once_with(436,994)
+
+    def test_refresh_offset_handles_green_background_joined_above_button(self):
+        app=self.make_engine();app.generateOffset=lambda:(-75,-25)
+        frame=shop();frame[870:1040,300:580]=(20,110,40)
+        app.mouse.screenshot.return_value=Image.fromarray(frame)
+        app._confirm=Mock(return_value=True)
+        self.assertTrue(app.clickRefresh())
+        app.mouse.click.assert_called_once_with(422,987)
+
+    def test_confirmation_waits_use_configured_tap_delay(self):
+        app=self.make_engine();app.tap_sleep=.67
+        app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (shop(),dialog(),dialog(),shop())]
+        with patch('e7_mouse_refresh.time.sleep') as sleep:
+            self.assertTrue(app.clickRefresh())
+        self.assertEqual([call.args[0] for call in sleep.call_args_list],[.67,.67])
 
     def test_missing_confirmation_stops_after_one_refresh_click(self):
         app = self.make_engine()
