@@ -1,4 +1,9 @@
-0.1.0 · First release preview (rc43)
+0.1.0 · First release preview (rc44)
+
+rc44
+• Fixed STOVE startup when Windows OCR reads Secret Shop as Secret Shoo.
+  Home context and the visible icon are still required before a click.
+• Live hidden-home → reveal → Secret Shop entry verified without spending.
 
 rc43
 • Mouse home entry rechecks the visible controls before clicking, allowing

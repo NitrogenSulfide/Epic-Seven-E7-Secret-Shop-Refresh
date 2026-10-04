@@ -27,13 +27,15 @@ def home_menu_target(result,rgb=None):
     words = result.get('words',[])
     choices = []
     for word in words:
-        if re.sub('[^a-z0-9]','',word['text'].lower()) not in ('secretshop','secretsh0p'):
+        if re.sub('[^a-z0-9]','',word['text'].lower()) not in ('secretshop','secretsh0p','secretshoo','secretsh0o'):
             continue
         box=word['box']
         if 0 <= box[0] < box[2] <= 360 and 210 <= box[1] < box[3] <= 850:
             choices.append(((box[0]+box[2])/2,(box[1]+box[3])/2))
     for first,second in zip(words,words[1:]):
-        if re.sub('[^a-z]','',first['text'].lower()) != 'secret' or not re.fullmatch('sh[o0p]p',re.sub('[^a-z0-9]','',second['text'].lower())):
+        # Windows OCR can read the thin descender of native Shop as Shoo.
+        # The home context and observed icon are still required for Mouse input.
+        if re.sub('[^a-z]','',first['text'].lower()) != 'secret' or not re.fullmatch('sh(?:[o0p]p|[o0]o)',re.sub('[^a-z0-9]','',second['text'].lower())):
             continue
         a,b = first['box'],second['box']
         box = (min(a[0],b[0]),min(a[1],b[1]),max(a[2],b[2]),max(a[3],b[3]))

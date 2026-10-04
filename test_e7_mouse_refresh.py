@@ -504,10 +504,18 @@ class NativeEngineTests(unittest.TestCase):
         self.assertEqual(home_menu_target(result),(97.5,635))
 
     def test_home_ocr_accepts_joined_secret_shop_words(self):
-        for text in ('SecretShop','Secret Sh0p','Secret.Shop'):
+        for text in ('SecretShop','Secret Sh0p','Secret.Shop','SecretShoo'):
             result=dict(text='Sanctuary '+text,words=[dict(text=text,box=[20,620,175,650])])
             self.assertEqual(home_menu_target(result),(97.5,635))
         self.assertIsNone(home_menu_target(dict(text='Sanctuary',words=[dict(text='SecretShop',box=[600,620,775,650])])))
+
+    def test_native_shop_ocr_descender_error_still_requires_home_context_and_icon(self):
+        result=dict(text='sanctuary secr.et shoo epic pas',words=[dict(text='secr.et',box=[17,534,89,564]),dict(text='shoo',box=[97,533,152,557])])
+        icon=np.asarray(Image.open('adb-assets/builtin-navigation/native-secret-shop-icon.png'))
+        frame=shop();frame[475:523,54:115][icon>0]=230
+        self.assertIsNotNone(home_menu_target(result,frame))
+        self.assertIsNone(home_menu_target(result,shop()))
+        self.assertIsNone(home_menu_target(dict(result,text='secr.et shoo'),frame))
 
     def test_session_errors_emit_actual_reason_instead_of_stop_key_message(self):
         from e7_mouse_refresh import run_mouse_session
