@@ -222,8 +222,8 @@ sends no ADB commands, starts no keyboard hooks and makes no game actions.
 The rc24 engine also supports `--preview-mouse-frame PATH --output REPORT.json`.
 This early CLI branch analyzes an existing game-client screenshot with the same shop
 references and writes normalized targets/item detections. It exits before ADB
-initialization, keyboard hooks or the refresh loop. The GUI's Mouse preview uses
-this branch only; screenshots/reports are private runtime data. This preview branch sends no mouse
+initialization, keyboard hooks or the refresh loop. This remains an offline developer utility; Mouse preview is no longer an app mode.
+Screenshots/reports are private runtime data. This preview branch sends no mouse
 input. The engine builder includes `e7_mouse_analysis.py` in
 both the binary and corresponding source distribution.
 

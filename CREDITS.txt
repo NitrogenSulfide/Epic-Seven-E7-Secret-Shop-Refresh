@@ -22,3 +22,10 @@ e7_gui_assets/provenance.json.
 Built-in shop recognition labels: Epic Seven, Smilegate and respective rights holders.
 UI-only crops, dimensions and hashes: adb-assets/builtin-navigation/provenance.json
 (runtime/adb-assets/builtin-navigation in the player package).
+
+GitHub profile button: official GitHub Invertocat, black/white PNG originals.
+GitHub, Inc. trademarks; used as a social button linking to the author’s profile.
+https://brand.github.com/foundations/logo
+Downloaded from https://brand.github.com/GitHub_Logos.zip on 2026-10-04.
+Images are resized proportionally in memory; original file bytes preserved.
+Coffee cup: original simple drawing rendered by e7_appearance.py.

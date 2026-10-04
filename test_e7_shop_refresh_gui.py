@@ -232,7 +232,7 @@ class GuiTests(unittest.TestCase):
         self.assertIn('half', self.app.tap_timing_hint.cget('text'))
 
     def test_mouse_disables_and_clears_debug_after_mode_change_and_session(self):
-        for mode in ('Mouse', 'Mouse (preview)'):
+        for mode in ('Mouse',):
             self.app.control_mode.set('ADB'); self.app._change_control_mode()
             self.app.debug_check.invoke()
             self.assertTrue(self.app.debug_mode.get())
@@ -413,7 +413,7 @@ class GuiTests(unittest.TestCase):
                          (12.0, 0.3, "`", True))
 
     def choose_mouse_fixture(self):
-        self.app.control_mode.set('Mouse (preview)')
+        self.app.control_mode.set('Mouse')
         self.app._change_control_mode()
         target=GameWindow(123,456,'Epic Seven',(0,0,1920,1080))
         self.app.mouse_windows={target.label:target}
@@ -421,20 +421,51 @@ class GuiTests(unittest.TestCase):
         self.app._select_mouse_window()
         return target
 
+    def test_retired_preview_preference_loads_as_mouse_without_starting(self):
+        gui.GUI_CONFIG_FILE.write_text('[GUI]\ncontrol_mode = Mouse (preview)\n', encoding='utf-8')
+        with patch.object(gui, 'launch_engine') as launch, patch.object(gui, 'activate_native_target') as activate:
+            self.app._load_config()
+            self.assertEqual(self.app.control_mode.get(), 'Mouse')
+            self.assertEqual(tuple(self.app.mode_box.cget('values')), ('ADB', 'Mouse'))
+            self.assertFalse(hasattr(self.app, '_start_mouse_preview'))
+            self.assertIsNone(self.app.process)
+            launch.assert_not_called(); activate.assert_not_called()
+
+    def test_help_and_links_are_available_without_game_input(self):
+        import e7_about
+        with patch.object(gui.webbrowser, 'open') as link:
+            self.app.coffee_button.invoke()
+            link.assert_called_once_with('https://ko-fi.com/bluenatto')
+        self.app.about_button.invoke()
+        dialog = self.app.about_window
+        titles = [dialog.notebook.tab(tab, 'text') for tab in dialog.notebook.tabs()]
+        self.assertIn('Quickstart', titles); self.assertIn('Release notes', titles)
+        quickstart = dialog.readers[titles.index('Quickstart')].get('1.0', 'end')
+        self.assertIn('Mouse mode', quickstart); self.assertIn('ADB mode', quickstart)
+        self.assertIn(e7_about.TESTED_CLIENTS, quickstart)
+        self.assertNotIn('Friendship', quickstart)
+        self.assertNotIn('unavailable', dialog.readers[titles.index('Release notes')].get('1.0', 'end'))
+        self.assertTrue(dialog.github_image)
+        self.assertEqual(dialog.github_button.cget('text'), '')
+        with patch.object(e7_about.webbrowser, 'open') as link:
+            dialog.github_button.invoke()
+            link.assert_called_once_with('https://github.com/NitrogenSulfide')
+        dialog.close()
+
     def test_mouse_single_window_is_readable_selected_and_ready(self):
-        self.app.control_mode.set('Mouse (preview)'); self.app._change_control_mode()
+        self.app.control_mode.set('Mouse'); self.app._change_control_mode()
         target = GameWindow(123,456,'Epic Seven',(0,0,3840,2019))
-        with patch.object(gui,'capture_selected') as capture, patch.object(gui,'launch_engine') as launch:
+        with patch.object(gui.WindowsCapture,'inspect') as capture, patch.object(gui,'launch_engine') as launch:
             self.app._apply_mouse_windows([target], '')
         self.assertEqual(self.app.mouse_target.get(), 'Epic Seven')
         self.assertEqual(self.app.mouse_windows['Epic Seven'], target)
         self.assertIn('3840 × 2019', self.app.device_notice.get())
-        self.assertIn('countdown', self.app.device_notice.get())
+        self.assertIn('actual pointer', self.app.device_notice.get())
         self.assertFalse(self.app.start_button.instate(['disabled']))
         capture.assert_not_called(); launch.assert_not_called()
 
     def test_mouse_rescan_preserves_identity_when_labels_and_size_change(self):
-        self.app.control_mode.set('Mouse (preview)'); self.app._change_control_mode()
+        self.app.control_mode.set('Mouse'); self.app._change_control_mode()
         first = GameWindow(123,456,'Epic Seven',(0,0,1920,1080))
         other = GameWindow(124,457,'Epic Seven',(0,0,1920,1080))
         self.app._apply_mouse_windows([first,other], '')
@@ -476,63 +507,12 @@ class GuiTests(unittest.TestCase):
 
     def test_switch_from_empty_mouse_selector_restores_adb_start(self):
         before = self.app._device_address()
-        self.app.control_mode.set('Mouse (preview)'); self.app._change_control_mode()
+        self.app.control_mode.set('Mouse'); self.app._change_control_mode()
         self.app._apply_mouse_windows([], '')
         self.assertTrue(self.app.start_button.instate(['disabled']))
         self.app.control_mode.set('ADB'); self.app._change_control_mode()
         self.assertFalse(self.app.start_button.instate(['disabled']))
         self.assertEqual(self.app._device_address(), before)
-
-    def test_mouse_preview_captures_without_adb_or_refresh_session(self):
-        target=self.choose_mouse_fixture()
-        report=dict(read_only=True,state='home',targets=[dict(label='Secret Shop menu',point=[86,548])],detections=[])
-        def capture(window,path,**kwargs):
-            from PIL import Image,ImageDraw
-            image=Image.new('RGB',(1920,1080),'#334155')
-            ImageDraw.Draw(image).rectangle((50,500,150,580),outline='white',width=5)
-            image.save(path)
-        with patch.object(gui,'capture_selected',side_effect=capture) as grab, patch.object(gui,'wait_for_window',return_value=target), patch.object(gui,'analyze_capture',return_value=report), \
-                patch.object(gui,'launch_engine') as launch, patch.object(gui,'check_connection') as adb:
-            self.app.start_button.invoke()
-            self.app._mouse_preview_countdown(self.app._preview_token,target,0)
-            self.pump_until(lambda:self.app.status.get()=='Preview complete')
-        self.assertEqual(grab.call_count,1);launch.assert_not_called();adb.assert_not_called()
-        self.assertIsNone(self.app.process);self.assertEqual(self.app.run_id,0)
-        self.assertFalse(self.history.exists());self.assertFalse(self.config.exists())
-        self.assertIn('no clicks',self.app.preview_window.title())
-        self.assertEqual(self.app.start_button.cget('text'),'Preview targets')
-        self.app.preview_window.close()
-
-    def test_mouse_preview_cancelled_before_capture_and_late_result_ignored(self):
-        target=self.choose_mouse_fixture()
-        with patch.object(gui,'capture_selected') as capture, patch.object(gui,'launch_engine') as launch:
-            self.app.start_button.invoke();token=self.app._preview_token
-            self.assertEqual(self.app.stop_button.cget('text'), 'Cancel preview')
-            self.assertIn('Ready check in', self.app.detail.get())
-            self.app.stop_refresh()
-            self.app._mouse_preview_countdown(token,target,0)
-            self.app._finish_mouse_preview(token,None,None,'')
-        capture.assert_not_called();launch.assert_not_called()
-        self.assertIsNone(self.app.preview_window)
-        self.assertEqual(self.app.status.get(),'Preview cancelled')
-        self.assertEqual(self.app.stop_button.cget('text'), 'Stop Session')
-
-    def test_mouse_waiting_can_be_cancelled_without_capture_or_engine(self):
-        target=self.choose_mouse_fixture();entered=threading.Event();exited=threading.Event()
-        def wait(window,cancel):
-            entered.set();cancel.wait(3);exited.set()
-            raise ValueError('Cancelled')
-        with patch.object(gui,'wait_for_window',side_effect=wait),patch.object(gui,'capture_selected') as capture, \
-                patch.object(gui,'analyze_capture') as analyze,patch.object(gui,'launch_engine') as launch:
-            self.app.start_button.invoke()
-            self.app._mouse_preview_countdown(self.app._preview_token,target,0)
-            self.pump_until(entered.is_set)
-            self.assertEqual(self.app.status.get(),'Waiting for game window')
-            self.assertIn('20 seconds',self.app.home_ui_hint.get())
-            self.app.stop_refresh();self.pump_until(exited.is_set)
-        capture.assert_not_called();analyze.assert_not_called();launch.assert_not_called()
-        self.assertEqual(self.app.status.get(),'Preview cancelled')
-        self.assertIsNone(self.app.preview_window)
 
     def test_mouse_scan_results_and_switch_back_preserve_adb_choice(self):
         before=self.app._device_address()
@@ -546,12 +526,12 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(self.app.device_box.cget('textvariable'),str(self.app.device))
 
     def test_missing_mouse_target_blocks_capture_and_red_warning_is_clear(self):
-        self.app.control_mode.set('Mouse (preview)');self.app._change_control_mode()
-        with patch.object(gui,'capture_selected') as capture, patch.object(gui,'launch_engine') as launch:
+        self.app.control_mode.set('Mouse');self.app._change_control_mode()
+        with patch.object(gui.WindowsCapture,'inspect') as capture, patch.object(gui,'launch_engine') as launch:
             self.assertTrue(self.app.start_button.instate(['disabled']))
-            self.app._start_mouse_preview()
+            self.app._start_mouse_refresh()
         capture.assert_not_called();launch.assert_not_called()
-        self.assertIn('Choose an open game window',self.app.home_ui_hint.get())
+        self.assertIn('Select the window showing Epic Seven',self.app.home_ui_hint.get())
 
     def test_stale_adb_scan_cannot_override_mouse_mode_notice(self):
         old=self.app._connection_check_id
@@ -559,7 +539,7 @@ class GuiTests(unittest.TestCase):
         self.app.log_queue.put((None,'devices',(old,gui.ConnectionCheck((),'No emulator',''),False)))
         self.app._drain_log_queue()
         self.assertEqual(self.app.connection_warning,'')
-        self.assertIn('Mouse preview only',self.app.home_ui_hint.get())
+        self.assertIn('Mouse uses your pointer',self.app.home_ui_hint.get())
 
     def test_real_mouse_start_uses_native_cli_and_same_settings_without_adb(self):
         target = self.choose_mouse_fixture()
@@ -1066,15 +1046,14 @@ time.sleep(30)
         self.assertEqual(self.app.device.get(), 'localhost:6520')
         self.assertEqual(self.app._device_address(), 'localhost:6520')
 
-    def test_debug_results_accept_engine_spacing_and_record_friendship_points(self):
+    def test_results_accept_spacing_and_ignore_retired_friendship_counter(self):
         self.app._handle_line('Covenant bookmark : 2')
         self.app._handle_line('Mystic medal : 1')
         self.app._handle_line('Friendship bookmark : 3')
         self.assertEqual(self.app.covenant.get(), '2')
         self.assertEqual(self.app.mystic.get(), '1')
-        self.assertEqual(self.app.friendship.get(), '3')
         events = [self.app.activity.item(item)['values'][1] for item in self.app.activity.get_children()]
-        self.assertIn('Friendship Points purchases: 3.', events)
+        self.assertFalse(any('Friendship' in str(event) for event in events))
 
     def test_owned_engine_runs_below_normal_priority(self):
         self.start_fake(stall=True)

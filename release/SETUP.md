@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc39.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc40.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,13 +14,12 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc39.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc40.zip'
 ```
 
 ## Emulator setup
 
-**ADB** remains the default mode for refreshing. **Mouse (preview)** is a separate
-experimental, read-only option described below; **Mouse** automates the visible
+**ADB** remains the default mode for refreshing. **Mouse** automates the visible
 game in STOVE or an emulator, including Google Play Games Developer Emulator.
 
 Use [Google Play Games on PC Developer Emulator](https://developer.android.com/games/playgames/emulator),
@@ -142,7 +141,7 @@ fixed during the session, including dimmed confirmation dialogs. Actual window
 moves and resizes still stop input. Restored Google windows with a thin light
 frame above the header are supported. Set the window size before pressing Start;
 you can begin directly in the open Secret Shop.
-Google developer-emulator live actions in rc39 remain unverified.
+Google developer-emulator live actions in rc40 remain unverified.
 
 The app checks each confirmation before clicking it and stops on unexpected text
 or an insufficient-currency message. Keep English confirmation text readable.
@@ -157,37 +156,6 @@ unverified; begin with a small supervised budget and check Stop and your Stop ke
 Save Settings retains your control mode and other preferences. Reopening the app
 scans that mode without starting a session. ADB remains the fresh-install default.
 No ADB connection is made by a Mouse session.
-
-## Mouse preview — optional read-only check
-
-This checks capture and recognition in regular Google Play Games or native STOVE.
-It is optional and does not start automation. No ADB connection is needed.
-
-1. Open English Epic Seven, reveal its home controls or open Secret Shop manually.
-   Keep its game view, at least 640 × 360 pixels, visible and unobstructed.
-   Native STOVE can fill a wider maximized window; preview preserves that image.
-   Plain symmetric black bars around a 16:9 view are cropped when clearly identifiable.
-2. Choose **Control mode → Mouse (preview)**. The app scans automatically and
-   selects the window if only one is found. If several are found, choose yours;
-   **Scan** checks again. The selected game's name and capture size appear below
-   the selector. Open Secret Shop manually, then press **Preview targets** and
-   switch to the selected game. The three-second countdown begins the readiness
-   check; it is not a deadline to switch windows. The app waits up to 20 more seconds for
-   the selected game to be in front and unobstructed. Keep it still until capture
-   finishes. The app never brings the game forward or moves your mouse for you.
-3. Return to this app. Yellow markers show the recognized Secret Shop menu or
-   Refresh button; cyan boxes show detected Covenant/Mystic item icons in the
-   visible list. An unknown screen still shows the capture with no guessed targets.
-   If home controls are hidden, click inside the game picture (not its title bar)
-   or open Secret Shop manually, then preview again.
-
-The tool does not move the pointer, click, refresh, buy or install hooks in this
-mode. **Cancel preview** cancels the countdown/window wait and ignores late preview results. Captures
-and reports, including the original client capture for troubleshooting, stay
-private under `runtime/mouse-previews`; keep them out of shared
-ZIPs. A closed, covered, unfocused, moved or blank window fails with an explanation.
-Fresh settings use ADB mode; saved settings retain your mode. Switching back
-preserves your ADB address.
 
 Native stops show their actual reason on the main screen. Detailed text logs stay
 private under `runtime/mouse-session-logs`. The app checks that the pointer reaches the game before clicking. A missing confirmation also saves central game crops under `runtime/mouse-failures`; keep both folders out of shared ZIPs. Focus pauses discard stale captures and restart the recognition timeout.
@@ -218,3 +186,13 @@ are under `runtime/third-party-licenses`; ADB notices are in
 `runtime/adb-assets/platform-tools/NOTICE.txt`. About & Credits remains available
 through the app's information button. Game/artwork and audio credits remain
 preserved; the software GPL does not relicense third-party artwork.
+
+## Quickstart and tested clients
+
+About & Credits contains Quickstart and bundled Release notes tabs. The main
+screen’s Buy me a coffee button opens https://ko-fi.com/bluenatto only when clicked.
+
+For this upcoming first full release, testing has been limited to Google Play
+Games on PC Developer Emulator and the official STOVE client of Epic Seven.
+Other emulators and methods have not been tested. Both modes buy only Covenant
+Bookmarks and Mystic Medals; Friendship purchases are removed from calibration too.

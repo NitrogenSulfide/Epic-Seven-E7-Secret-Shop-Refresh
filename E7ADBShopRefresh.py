@@ -118,8 +118,6 @@ class E7ADBShopRefresh:
 
         self.storage.addItem('cov.png', 'Covenant bookmark', 184000)
         self.storage.addItem('mys.png', 'Mystic medal', 280000)
-        if self.debug:
-            self.storage.addItem('fb.png', 'Friendship bookmark', 18000)
 
     def start(self):
         self.loop_active = True
@@ -149,7 +147,7 @@ class E7ADBShopRefresh:
             'skystone_spent': self.refresh_count * 3,
             'covenant': counts.get('Covenant bookmark', 0),
             'mystic': counts.get('Mystic medal', 0),
-            'friendship': counts.get('Friendship bookmark', 0),
+            'friendship': 0,  # Reserved legacy protocol field; no Friendship purchases.
         }), flush=True)
 
     def refreshShop(self):
@@ -665,7 +663,7 @@ if __name__ == '__main__':
         debug = True
         print()
         print('Debug mode:')
-        print('Program will buy friendship bookmarks for testing purpose')
+        print('Only Covenant bookmarks and Mystic medals are purchased.')
         print('It will pause to generate a image window - will show up in the taskbar')
         print('If the click area shown is not within the UI button, do not use the randomize click feature')
         print('Closing the image window will continue to refresh action')
@@ -676,7 +674,7 @@ if __name__ == '__main__':
     #setting
     stop_refresh_key = 'esc'
     if debug:
-        print('Keep looking at image until friendship bookmark or any bm is purchased')
+        print('Check each highlighted target before continuing.')
         print('Use "esc" key to exit in debug mode')
     else:
         print("Input the key that you want to use to stop refresh (0-9 a-z /.,';[]) ")

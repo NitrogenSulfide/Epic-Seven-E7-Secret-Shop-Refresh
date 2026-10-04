@@ -19,6 +19,32 @@ def avatar_icon(master, asset_dir, size):
         return None
 
 
+def github_icon(master, asset_dir, size, dark):
+    if Image is None:
+        return None
+    filename = 'github-white.png' if dark else 'github-black.png'
+    try:
+        with Image.open(asset_dir / filename) as source:
+            icon = source.convert('RGBA')
+            icon.thumbnail((size, size), Image.Resampling.LANCZOS)
+        return ImageTk.PhotoImage(icon, master=master)
+    except OSError:
+        return None
+
+
+def coffee_icon(master, size):
+    if Image is None:
+        return None
+    s = size * 3
+    image = Image.new('RGBA', (s, s))
+    draw = ImageDraw.Draw(image)
+    blue = '#60a5fa'
+    draw.arc((s*.59, s*.31, s*.93, s*.71), 270, 90, fill=blue, width=max(2, s//12))
+    draw.rounded_rectangle((s*.13, s*.27, s*.70, s*.79), radius=s*.12, fill=blue)
+    draw.line((s*.10, s*.90, s*.82, s*.90), fill=blue, width=max(2, s//14))
+    return ImageTk.PhotoImage(image.resize((size, size), Image.Resampling.LANCZOS), master=master)
+
+
 def theme_icon(master, size, dark):
     if Image is None:
         return None
@@ -87,6 +113,8 @@ class Scenery:
         self.checkbox_styles = {}
         self.job = None
         self.cache_key = None
+        self.canvas_image = None
+        self.canvas_photo = None
         self.renders = 0
         self.render_calls = 0
         self.checkbox_theme = None
@@ -164,6 +192,18 @@ class Scenery:
                 style.layout(name,[(element,{'sticky':'nswe','children':style.layout(original)})])
             self.checkbox_theme = dark
         rx,ry = self.root.winfo_rootx(),self.root.winfo_rooty()
+        # Paint the unused settings viewport too; use only the embedded controls
+        # for its scrollregion, so this decoration cannot create a scrollbar.
+        canvas = self.root.settings_canvas
+        if canvas.winfo_ismapped():
+            x, y = canvas.winfo_rootx()-rx, canvas.winfo_rooty()-ry
+            crop = self.backdrop.crop((x, y, x+canvas.winfo_width(), y+canvas.winfo_height()))
+            self.canvas_photo = ImageTk.PhotoImage(crop, master=self.root)
+            if self.canvas_image is None:
+                self.canvas_image = canvas.create_image(0, 0, anchor='nw', tags='scenery')
+            canvas.itemconfigure(self.canvas_image, image=self.canvas_photo)
+            canvas.coords(self.canvas_image, canvas.canvasx(0), canvas.canvasy(0))
+            canvas.tag_lower(self.canvas_image)
         for item in self.widgets:
             widget,photo,previous = item
             if not widget.winfo_exists() or not widget.winfo_ismapped():

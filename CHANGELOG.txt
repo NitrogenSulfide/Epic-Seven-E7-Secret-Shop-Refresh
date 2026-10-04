@@ -1,0 +1,22 @@
+0.1.0 · First release preview (rc40)
+
+Secret Shop refresh sessions through ADB or your actual mouse.
+Automatic shop entry from home, Covenant Bookmark and Mystic Medal purchases,
+Skystone budgets, live counters, stop keys and recent session history.
+
+Recent improvements
+• Mouse mode supports STOVE and visible emulator windows.
+• Smaller Google Developer Emulator windows use the game viewport correctly.
+• Smoother pointer movement and short shop drags.
+• Optional tap offsets and adjustable timing variation up to ±0.10 seconds.
+• Quickstart, local release notes and tested-client information in About & Credits.
+• GitHub profile icon and a Buy me a coffee link on the main screen.
+• More space below the estimate/calibration button and a continuous background.
+• Removed Mouse preview and Friendship purchases, including in calibration.
+
+Tested clients
+Google Play Games on PC Developer Emulator and the official STOVE client of
+Epic Seven. Other emulators and methods have not been tested. Use English UI.
+
+Notes for the upcoming first full release.
+These notes are bundled with the app; no online update check is performed.

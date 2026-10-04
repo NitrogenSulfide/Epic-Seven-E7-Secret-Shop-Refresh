@@ -3,13 +3,40 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
 import webbrowser
-from e7_appearance import profile_avatar
+from e7_appearance import profile_avatar, github_icon, ThemeHint
+
+TESTED_CLIENTS = (
+    'First release testing: Google Play Games on PC Developer Emulator and the '
+    'official STOVE client of Epic Seven. Other emulators and methods have not '
+    'been tested.'
+)
+QUICKSTART = (
+    'Mouse mode\n\n'
+    '1. Open English Epic Seven at home or in Secret Shop. Close popups.\n'
+    '2. Choose Mouse → select your game window. Use Scan if needed.\n'
+    '3. Press Start Refresh. The app opens the shop if needed. Leave the PC '
+    'alone; keep the game visible and its window still.\n\n'
+    'ADB mode\n\n'
+    '1. Enable/authorize emulator ADB debugging. Use English Epic Seven and a '
+    '1920 × 1080 Android display.\n'
+    '2. Choose ADB → select your device. Google Developer Emulator: '
+    'localhost:6520. Use Scan if needed.\n'
+    '3. Leave home controls or Secret Shop visible, then press Start Refresh. '
+    'You can use your PC mouse while ADB runs.\n\n'
+    'Before Start: check budget, delay and stop key. Keep calibration off for '
+    'ordinary sessions. Both modes buy only Covenant Bookmarks and Mystic Medals.\n'
+    'To stop: press your stop key or use Stop Session.\n\n'
+    'Mouse: resize before Start; game view must be at least 640 × 360. If the '
+    'game runs as administrator, the app needs the same permission.\n\n'
+    + TESTED_CLIENTS
+)
 
 
 class AboutDialog(tk.Toplevel):
     def __init__(self, app, project, first_time=False):
         super().__init__(app)
         self.app = app
+        self.app_asset_dir = project/'e7_gui_assets'
         self.title('Welcome · About & Credits' if first_time else 'About & Credits')
         self.transient(app)
         self.protocol('WM_DELETE_WINDOW', self.close)
@@ -39,8 +66,9 @@ class AboutDialog(tk.Toplevel):
         notebook.grid(row=1, column=0, sticky='nsew', padx=dp(20))
         self.notebook = notebook
         overview = (
-            'Welcome! Open Epic Seven’s Secret Shop, select your device, '
-            'and check the budget and stop key before starting.\n\n'
+            'Welcome! Choose Mouse or ADB, then check the budget and stop key. '
+            'See Quickstart for the basic steps.\n\n'
+            f'{TESTED_CLIENTS}\n\n'
             'GUI and enhancements: NitrogenSulfide (Blue Natto)\n'
             'Original refresh engine: Solunium\n'
             'Epic Seven artwork: Smilegate and respective rights holders\n'
@@ -49,8 +77,10 @@ class AboutDialog(tk.Toplevel):
             'Independent community tool.'
         )
         for title, contents in (('Overview',overview),
+                                ('Quickstart',QUICKSTART),
+                                ('Release notes',read_document(project/'CHANGELOG.txt')),
                                 ('Full credits',read_document(project/'CREDITS.txt')),
-                                ('Software licence',read_document(project/'LICENSE'))):
+                                ('Licence',read_document(project/'LICENSE'))):
             panel = ttk.Frame(notebook, padding=dp(8))
             panel.columnconfigure(0, weight=1)
             panel.rowconfigure(0, weight=1)
@@ -75,19 +105,24 @@ class AboutDialog(tk.Toplevel):
         self.startup_check.grid(row=0,column=0,columnspan=3,sticky='w',pady=(0,dp(8)))
         links = ttk.Frame(footer)
         links.grid(row=1,column=0,sticky='w')
-        ttk.Button(links,text='GitHub profile',command=lambda: webbrowser.open('https://github.com/NitrogenSulfide')).pack(side='left',padx=(0,dp(8)))
+        self.github_button = ttk.Button(links, text='', padding=dp(8), cursor='hand2', takefocus=True,
+            command=lambda: webbrowser.open('https://github.com/NitrogenSulfide'))
+        self.github_button.pack(side='left',padx=(0,dp(8)))
+        self.github_hint = ThemeHint(self.github_button, lambda: 'GitHub profile · NitrogenSulfide')
         ttk.Button(links,text='Upstream project',command=lambda: webbrowser.open('https://github.com/Solunium/Epic-Seven-E7-Secret-Shop-Refresh')).pack(side='left')
         self.continue_button = ttk.Button(footer,text='Continue' if first_time else 'Close',command=self.close,style='Accent.TButton')
         self.continue_button.grid(row=1,column=2,sticky='e',padx=(dp(8),0))
         self.apply_theme(app.dark_mode.get())
         left,top,width,height = app._screen_work_area()
-        w,h = min(dp(700),width-dp(48)),min(dp(650),height-dp(48))
+        w,h = min(dp(700),width-dp(48)),min(dp(720),height-dp(48))
         self.minsize(min(dp(600),w),min(dp(420),h))
         x = max(left,min(app.winfo_rootx()+(app.winfo_width()-w)//2,left+width-w))
         y = max(top,min(app.winfo_rooty()+(app.winfo_height()-h)//2,top+height-h))
         self.geometry(f'{w}x{h}+{x}+{y}')
 
     def apply_theme(self,dark):
+        self.github_image = github_icon(self, self.app_asset_dir, self.app._dp(24), dark)
+        self.github_button.configure(image=self.github_image or '', text='' if self.github_image else 'GitHub')
         bg,field,fg = ('#111827','#1e293b','#e2e8f0') if dark else ('#f3f5f8','#ffffff','#1e293b')
         self.configure(bg=bg)
         for widget in self.colored:
@@ -98,6 +133,7 @@ class AboutDialog(tk.Toplevel):
             reader.configure(bg=field,fg=fg,insertbackground=fg,selectbackground='#2563eb',selectforeground='white')
 
     def close(self):
+        self.github_hint.hide()
         self.app.credits_seen.set(True)
         self.app._save_credits_preference()
         self.app.about_window = None
