@@ -1,7 +1,7 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.1.0-rc51** is a local candidate. The previous rc20 public preview is unchanged.
-Players need only **E7ShopRefresh-0.1.0-rc51.zip**.
+Version **0.1.0** is the first official release, based on the rc51 working baseline.
+Players need only **E7ShopRefresh-0.1.0.zip**.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
 Pillow are included in this EXE. Artwork, the matching compiled engine, ADB tools
@@ -35,8 +35,8 @@ Your budget, delay, randomized offsets, counters and Stop key apply. Leave the P
 alone until it stops. Focus or coverage changes pause input for up to 10 seconds;
 a changed window or an unrecognized confirmation stops the session. The game keeps its current size. Use normal settings; Debug
 remains an ADB feature. Saving settings also saves your control mode without
-starting a session next time. Native checks succeeded in earlier candidates. Google developer-emulator live
-actions in rc51 remain unverified; begin with a small supervised budget. Keep English game text readable.
+starting a session next time. The owner reports the ordinary live cases pass on both clients with rc51. This
+release preserves that automation code; begin with a small supervised budget. Keep English game text readable.
 
 Live counters report engine-completed buys/refreshes, not confirmed balances.
 Insufficient-currency stopping remains unverified. Keep initial runs supervised.
@@ -58,7 +58,7 @@ are under `runtime/third-party-licenses`, with ADB notices in its tool folder.
 About & Credits contains Quickstart and bundled Release notes tabs. The main
 screen’s Buy me a coffee button opens https://ko-fi.com/bluenatto only when clicked.
 
-For this upcoming first full release, testing has been limited to Google Play
+For this first release, testing has been limited to Google Play
 Games on PC Developer Emulator and the official STOVE client of Epic Seven.
 Other emulators and methods have not been tested. Both modes buy only Covenant
 Bookmarks and Mystic Medals; Friendship purchases are removed from calibration too.

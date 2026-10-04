@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc51.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,7 +14,7 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc51.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0.zip'
 ```
 
 ## Emulator setup
@@ -144,7 +144,7 @@ fixed during the session, including dimmed confirmation dialogs. Actual window
 moves and resizes still stop input. Restored Google windows with a thin light
 frame above the header are supported. Set the window size before pressing Start;
 you can begin directly in the open Secret Shop.
-Google developer-emulator live actions in rc51 remain unverified.
+The owner reports the ordinary live cases pass on both clients with rc51. This release preserves that automation code. Exact rebuilt binaries have offline verification; long runs remain unverified.
 
 The app checks each confirmation before clicking it and stops on unexpected text
 or an insufficient-currency message. Keep English confirmation text readable.
@@ -159,9 +159,9 @@ name, gold price and Buy label on the same row. A recognized currency with an
 uncertain price or button stops the run before Refresh. A partly hidden bottom
 row is checked again after scrolling. Keep the item names and prices readable.
 Live counters describe completed action sequences rather than balance readings.
-A supervised elevated check opened the native shop from home and completed one
-three-Skystone refresh without purchases. Native purchases and long runs remain
-unverified; begin with a small supervised budget and check Stop and your Stop key.
+The owner reports the ordinary live cases pass on both clients with rc51.
+This release preserves that automation code. Long runs remain unverified;
+begin with a small supervised budget and check Stop and your Stop key.
 Save Settings retains your control mode and other preferences. Reopening the app
 scans that mode without starting a session. ADB remains the fresh-install default.
 No ADB connection is made by a Mouse session.
@@ -201,7 +201,7 @@ preserved; the software GPL does not relicense third-party artwork.
 About & Credits contains Quickstart and bundled Release notes tabs. The main
 screen’s Buy me a coffee button opens https://ko-fi.com/bluenatto only when clicked.
 
-For this upcoming first full release, testing has been limited to Google Play
+For this first release, testing has been limited to Google Play
 Games on PC Developer Emulator and the official STOVE client of Epic Seven.
 Other emulators and methods have not been tested. Both modes buy only Covenant
 Bookmarks and Mystic Medals; Friendship purchases are removed from calibration too.

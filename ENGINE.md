@@ -1,12 +1,14 @@
-# E7 live-counter engine candidate
+# E7 live-counter engine — v0.1.0
 
 Modified from Solunium's GPL-3.0 E7 ADB engine, maintained by
 NitrogenSulfide (Blue Natto).
 Source: `E7ADBShopRefresh.py`. The upstream history remains in the maintained
 repository; upstream base `49313d14b24f1b8efbeb49f9a6b2126f9bbd0849`.
-This local candidate has not been published. Automated checks and the owner's
-reports about earlier candidates are separate from verification of these exact
-download bytes. Insufficient-currency live checks remain deferred.
+The first release preserves rc51's automation code. The owner reports the ordinary
+live cases pass on both clients with rc51. Automated checks of these exact rebuilt
+packages are recorded separately from that report. Long runs and insufficient-
+currency live checks remain unverified. Older candidate notes retain their
+historical verification status.
 
 rc51 consolidates normal ADB and Mouse actions in `e7_shop_flow.py`. The
 capture/input transports remain separate. Both modes use observed home controls,
