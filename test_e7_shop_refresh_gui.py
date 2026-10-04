@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 import e7_shop_refresh_gui as gui
 from e7_setup import REFERENCE_NAMES
+from e7_window_preview import GameWindow
 PACKAGED_ASSETS = gui.ASSET_DIR
 DEVICE_SCAN = gui.RefreshGui.refresh_devices
 CONNECTION_CHECK = gui.RefreshGui._start_connection_check
@@ -285,6 +286,71 @@ class GuiTests(unittest.TestCase):
         settings = self.app._settings()
         self.assertEqual((settings.budget, settings.tap_sleep, settings.stop_key, settings.random_offset),
                          (12.0, 0.3, "`", True))
+
+    def choose_mouse_fixture(self):
+        self.app.control_mode.set('Mouse (preview)')
+        self.app._change_control_mode()
+        target=GameWindow(123,456,'Epic Seven',(0,0,1920,1080))
+        self.app.mouse_windows={target.label:target}
+        self.app.mouse_target.set(target.label)
+        return target
+
+    def test_mouse_preview_captures_without_adb_or_refresh_session(self):
+        target=self.choose_mouse_fixture()
+        report=dict(read_only=True,state='home',targets=[dict(label='Secret Shop menu',point=[86,548])],detections=[])
+        def capture(window,path):
+            from PIL import Image,ImageDraw
+            image=Image.new('RGB',(1920,1080),'#334155')
+            ImageDraw.Draw(image).rectangle((50,500,150,580),outline='white',width=5)
+            image.save(path)
+        with patch.object(gui,'capture_selected',side_effect=capture) as grab, patch.object(gui,'analyze_capture',return_value=report), \
+                patch.object(gui,'launch_engine') as launch, patch.object(gui,'check_connection') as adb:
+            self.app.start_button.invoke()
+            self.app._mouse_preview_countdown(self.app._preview_token,target,0)
+            self.pump_until(lambda:self.app.status.get()=='Preview complete')
+        self.assertEqual(grab.call_count,1);launch.assert_not_called();adb.assert_not_called()
+        self.assertIsNone(self.app.process);self.assertEqual(self.app.run_id,0)
+        self.assertFalse(self.history.exists());self.assertFalse(self.config.exists())
+        self.assertIn('no clicks',self.app.preview_window.title())
+        self.assertEqual(self.app.start_button.cget('text'),'Preview targets')
+        self.app.preview_window.close()
+
+    def test_mouse_preview_cancelled_before_capture_and_late_result_ignored(self):
+        target=self.choose_mouse_fixture()
+        with patch.object(gui,'capture_selected') as capture, patch.object(gui,'launch_engine') as launch:
+            self.app.start_button.invoke();token=self.app._preview_token
+            self.app.stop_refresh()
+            self.app._mouse_preview_countdown(token,target,0)
+            self.app._finish_mouse_preview(token,None,None,'')
+        capture.assert_not_called();launch.assert_not_called()
+        self.assertIsNone(self.app.preview_window)
+        self.assertEqual(self.app.status.get(),'Preview cancelled')
+
+    def test_mouse_scan_results_and_switch_back_preserve_adb_choice(self):
+        before=self.app._device_address()
+        target=self.choose_mouse_fixture()
+        self.app.log_queue.put((None,'windows',(self.app._connection_check_id,[target],'')))
+        self.app._drain_log_queue()
+        self.assertEqual(self.app.device_box.cget('textvariable'),str(self.app.mouse_target))
+        self.app.control_mode.set('ADB');self.app._change_control_mode()
+        self.assertEqual(self.app._device_address(),before)
+        self.assertEqual(self.app.start_button.cget('text'),'Start Refresh')
+        self.assertEqual(self.app.device_box.cget('textvariable'),str(self.app.device))
+
+    def test_missing_mouse_target_blocks_capture_and_red_warning_is_clear(self):
+        self.app.control_mode.set('Mouse (preview)');self.app._change_control_mode()
+        with patch.object(gui,'capture_selected') as capture, patch.object(gui,'launch_engine') as launch:
+            self.app.start_button.invoke()
+        capture.assert_not_called();launch.assert_not_called()
+        self.assertIn('Choose an open game window',self.app.home_ui_hint.get())
+
+    def test_stale_adb_scan_cannot_override_mouse_mode_notice(self):
+        old=self.app._connection_check_id
+        self.choose_mouse_fixture()
+        self.app.log_queue.put((None,'devices',(old,gui.ConnectionCheck((),'No emulator',''),False)))
+        self.app._drain_log_queue()
+        self.assertEqual(self.app.connection_warning,'')
+        self.assertIn('Mouse preview only',self.app.home_ui_hint.get())
 
     def test_credits_first_launch_dismissal_and_startup_opt_in_persist(self):
         with patch.object(self.app,'winfo_viewable',return_value=True), patch.object(self.app,'_show_about') as show:

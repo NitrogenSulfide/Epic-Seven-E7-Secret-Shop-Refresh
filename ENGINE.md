@@ -144,3 +144,13 @@ explicit Start is required after setup. Existing mid-session shop guards remain.
 `--check-navigation-frame PATH` checks a saved screenshot entirely offline from
 the runtime directory. It prints JSON with `home`, `shop` or `unrecognized` and
 sends no ADB commands, starts no keyboard hooks and makes no game actions.
+
+## Read-only Mouse preview
+
+The rc24 engine also supports `--preview-mouse-frame PATH --output REPORT.json`.
+This early CLI branch analyzes an existing 16:9 screenshot with the same shop
+references and writes normalized targets/item detections. It exits before ADB
+initialization, keyboard hooks or the refresh loop. The GUI's Mouse preview uses
+this branch only; screenshots/reports are private runtime data. Actual mouse
+input is not implemented. The engine builder includes `e7_mouse_analysis.py` in
+both the binary and corresponding source distribution.

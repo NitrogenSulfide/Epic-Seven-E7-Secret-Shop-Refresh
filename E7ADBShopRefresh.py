@@ -456,6 +456,18 @@ def run_refresh_engine(**settings):
 
 
 if __name__ == '__main__':
+    if sys.argv[1:2] == ['--preview-mouse-frame']:
+        import argparse
+        from pathlib import Path
+        from e7_mouse_analysis import inspect_mouse_frame
+        parser = argparse.ArgumentParser(description='Analyze a saved mouse-mode frame offline. No input or spending.')
+        parser.add_argument('--preview-mouse-frame',required=True)
+        parser.add_argument('--output',required=True)
+        args = parser.parse_args()
+        report = inspect_mouse_frame(args.preview_mouse_frame,'adb-assets')
+        Path(args.output).write_text(json.dumps(report,indent=2),encoding='utf-8')
+        print('Read-only mouse preview analyzed. No game actions.')
+        sys.exit(0)
     if sys.argv[1:2] == ['--prepare-navigation-references']:
         import argparse
         parser = argparse.ArgumentParser(description='Prepare private navigation references offline; no ADB or game actions.')
