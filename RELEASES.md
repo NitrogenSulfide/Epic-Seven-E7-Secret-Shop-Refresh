@@ -84,6 +84,9 @@ Also check maximized STOVE dimensions with symmetric black side bars, top/bottom
 bars, exact cropped screen coordinates and recognition on the resulting image;
 reject colored chrome, asymmetric borders and images that do not contain a
 16:9 viewport.
+Verify readiness waiting without activation/input, timeout, cancellation while
+waiting/grabbing and stale-result handling. A delayed user focus change must
+continue to the read-only preview; Stop/close must prevent a waiting capture.
 Use saved frames to check annotations. Actual Google Play/STOVE capture remains
 a separate user-run check. Do not add input or claim live refreshing support until
 window/process identity, focus-loss stops, purchase confirmation and budget/stop
