@@ -903,9 +903,11 @@ class NativeEngineTests(unittest.TestCase):
             previous=os.getcwd()
             try:
                 os.chdir(temp)
-                self.assertTrue(E7MouseShopRefresh._save_confirmation_failure(app,'refresh',shop()))
+                self.assertTrue(E7MouseShopRefresh._save_confirmation_failure(app,'refresh',shop(),validated=dialog()))
                 folder=next(Path('mouse-failures').iterdir())
                 with Image.open(folder/'dialog.png') as saved:
+                    self.assertEqual(saved.size,(950,740))
+                with Image.open(folder/'validated.png') as saved:
                     self.assertEqual(saved.size,(950,740))
                 self.assertFalse(json.loads((folder/'failure.json').read_text())['confirmation_clicked'])
                 with patch('e7_mouse_refresh.Path.mkdir',side_effect=OSError('read only')):
@@ -1095,11 +1097,11 @@ class NativeEngineTests(unittest.TestCase):
                                     ('buy','Mystic medal','Cancel Buy Mystic Medals 280,000')):
             with self.subTest(operation=operation,item=name):
                 app=self.make_engine();app._item_name=name
-                app.read_confirmation_text=Mock(side_effect=['Cancel Confirm',text])
+                app.read_confirmation_text=Mock(side_effect=['Cancel Confirm',text,text])
                 app.mouse.screenshot.side_effect=[Image.fromarray(image) for image in (dialog(operation),dialog(operation),dialog(operation),shop())]
                 with patch('e7_mouse_refresh.time.sleep'):
                     self.assertTrue(app._confirm(operation,shop()))
-                self.assertEqual(app.read_confirmation_text.call_count,2)
+                self.assertEqual(app.read_confirmation_text.call_count,3)
                 self.assertEqual(app.mouse.click.call_count,1)
                 app._save_confirmation_failure.assert_not_called()
 
@@ -1121,6 +1123,68 @@ class NativeEngineTests(unittest.TestCase):
             with self.assertRaisesRegex(MouseStopped,'changed while'):
                 app.clickRefresh()
         self.assertEqual(app.mouse.click.call_count,1)
+
+    def test_consecutive_refreshes_accept_animated_background_and_small_button_jitter(self):
+        app=self.make_engine();app.budget=6
+        state=['shop'];reads=[0]
+        def screenshot():
+            image=shop() if state[0]=='shop' else dialog()
+            if state[0]=='confirm':
+                reads[0]+=1
+                image[300:500,550:1450]=40 if reads[0]%2 else 100
+            return Image.fromarray(image)
+        def click(x,y):state[0]='confirm' if y>900 else 'shop'
+        app.mouse.screenshot.side_effect=screenshot;app.mouse.click.side_effect=click
+        original=confirmation_button
+        observed=[]
+        def button(rgb,operation,before):
+            box=original(rgb,operation,before)
+            if box is not None:
+                box=tuple(v+(1 if reads[0]%2==0 else 0) for v in box)
+                observed.append(box)
+            return box
+        with patch('e7_mouse_refresh.confirmation_button',side_effect=button),patch('e7_mouse_refresh.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
+            app.refreshShop()
+        self.assertEqual(app.refresh_count,2)
+        self.assertEqual(app.mouse.click.call_count,4)
+        self.assertEqual([call.args for call in app.mouse.click.call_args_list[1::2]],
+                         [((box[0]+box[2])/2,(box[1]+box[3])/2) for box in observed[1::2]])
+        app._save_confirmation_failure.assert_not_called()
+
+    def test_fresh_confirmation_must_still_match_item_cost_and_action(self):
+        for operation,name,initial,changed in (
+            ('refresh',None,'Use Skystone to refresh? Cancel Confirm','Cancel Buy Covenant Bookmarks 184,000'),
+            ('refresh',None,'Use Skystone to refresh? Cancel Confirm','Not enough Skystone Cancel Confirm Refresh 3 Skystone'),
+            ('buy','Covenant bookmark','Cancel Buy Covenant Bookmarks 184,000','Cancel Buy Mystic Medals 280,000'),
+            ('buy','Mystic medal','Cancel Buy Mystic Medals 280,000','Cancel Buy Mystic Medals 184,000')):
+            with self.subTest(operation=operation,item=name):
+                app=self.make_engine();app._item_name=name
+                app.mouse.screenshot.return_value=Image.fromarray(dialog(operation))
+                app.read_confirmation_text=Mock(side_effect=[initial,changed])
+                with patch('e7_mouse_refresh.time.sleep'):
+                    with self.assertRaisesRegex(MouseStopped,'changed while'):
+                        app._confirm(operation,shop())
+                app.mouse.click.assert_not_called()
+                self.assertIn('validated',app._save_confirmation_failure.call_args.kwargs)
+
+    def test_large_confirmation_button_movement_is_not_clicked(self):
+        app=self.make_engine();app.mouse.screenshot.return_value=Image.fromarray(dialog())
+        with patch('e7_mouse_refresh.confirmation_button',side_effect=[(1040,650,1290,740),(1060,650,1310,740)]),patch('e7_mouse_refresh.time.sleep'):
+            with self.assertRaisesRegex(MouseStopped,'changed while'):
+                app._confirm('refresh',shop())
+        app.mouse.click.assert_not_called()
+
+    def test_stop_during_fresh_confirmation_ocr_prevents_click(self):
+        app=self.make_engine();app.mouse.screenshot.return_value=Image.fromarray(dialog())
+        def read(_):
+            app.loop_active=False
+            return 'Use Skystone to refresh? Cancel Confirm'
+        app.read_confirmation_text=Mock()
+        app.read_confirmation_text.side_effect=lambda rgb: read(rgb) if app.read_confirmation_text.call_count==2 else 'Use Skystone to refresh? Cancel Confirm'
+        with patch('e7_mouse_refresh.time.sleep'):
+            self.assertFalse(app._confirm('refresh',shop()))
+        self.assertEqual(app.mouse.screenshot.call_count,2)
+        app.mouse.click.assert_not_called()
 
     def test_stop_during_ocr_prevents_another_capture_and_click(self):
         app = self.make_engine()
