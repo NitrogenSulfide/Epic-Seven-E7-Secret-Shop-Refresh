@@ -1,5 +1,15 @@
 # Release checks
 
+## rc41 STOVE home entry
+
+STOVE reframes its home artwork when the client aspect ratio changes. The saved
+private hidden-home reference now permits bounded affine alignment, requiring
+broad feature agreement and matching brightness across most of the image.
+Popups, dimmed dialogs, blank captures and changed pages must fail. References
+remain private and never go into player/source ZIPs. Check real saved STOVE home
+frames at several sizes, the one-reveal/one-shop-entry sequence with mocked
+input, unknown-screen rejection, and the existing Google viewport fixtures.
+
 ## rc40 app cleanup
 
 The app exposes ADB and Mouse only. Saved Mouse preview preferences load as

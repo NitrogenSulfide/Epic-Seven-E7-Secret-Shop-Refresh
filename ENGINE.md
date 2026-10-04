@@ -219,6 +219,13 @@ sends no ADB commands, starts no keyboard hooks and makes no game actions.
 
 ## Read-only Mouse preview
 
+rc41 also recognizes a private known STOVE home image after modest changes to
+the window's aspect ratio. Broad image-feature agreement identifies its framing;
+aligned pixel differences must still reject dimmed dialogs, popups and changed
+pages. This only enables the existing guarded reveal-controls and Secret Shop
+entry sequence. Unknown artwork still requires visible home controls. It sends
+no Refresh or purchase before the shop markers are verified.
+
 The rc24 engine also supports `--preview-mouse-frame PATH --output REPORT.json`.
 This early CLI branch analyzes an existing game-client screenshot with the same shop
 references and writes normalized targets/item detections. It exits before ADB

@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw
 import E7ADBShopRefresh as adb_engine
 from e7_windows_capture import GameWindow
 from e7_native_mouse import WindowsMouse, MouseStopped, Input, verify_native_target, physical_pixel_coordinates, process_is_elevated, require_mouse_permissions, pointer_glide
-from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons, home_menu_target, home_icon_target, hidden_home_matches, currency_button, IncompleteCurrencyRow, inspect_mouse_items
+from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons, home_menu_target, home_icon_target, hidden_home_matches, reframed_home_matches, currency_button, IncompleteCurrencyRow, inspect_mouse_items
 from e7_mouse_confirmation import confirmation_matches
 
 
@@ -566,6 +566,24 @@ class NativeEngineTests(unittest.TestCase):
             popup=frame.copy(); popup[300:900,500:1450]=30
             self.assertFalse(hidden_home_matches(popup,path))
             self.assertFalse(hidden_home_matches(np.full_like(frame,50),path))
+
+    def test_stove_reframed_home_requires_matching_artwork_and_rejects_overlays(self):
+        import cv2
+        rng = np.random.default_rng(41)
+        saved = np.full((540,960), 70, dtype=np.uint8)
+        for _ in range(350):
+            x,y = rng.integers([20,20],[900,500])
+            cv2.circle(saved, (int(x),int(y)), int(rng.integers(3,18)), int(rng.integers(20,230)), -1)
+        matrix = np.float32([[1.08,0,-38],[0,1,0]])
+        current = cv2.warpAffine(saved, matrix, (960,540))
+        self.assertTrue(reframed_home_matches(current,saved))
+        for altered in (current.copy(), (current*.45).astype('uint8'), np.full_like(current,50)):
+            if np.array_equal(altered,current): altered[155:435,250:720] = 30
+            self.assertFalse(reframed_home_matches(altered,saved))
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/'hidden.png'; Image.fromarray(saved).save(path)
+            frame=cv2.resize(current,(1920,1080))
+            self.assertTrue(hidden_home_matches(frame,path))
 
     def test_default_hidden_home_checks_google_without_replacing_native_reference(self):
         with tempfile.TemporaryDirectory() as temp:

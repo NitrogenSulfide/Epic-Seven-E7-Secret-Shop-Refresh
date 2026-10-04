@@ -1,4 +1,9 @@
-0.1.0 · First release preview (rc40)
+0.1.0 · First release preview (rc41)
+
+rc41
+• STOVE recognizes the same saved home screen across different window shapes,
+  reveals its hidden controls and enters Secret Shop automatically.
+• A popup or changed page still prevents automatic home input.
 
 Secret Shop refresh sessions through ADB or your actual mouse.
 Automatic shop entry from home, Covenant Bookmark and Mystic Medal purchases,
