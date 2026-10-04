@@ -27,6 +27,7 @@ scratch/
 ShopRefreshGUI.ini
 engine-location.ini
 mouse-previews/
+mouse-failures/
 *.log
 *.bak
 *.tmp

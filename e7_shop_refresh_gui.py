@@ -21,7 +21,7 @@ from e7_process import launch_engine
 from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon
 from e7_about import AboutDialog
 from e7_setup import missing_references, has_builtin_references, RecognitionSetup, verify_setup_engine
-from e7_native_mouse import activate_native_target
+from e7_native_mouse import activate_native_target, release_native_button
 from e7_connection import check_connection, ConnectionCheck
 from e7_window_preview import WindowsCapture, capture_selected, analyze_capture, MousePreviewDialog, wait_for_window
 
@@ -244,6 +244,7 @@ class RefreshGui(tk.Tk):
         self.stopping = False
         self.finished = False
         self._mouse_failure = None
+        self._native_mouse_run = False
         self._session_log_path = None
         self.partial_line = ""
         self.raw_output = ""
@@ -1256,8 +1257,8 @@ class RefreshGui(tk.Tk):
             verify_setup_engine(ENGINE_EXE)
             check = subprocess.run([str(ENGINE_EXE),'--verify'],cwd=APP_DIR,capture_output=True,text=True,
                                    timeout=15,creationflags=NO_WINDOW)
-            if check.returncode or 'native mouse v2' not in check.stdout:
-                raise ValueError('Real Mouse mode needs the matching rc30 or newer engine. Use the complete new player folder.')
+            if check.returncode or 'native mouse v3' not in check.stdout:
+                raise ValueError('Real Mouse mode needs the matching rc31 or newer engine. Use the complete new player folder.')
             target = activate_native_target(target)
         except (ValueError,OSError,RuntimeError,subprocess.SubprocessError) as error:
             self._set_connection_warning(str(error),reveal=True)
@@ -1280,6 +1281,7 @@ class RefreshGui(tk.Tk):
         run_id = self.run_id
         self.stopping = self.finished = False
         self._mouse_failure = None
+        self._native_mouse_run = mouse_target is not None
         self._session_log_path = None
         if mouse_target:
             try:
@@ -1524,8 +1526,18 @@ class RefreshGui(tk.Tk):
         self.progress_text.set("Stopping this session’s engine and calibration windows…")
         self.stop_button.configure(state=tk.DISABLED)
         self._event("Stop requested.")
+        if self._native_mouse_run:
+            try:
+                process.stdin.write('STOP\n')
+                process.stdin.flush()
+                self.after(2500,lambda:self._kill_if_needed(process))
+                return
+            except (OSError,ValueError):
+                pass
         try:
             self.process_tree.stop(process) if self.process_tree else process.terminate()
+            if self._native_mouse_run:
+                release_native_button()
         except OSError as exc:
             self._append_log(f"Stop failed: {exc}\n")
         self.after(2500, lambda: self._kill_if_needed(process))
@@ -1538,6 +1550,8 @@ class RefreshGui(tk.Tk):
         if process is self.process and process.poll() is None:
             try:
                 self.process_tree.close() if self.process_tree else process.kill()
+                if self._native_mouse_run:
+                    release_native_button()
             except OSError as exc:
                 self._append_log(f"Stop failed: {exc}\n")
 
@@ -1555,6 +1569,8 @@ class RefreshGui(tk.Tk):
             self._exit_seen = True
             if self.process_tree:
                 self.process_tree.close()
+            if self._native_mouse_run:
+                release_native_button()
             self.after(150, lambda: self._finish_process(process, run_id))
 
     def _finish_process(self, process=None, run_id=None):
@@ -1747,8 +1763,11 @@ class RefreshGui(tk.Tk):
             self.destroy()
 
     def destroy(self):
+        native_running = self._native_mouse_run and self.process and self.process.poll() is None
         if self.process_tree:
             self.process_tree.close()
+        if native_running:
+            release_native_button()
         # Cancel scheduled callbacks before Tcl commands are destroyed.
         for callback in self.tk.splitlist(self.tk.call("after", "info")):
             self.after_cancel(callback)

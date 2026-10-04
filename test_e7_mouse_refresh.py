@@ -100,19 +100,83 @@ class TransportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'changed'):
             verify_native_target(self.target,backend=self.backend,lookup=lambda _:'EpicSeven.exe')
 
-    def test_click_is_one_move_down_up_batch_and_partial_send_releases(self):
+    def prepare_input_api(self):
         self.mouse.screenshot()
         api = self.backend.user
         api.GetSystemMetrics.side_effect = [-3840,0,7680,2160]
-        api.SendInput.return_value = 3
-        self.mouse._send((-1920,1030),'click',0)
-        args = api.SendInput.call_args.args
-        self.assertEqual((args[0],args[2]),(3,ctypes.sizeof(Input)))
-        self.assertEqual([event.value.mouse.flags for event in args[1]],[0xC001,2,4])
-        api.GetSystemMetrics.side_effect = [-3840,0,7680,2160]
-        api.SendInput.side_effect = [2,1]
-        with self.assertRaises(MouseStopped): self.mouse._send((-1920,1030),'click',0)
-        self.assertEqual(api.SendInput.call_args.args[0],1)
+        api.SendInput.return_value = 1
+        def position(pointer):
+            pointer._obj.x,pointer._obj.y=-1920,1030
+            return True
+        api.GetCursorPos.side_effect=position
+        return api
+
+    def test_click_moves_verifies_then_holds_across_frames_and_releases(self):
+        api=self.prepare_input_api()
+        flags=[]
+        api.SendInput.side_effect=lambda count,event,size:flags.append(event._obj.value.mouse.flags) or 1
+        with patch('e7_native_mouse.time.sleep') as sleep:
+            self.mouse._send((-1920,1030),'click',0)
+        self.assertEqual(flags,[0xC001,2,4])
+        self.assertEqual([call.args[0] for call in sleep.call_args_list],[.05,.08])
+        api.SetCursorPos.assert_not_called()
+
+    def test_failed_movement_blocks_down_and_confirmation(self):
+        api=self.prepare_input_api();api.GetCursorPos.side_effect=None
+        api.SetCursorPos.return_value=False
+        with patch('e7_native_mouse.time.sleep'),self.assertRaisesRegex(MouseStopped,'No click sent'):
+            self.mouse._send((-1920,1030),'click',0)
+        self.assertEqual(api.SendInput.call_count,1)
+
+    def test_direct_position_fallback_must_reach_the_target(self):
+        api=self.prepare_input_api();position=api.GetCursorPos.side_effect
+        api.GetCursorPos.side_effect=[False,False]
+        with patch('e7_native_mouse.time.sleep'),self.assertRaisesRegex(MouseStopped,'place the pointer'):
+            self.mouse._send((-1920,1030),'click',0)
+        api.SetCursorPos.assert_called_once_with(-1920,1030)
+        self.assertEqual(api.SendInput.call_count,1)
+        api.reset_mock();api.GetSystemMetrics.side_effect=[-3840,0,7680,2160]
+        api.GetCursorPos.side_effect=lambda pointer:position(pointer) if api.SetCursorPos.called else False
+        with patch('e7_native_mouse.time.sleep'):
+            self.mouse._send((-1920,1030),'click',0)
+        self.assertEqual(api.SendInput.call_count,3)
+
+    def test_stop_or_exception_while_held_always_releases(self):
+        for failure in (False,True):
+            self.active=True
+            api=self.prepare_input_api();flags=[]
+            api.SendInput.side_effect=lambda count,event,size:flags.append(event._obj.value.mouse.flags) or 1
+            def sleep(delay):
+                if delay==.08:
+                    self.active=False
+                    if failure: raise RuntimeError('interrupted')
+            self.active=True
+            with patch('e7_native_mouse.time.sleep',side_effect=sleep),self.assertRaises((MouseStopped,RuntimeError)):
+                self.mouse._send((-1920,1030),'click',0)
+            self.assertEqual(flags[-1],4)
+            api.SendInput.side_effect=None
+
+    def test_failed_down_still_sends_release(self):
+        api=self.prepare_input_api();api.SendInput.side_effect=[1,0,1]
+        with patch('e7_native_mouse.time.sleep'),self.assertRaisesRegex(MouseStopped,'mouse-down'):
+            self.mouse._send((-1920,1030),'click',0)
+        self.assertEqual(api.SendInput.call_count,3)
+
+    def test_failed_release_is_retried_before_returning(self):
+        api=self.prepare_input_api();api.SendInput.side_effect=[1,1,0,1]
+        with patch('e7_native_mouse.time.sleep'):
+            self.mouse._send((-1920,1030),'click',0)
+        self.assertEqual(api.SendInput.call_count,4)
+
+    def test_capture_after_post_grab_pause_is_fresh(self):
+        fresh=self.image.copy();ImageDraw.Draw(fresh).rectangle((400,400,500,500),fill='red')
+        self.mouse.grabber.side_effect=[self.image,fresh]
+        self.backend.unobstructed.side_effect=[True,False,True,True,True]
+        with patch('e7_native_mouse.time.sleep'):
+            result=self.mouse.screenshot()
+        self.assertEqual(result.getpixel((450,450)),(255,0,0))
+        self.assertEqual(self.mouse.grabber.call_count,2)
+        self.sender.assert_not_called()
 
     def test_scroll_sends_wheel_without_held_button(self):
         self.mouse.screenshot(); self.mouse.scroll(1200,800)
@@ -178,6 +242,7 @@ class NativeEngineTests(unittest.TestCase):
         app.read_confirmation_text = lambda _:'Cancel Confirm Refresh Secret Shop 3 Skystone Covenant bookmark 184,000 Mystic medal 280,000'
         app.read_navigation_text = Mock(return_value=dict(text='',words=[]))
         app.mouse = Mock()
+        app._save_confirmation_failure=Mock(return_value=False)
         app.mouse.screenshot.return_value = Image.fromarray(shop())
         app.navigation = Mock()
         app.navigation.shop_visible.return_value = True
@@ -278,6 +343,48 @@ class NativeEngineTests(unittest.TestCase):
                 app.clickRefresh()
         self.assertEqual(app.mouse.click.call_count,1)
         self.assertEqual(app.refresh_count,0)
+
+    def test_focus_pause_does_not_consume_confirmation_timeout(self):
+        app=self.make_engine();app.mouse.pause_revision=0;clock=[0];images=iter((shop(),shop(),dialog(),dialog(),shop()))
+        captures=[0]
+        def capture():
+            captures[0]+=1
+            if captures[0]==2:
+                clock[0]=8;app.mouse.pause_revision+=1
+            return Image.fromarray(next(images))
+        app.mouse.screenshot.side_effect=capture
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:clock[0]):
+            self.assertTrue(app.clickRefresh())
+        self.assertEqual(app.mouse.click.call_count,2)
+
+    def test_shifted_dialog_action_is_observed_without_adb_anchor(self):
+        frame=shop();frame[300:920,550:1400]=90
+        frame[810:890,1100:1350]=(20,110,40)
+        self.assertEqual(confirmation_button(frame,'refresh',shop()),(1100,810,1350,890))
+        frame[420:500,1100:1350]=(20,110,40)
+        self.assertIsNone(confirmation_button(frame,'refresh',shop()))
+
+    def test_stop_protocol_and_eof_cancel_the_native_session(self):
+        from e7_mouse_refresh import listen_for_stop
+        for text in ('STOP\n',''):
+            app=Mock();listen_for_stop(io.StringIO(text),app)
+            app.request_stop.assert_called_once()
+
+    def test_private_failure_crops_exclude_header_and_report_write_failure(self):
+        import os
+        app=self.make_engine();app._rgb=dialog()
+        with tempfile.TemporaryDirectory() as temp:
+            previous=os.getcwd()
+            try:
+                os.chdir(temp)
+                self.assertTrue(E7MouseShopRefresh._save_confirmation_failure(app,'refresh',shop()))
+                folder=next(Path('mouse-failures').iterdir())
+                with Image.open(folder/'dialog.png') as saved:
+                    self.assertEqual(saved.size,(950,740))
+                self.assertFalse(json.loads((folder/'failure.json').read_text())['confirmation_clicked'])
+                with patch('e7_mouse_refresh.Path.mkdir',side_effect=OSError('read only')):
+                    self.assertFalse(E7MouseShopRefresh._save_confirmation_failure(app,'refresh',shop()))
+            finally: os.chdir(previous)
 
     def test_stop_between_click_and_confirmation_sends_no_second_click(self):
         app = self.make_engine()
