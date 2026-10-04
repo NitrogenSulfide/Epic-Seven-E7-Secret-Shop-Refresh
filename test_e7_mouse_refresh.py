@@ -749,6 +749,31 @@ class NativeEngineTests(unittest.TestCase):
         self.ui_ocr.return_value['words'].pop(0)
         self.assertIsNone(confirmation_button(frame,'refresh',shop()))
 
+    def test_native_wide_purchase_confirmation_is_clicked_only_for_matching_item(self):
+        frame=shop();frame[300:920,550:1400]=90
+        frame[718:809,896:1351]=(20,110,40)  # Captured STOVE button geometry.
+        self.assertEqual(confirmation_button(frame,'buy',shop()),(896,718,1351,809))
+        self.assertIsNone(confirmation_button(frame,'refresh',shop()))
+        self.assertEqual(green_buttons(frame,(800,400,1450,1000)),[])
+        for name,text in (('Covenant bookmark','Cancel Buy Covenant Bookmarks 184,000'),
+                          ('Mystic medal','Cancel Buy Mystic Medals 280,000')):
+            with self.subTest(item=name):
+                app=self.make_engine();app._item_name=name
+                app.read_confirmation_text=lambda _,text=text:text
+                app.mouse.screenshot.side_effect=[Image.fromarray(image) for image in (frame,frame,shop())]
+                with patch('e7_mouse_refresh.time.sleep'):
+                    self.assertTrue(app._confirm('buy',shop()))
+                self.assertEqual(app.mouse.click.call_args_list[0].args,(1123.5,763.5))
+                self.assertEqual(app.mouse.click.call_count,1)
+        app=self.make_engine();app._item_name='Mystic medal'
+        app.read_confirmation_text=lambda _:'Cancel Buy Covenant Bookmarks 184,000'
+        app.mouse.screenshot.return_value=Image.fromarray(frame)
+        with patch('e7_mouse_refresh.time.sleep'),self.assertRaisesRegex(MouseStopped,'does not match'):
+            app._confirm('buy',shop())
+        app.mouse.click.assert_not_called()
+        frame[718:809,896:1400]=(20,110,40)
+        self.assertIsNone(confirmation_button(frame,'buy',shop()))
+
     def test_refresh_uses_recognized_label_then_observed_confirmation(self):
         app = self.make_engine()
         app.mouse.screenshot.side_effect = [Image.fromarray(frame) for frame in (shop(),dialog(),dialog(),shop())]

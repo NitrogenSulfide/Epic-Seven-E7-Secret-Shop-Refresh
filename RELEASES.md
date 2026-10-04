@@ -1,5 +1,15 @@
 # Release checks
 
+## rc46 STOVE purchase confirmation width
+
+The saved Covenant Bookmarks dialog has a 455-pixel-wide green action button
+at the normalized 1920×1080 size. The old 450-pixel maximum excluded it even
+though local OCR correctly read the intended item and 184,000 gold price.
+Allow up to 500 pixels only for purchase-confirmation buttons; keep list and
+refresh limits unchanged. Verify the private failed crop at multiple sizes,
+both currency confirmation flows, wrong-item rejection and oversized rejection
+with mocked input. This fix does not claim a new live purchase check.
+
 ## rc45 home controls across wallpapers
 
 Windows OCR read the bright field home's Secret Shop caption as `secietshop`.

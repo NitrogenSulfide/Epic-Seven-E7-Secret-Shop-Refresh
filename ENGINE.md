@@ -86,6 +86,11 @@ OCR crop stays local and is removed on exit; recognized text is not logged.
 offline and reports verified currency names, prices and Buy targets. It creates
 no mouse session, capture, keyboard hook, ADB connection or purchase.
 
+rc46 permits purchase-confirmation buttons up to 500 normalized pixels wide,
+covering STOVE's observed 455-pixel combined gold-price/Buy button. List and
+refresh-button limits stay at 450. Intended-item/price text checks and fresh
+dialog agreement remain required before any confirmation click.
+
 In rc5, `e7_shop_navigation.py` replaces the original three fixed menu taps with
 recognition of a private Secret Shop text reference. It sends at most one
 navigation tap, waits up to eight seconds for the shop title and Refresh label,

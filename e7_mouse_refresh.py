@@ -253,14 +253,14 @@ def currency_button(result, boxes, item_name):
     raise MouseStopped(f'The {item_name} name was recognized, but its price and Buy button could not be verified on the same row. Stopped before scrolling or refreshing.')
 
 
-def green_buttons(rgb, region):
+def green_buttons(rgb, region, *, max_width=450):
     left,top,right,bottom = region
     hsv = cv2.cvtColor(rgb[top:bottom,left:right],cv2.COLOR_RGB2HSV)
     mask = cv2.inRange(hsv,np.array([30,45,25]),np.array([95,255,255]))
     count,_,stats,_ = cv2.connectedComponentsWithStats(mask)
     boxes = []
     for x,y,width,height,area in stats[1:count]:
-        if 100 <= width <= 450 and 35 <= height <= 140 and width/height >= 1.4 and area >= width*height*.35:
+        if 100 <= width <= max_width and 35 <= height <= 140 and width/height >= 1.4 and area >= width*height*.35:
             boxes.append((int(left+x),int(top+y),int(left+x+width),int(top+y+height)))
     return boxes
 
@@ -270,7 +270,11 @@ def confirmation_button(rgb, operation, before):
     # Shop Buy buttons are excluded; a single centered acknowledgement is excluded.
     if np.mean(cv2.absdiff(rgb[300:920,550:1400],before[300:920,550:1400])) < 4:
         return None
-    choices = [box for box in green_buttons(rgb,(800,400,1450,1000))
+    # STOVE's purchase button includes the gold-price inset and measures 455px
+    # at the normalized size. Keep list/refresh limits unchanged; item and price
+    # verification plus a fresh dialog capture still precede confirmation input.
+    choices = [box for box in green_buttons(rgb,(800,400,1450,1000),
+                                          max_width=500 if operation=='buy' else 450)
                if (box[0]+box[2])/2 >= 1020]
     if len(choices)==1:
         return choices[0]
