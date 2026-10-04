@@ -165,6 +165,7 @@ class E7ADBShopRefresh:
 
             if not self.loop_active: break
             #look at shop (page 1)
+            self._scan_page = 1
             screenshot = self.takeScreenshot()
             self.navigation.require_shop(screenshot)
             #print(len(self.storage.inventory.items()))
@@ -190,11 +191,14 @@ class E7ADBShopRefresh:
 
             if not self.loop_active: break
             #look at shop (page 2)
+            self._scan_page = 2
             screenshot = self.takeScreenshot()
             self.navigation.require_shop(screenshot)
             for key, value in self.storage.inventory.items():
+                if key in brought:
+                    continue
                 pos = self.findItemPosition(screenshot, value.image)
-                if pos is not None and key not in brought:
+                if pos is not None:
                     if self.clickBuy(pos):
                         value.count += 1
                         self.reportLiveStats()
@@ -479,6 +483,14 @@ if __name__ == '__main__':
         target = home_menu_target(read_ui_text(rgb,(0,180,420,920)),rgb)
         hidden = args.hidden_reference is not None and hidden_home_matches(cv2.cvtColor(rgb,cv2.COLOR_RGB2GRAY),args.hidden_reference)
         print(json.dumps(dict(read_only=True,state='home' if target else 'hidden-home' if hidden else 'unrecognized',target=target)))
+        sys.exit(0)
+    if sys.argv[1:2] == ['--check-mouse-items']:
+        import argparse
+        from e7_mouse_refresh import inspect_mouse_items
+        parser = argparse.ArgumentParser(description='Check native currency detection on a saved shop image; no input or spending.')
+        parser.add_argument('--check-mouse-items',required=True)
+        args = parser.parse_args()
+        print(json.dumps(inspect_mouse_items(args.check_mouse_items)))
         sys.exit(0)
     if sys.argv[1:2] == ['--check-mouse-confirmation']:
         import argparse

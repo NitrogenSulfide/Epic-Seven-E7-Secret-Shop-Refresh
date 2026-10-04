@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc33.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc34.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,7 +14,7 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc33.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc34.zip'
 ```
 
 ## Emulator setup
@@ -126,6 +126,10 @@ Unknown screens receive no guessed clicks.
 
 The app checks each confirmation before clicking it and stops on unexpected text
 or an insufficient-currency message. Keep English confirmation text readable.
+If a native currency icon does not match, the app also checks its full summon
+name, gold price and Buy label on the same row. A recognized currency with an
+uncertain price or button stops the run before Refresh. A partly hidden bottom
+row is checked again after scrolling. Keep the item names and prices readable.
 Live counters describe completed action sequences rather than balance readings.
 A supervised elevated check opened the native shop from home and completed one
 three-Skystone refresh without purchases. Native purchases and long runs remain

@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw
 import E7ADBShopRefresh as adb_engine
 from e7_windows_capture import GameWindow
 from e7_native_mouse import WindowsMouse, MouseStopped, Input, verify_native_target, physical_pixel_coordinates, process_is_elevated, require_mouse_permissions, pointer_glide
-from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons, home_menu_target, home_icon_target, hidden_home_matches
+from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons, home_menu_target, home_icon_target, hidden_home_matches, currency_button, IncompleteCurrencyRow, inspect_mouse_items
 from e7_mouse_confirmation import confirmation_matches
 
 
@@ -27,6 +27,51 @@ def dialog(operation='refresh',centered=False):
     left = 830 if centered else 1040
     frame[top:top+90,left:left+250] = (20,110,40)
     return frame
+
+
+def currency_words(name,offset=0,price=None):
+    prefix,noun,normal_price = ('covenant','bookmarks','184,000') if name=='Covenant bookmark' else ('mystic','medals','280,000')
+    fields = [('summon',[1035,155,1135,180]),(prefix,[1035,205,1160,237]),
+              (noun,[1170,205,1335,237]),(price or normal_price,[1684,168,1786,199]),
+              ('buy',[1711,244,1757,276]),('only',[1035,255,1085,285]),
+              ('1',[1094,255,1103,285]),('available',[1114,255,1220,285])]
+    return [dict(text=text,box=[box[0],box[1]+offset,box[2],box[3]+offset]) for text,box in fields]
+
+
+class CurrencyRowTests(unittest.TestCase):
+    def test_each_currency_requires_its_own_name_price_category_and_buy(self):
+        for name in ('Covenant bookmark','Mystic medal'):
+            words=currency_words(name)
+            self.assertEqual(currency_button(dict(words=words),[(1550,220,1810,300)],name),(1711,244,1757,276))
+            for omitted in ('summon','buy'):
+                with self.subTest(name=name,omitted=omitted),self.assertRaises(MouseStopped):
+                    currency_button(dict(words=[word for word in words if word['text']!=omitted]),[(1550,220,1810,300)],name)
+
+    def test_wrong_price_or_price_on_another_row_is_rejected(self):
+        for price,shift in (('184,000',0),('280,000',430)):
+            words=currency_words('Mystic medal',price=price)
+            for word in words:
+                if word['text']==price:word['box'][1]+=shift;word['box'][3]+=shift
+            with self.assertRaisesRegex(MouseStopped,'same row'):
+                currency_button(dict(words=words),[(1550,220,1810,300)],'Mystic medal')
+
+    def test_ambiguous_or_incomplete_name_is_rejected(self):
+        words=currency_words('Mystic medal')
+        for altered in (words+currency_words('Mystic medal',430),[word for word in words if word['text']!='medals']):
+            with self.assertRaises(MouseStopped):currency_button(dict(words=altered),[(1550,220,1810,300)],'Mystic medal')
+
+    def test_names_outside_item_column_and_other_currencies_are_ignored(self):
+        words=currency_words('Mystic medal')
+        for word in words:word['box'][0]-=600;word['box'][2]-=600
+        self.assertIsNone(currency_button(dict(words=words),[(1550,220,1810,300)],'Mystic medal'))
+        self.assertIsNone(currency_button(dict(words=currency_words('Mystic medal')),[(1550,220,1810,300)],'Covenant bookmark'))
+
+    def test_sold_out_row_is_ignored_only_when_no_active_buy_is_observed(self):
+        words=currency_words('Mystic medal')
+        for word in words:
+            if word['text']=='1':word['text']='0'
+        self.assertIsNone(currency_button(dict(words=words),[],'Mystic medal'))
+        self.assertIsNotNone(currency_button(dict(words=words),[(1550,220,1810,300)],'Mystic medal'))
 
 
 class PointerGlideTests(unittest.TestCase):
@@ -613,12 +658,113 @@ class NativeEngineTests(unittest.TestCase):
         frame[220:300,1550:1810] = (20,110,40)
         app._rgb = frame
         pos = app.findItemPosition(cv_gray(frame),template)
-        self.assertEqual(pos,(1680,260))
+        self.assertEqual(pos,(1741,260))
         app.mouse.screenshot.side_effect = [Image.fromarray(image) for image in (frame,dialog('buy'),dialog('buy'),shop())]
         with patch('e7_mouse_refresh.time.sleep'),patch.object(adb_engine.subprocess,'run') as adb:
             self.assertTrue(app.clickBuy(pos))
         adb.assert_not_called()
         self.assertEqual(app.mouse.click.call_args_list[0].args,pos)
+
+    def add_real_currencies(self,app):
+        for filename,name,price in (('cov.png','Covenant bookmark',184000),('mys.png','Mystic medal',280000)):
+            template=adb_engine.cv2.imread(str(Path(adb_engine.__file__).parent/'adb-assets'/filename),0)
+            self.assertIsNotNone(template)
+            app.storage.inventory[name]=adb_engine.E7Item(template,price)
+
+    def test_currency_text_fallback_uses_buy_label_and_caches_only_current_capture(self):
+        app=self.make_engine();self.add_real_currencies(app)
+        frame=shop();frame[220:300,1550:1810]=(20,110,40);frame[650:730,1550:1810]=(20,110,40)
+        app._rgb=frame;self.ui_ocr.return_value=dict(words=currency_words('Covenant bookmark')+currency_words('Mystic medal',430))
+        points=[app.findItemPosition(cv_gray(frame),item.image) for item in app.storage.inventory.values()]
+        self.assertEqual(points,[(1734,260),(1734,690)])
+        self.assertEqual(self.ui_ocr.call_count,1)
+        app._rgb=frame.copy();app.findItemPosition(cv_gray(frame),app.storage.inventory['Mystic medal'].image)
+        self.assertEqual(self.ui_ocr.call_count,2)
+
+    def test_partial_currency_can_scroll_on_first_page_but_cannot_be_refreshed_on_second(self):
+        app=self.make_engine();self.add_real_currencies(app)
+        words=currency_words('Mystic medal',800)
+        self.ui_ocr.return_value=dict(words=[word for word in words if word['text'] not in ('buy','only','1','available')])
+        app._scan_page=1
+        self.assertIsNone(app.findItemPosition(cv_gray(app._rgb),app.storage.inventory['Mystic medal'].image))
+        app._scan_page=2
+        with self.assertRaises(IncompleteCurrencyRow):app.findItemPosition(cv_gray(app._rgb),app.storage.inventory['Mystic medal'].image)
+        app.mouse.click.assert_not_called()
+
+    def test_unverified_currency_stops_shared_loop_before_drag_or_refresh(self):
+        app=self.make_engine();self.add_real_currencies(app)
+        frame=shop();frame[220:300,1550:1810]=(20,110,40)
+        app.mouse.screenshot.return_value=Image.fromarray(frame)
+        self.ui_ocr.return_value=dict(words=currency_words('Mystic medal',price='184,000'))
+        app.clickRefresh=Mock()
+        with patch('e7_mouse_refresh.time.sleep'),self.assertRaisesRegex(MouseStopped,'same row'):
+            app.refreshShop()
+        app.mouse.click.assert_not_called();app.mouse.drag.assert_not_called();app.clickRefresh.assert_not_called()
+
+    def test_shared_loop_buys_both_currencies_before_drag_and_refresh(self):
+        app=self.make_engine();self.add_real_currencies(app);app.budget=3
+        bought=set();pending=[None];stage=['shop'];events=[]
+        def scene():
+            frame=shop()
+            for name,top in (('Covenant bookmark',220),('Mystic medal',650)):
+                if name not in bought:frame[top:top+80,1550:1810]=(20,110,40)
+            return frame
+        app.mouse.screenshot.side_effect=lambda:Image.fromarray(dialog('buy') if stage[0]=='confirm' else scene())
+        def words(rgb,region):
+            result=[]
+            for name,offset in (('Covenant bookmark',0),('Mystic medal',430)):
+                row=currency_words(name,offset)
+                if name in bought:
+                    row=[word for word in row if word['text']!='buy']
+                    for word in row:
+                        if word['text']=='1':word['text']='0'
+                result.extend(row)
+            return dict(words=result)
+        self.ui_ocr.side_effect=words
+        app.read_confirmation_text=lambda rgb:f'Cancel Confirm {pending[0]} {app.storage.inventory[pending[0]].price}'
+        def click(x,y):
+            if stage[0]=='shop':
+                self.assertEqual(x,1734)
+                pending[0]='Covenant bookmark' if y==260 else 'Mystic medal'
+                self.assertEqual(y,260 if pending[0]=='Covenant bookmark' else 690)
+                stage[0]='confirm';events.append('buy '+pending[0])
+            else:
+                self.assertEqual((x,y),(1165,765))
+                bought.add(pending[0]);stage[0]='shop';events.append('confirm '+pending[0])
+        app.mouse.click.side_effect=click;app.mouse.drag.side_effect=lambda *args,**kw:events.append('drag')
+        def refresh():events.append('refresh');app.loop_active=False;return True
+        app.clickRefresh=Mock(side_effect=refresh)
+        with patch('e7_mouse_refresh.time.sleep'),patch.object(adb_engine.subprocess,'run') as adb:
+            app.refreshShop()
+        adb.assert_not_called()
+        self.assertEqual(events,['buy Covenant bookmark','confirm Covenant bookmark','buy Mystic medal','confirm Mystic medal','drag','refresh'])
+        self.assertEqual([item.count for item in app.storage.inventory.values()],[1,1])
+        self.assertEqual(app.refresh_count,1)
+
+    def test_offline_item_check_never_constructs_mouse_transport(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/'shop.png';Image.fromarray(shop()).save(path)
+            with patch('e7_mouse_refresh.create_navigator') as navigator,patch('e7_mouse_refresh.WindowsMouse') as transport:
+                result=inspect_mouse_items(path,Path(adb_engine.__file__).parent/'adb-assets')
+            navigator.return_value.require_shop.assert_called_once()
+            transport.assert_not_called()
+            self.assertEqual(result,dict(read_only=True,state='shop',items=[]))
+
+    def test_currencies_revealed_by_drag_are_bought_before_refresh(self):
+        app=self.make_engine();self.add_real_currencies(app);app.budget=3
+        exposed=[False];events=[]
+        page=shop();page[220:300,1550:1810]=(20,110,40);page[650:730,1550:1810]=(20,110,40)
+        app.mouse.screenshot.side_effect=lambda:Image.fromarray(page if exposed[0] else shop())
+        self.ui_ocr.side_effect=lambda rgb,region:dict(words=(currency_words('Covenant bookmark')+currency_words('Mystic medal',430)) if exposed[0] else [])
+        def drag(*args,**kw):exposed[0]=True;events.append('drag')
+        def buy(pos):events.append('buy '+app._item_name);return True
+        def refresh():events.append('refresh');app.loop_active=False;return True
+        app.mouse.drag.side_effect=drag;app.clickBuy=Mock(side_effect=buy);app.clickRefresh=Mock(side_effect=refresh)
+        with patch('e7_mouse_refresh.time.sleep'):
+            app.refreshShop()
+        self.assertEqual(events,['drag','buy Covenant bookmark','buy Mystic medal','refresh'])
+        self.assertEqual([item.count for item in app.storage.inventory.values()],[1,1])
+        self.assertEqual(app.refresh_count,1)
 
     def test_shared_loop_enforces_four_refreshes_for_twelve_skystones(self):
         app = self.make_engine()
