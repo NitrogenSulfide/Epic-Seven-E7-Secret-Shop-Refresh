@@ -1,4 +1,11 @@
-0.1.0 · First release preview (rc48)
+0.1.0 · First release preview (rc49)
+
+rc49
+• Mouse confirmations recheck the intended action, item/cost and observed
+  button on a fresh capture. Background animation and tiny OCR-bound shifts
+  no longer incorrectly stop an otherwise unchanged confirmation.
+• Changed-confirmation diagnostics retain both dialog crops for comparison.
+  Added consecutive-refresh and fresh item/cost/Stop regression checks.
 
 rc48
 • Mouse confirmation retries incomplete OCR within its existing five-second

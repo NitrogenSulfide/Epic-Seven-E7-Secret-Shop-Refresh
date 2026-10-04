@@ -524,18 +524,23 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
                     continue
                 if not self.loop_active:
                     return False
-                # OCR may take time. Re-capture and require the same dialog and
-                # action button before input; guard checks Stop/focus once more.
+                # Revalidate the intended action on a fresh capture. Artwork
+                # behind a translucent dialog can animate, and OCR button
+                # bounds can shift a few pixels without the dialog changing.
                 prior = self._rgb.copy()
                 self.takeScreenshot()
                 if not self.loop_active:
                     return False
                 current = confirmation_button(self._rgb,operation,before)
-                if current != box or np.mean(cv2.absdiff(self._rgb[260:950,500:1450],prior[260:950,500:1450])) > 3:
-                    saved = self._save_confirmation_failure(operation,before)
+                same_button = current is not None and all(abs(a-b)<=8 for a,b in zip(current,box))
+                fresh_text = self.read_confirmation_text(self._rgb) if same_button else ''
+                if not self.loop_active:
+                    return False
+                if not same_button or not confirmation_matches(fresh_text,operation,self._item_name):
+                    saved = self._save_confirmation_failure(operation,before,validated=prior)
                     detail = ' A private dialog crop was saved for diagnosis.' if saved else ''
                     raise MouseStopped('The confirmation changed while being read. No confirmation click sent.'+detail)
-                self._click_button(box)
+                self._click_button(current)
                 break
         else:
             if not self.loop_active:
@@ -559,7 +564,7 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
             return False
         raise MouseStopped('The shop did not return after confirmation. Stopped before another action.')
 
-    def _save_confirmation_failure(self,operation,before):
+    def _save_confirmation_failure(self,operation,before,*,validated=None):
         # Keep only central game crops, excluding the account/currency header.
         # These private runtime files are never part of the release package.
         try:
@@ -567,6 +572,8 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
             folder.mkdir(parents=True)
             Image.fromarray(before[260:1000,500:1450]).save(folder/'before.png')
             Image.fromarray(self._rgb[260:1000,500:1450]).save(folder/'dialog.png')
+            if validated is not None:
+                Image.fromarray(validated[260:1000,500:1450]).save(folder/'validated.png')
             (folder/'failure.json').write_text(json.dumps(dict(operation=operation,
                 confirmation_clicked=False,normalized_size=[1920,1080])),encoding='utf-8')
             return True
