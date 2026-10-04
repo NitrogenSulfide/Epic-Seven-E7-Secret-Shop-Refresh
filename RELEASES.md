@@ -1,5 +1,17 @@
 # Release checks
 
+## rc43 Mouse home menu after reveal
+
+Re-recognize the observed home icon on a fresh frame before clicking; compare
+target positions rather than animated wallpaper pixels. A built-in native
+question-mark mask can identify the icon despite neighboring bright artwork;
+other skins retain the observed-component fallback. Joined SecretShop OCR is
+accepted in the same guarded home context. Template menu captions must also
+resolve to a visible icon. Save a private left menu crop plus OCR on failure,
+excluding the account/currency header and all personal release data. Check
+joined labels, bright fragments, changing artwork, disappearing controls,
+source/package saved STOVE and Google frames, and compiled offline home checks.
+
 ## rc42 idle Mouse home controls
 
 When no shop or home menu is recognized, Mouse startup may send one center

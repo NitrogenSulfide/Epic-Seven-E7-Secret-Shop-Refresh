@@ -22,10 +22,16 @@ from e7_shop_navigation import create_navigator
 
 def home_menu_target(result,rgb=None):
     """Locate the observed home menu text, including rescaled native layouts."""
-    if not any(label in result['text'].lower() for label in ('sanctuary','epic pass','event')):
+    if not any(label in result.get('text','').lower() for label in ('sanctuary','epic pass','event')):
         return None
     words = result.get('words',[])
     choices = []
+    for word in words:
+        if re.sub('[^a-z0-9]','',word['text'].lower()) not in ('secretshop','secretsh0p'):
+            continue
+        box=word['box']
+        if 0 <= box[0] < box[2] <= 360 and 210 <= box[1] < box[3] <= 850:
+            choices.append(((box[0]+box[2])/2,(box[1]+box[3])/2))
     for first,second in zip(words,words[1:]):
         if re.sub('[^a-z]','',first['text'].lower()) != 'secret' or not re.fullmatch('sh[o0p]p',re.sub('[^a-z0-9]','',second['text'].lower())):
             continue
@@ -47,6 +53,25 @@ def home_icon_target(rgb,caption):
     if not crop.size:
         return None
     mask=np.where((crop.min(axis=2)>170)&(crop.max(axis=2).astype(int)-crop.min(axis=2)<65),255,0).astype('uint8')
+    # Match only the UI symbol. Bright particles in animated wallpapers can
+    # add components around it; they must not enlarge or invalidate its box.
+    path=Path('adb-assets/builtin-navigation/native-secret-shop-icon.png')
+    if path.is_file():
+        template=cv2.imdecode(np.frombuffer(path.read_bytes(),dtype=np.uint8),cv2.IMREAD_GRAYSCALE)
+        best=None
+        if template is not None:
+            for scale in np.linspace(.8,1.2,9):
+                icon=cv2.resize(template,None,fx=float(scale),fy=float(scale),interpolation=cv2.INTER_NEAREST)
+                h,w=icon.shape
+                if h>mask.shape[0] or w>mask.shape[1]: continue
+                scores=cv2.matchTemplate(mask,icon,cv2.TM_CCORR_NORMED)
+                _,score,_,point=cv2.minMaxLoc(scores)
+                if best is None or score>best[0]:
+                    px,py=point;other=scores.copy()
+                    other[max(0,py-h//2):py+h//2+1,max(0,px-w//2):px+w//2+1]=-1
+                    best=(score,float(other.max()),(left+px+w/2,top+py+h/2))
+        if best and best[0]>=.86 and best[1]<best[0]-.08:
+            return best[2]
     count,_,stats,_=cv2.connectedComponentsWithStats(mask)
     components=[(cx,cy,width,height) for cx,cy,width,height,area in stats[1:count] if area>=12]
     if not 2<=len(components)<=8:
@@ -272,21 +297,17 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
             if self.navigation.shop_visible(frame):
                 print('Navigation: Secret Shop screen verified; already open.',flush=True)
                 return True
-            target = self.navigation.menu_target(frame)
-            if target is None:
-                result = self.read_navigation_text(self._rgb)
-                target = home_menu_target(result,self._rgb)
-            else:
-                result = None
+            target = self._home_menu_target(frame)
             if not self.loop_active:
                 return False
             if target is not None:
-                prior = self._rgb.copy()
-                self.takeScreenshot()
-                if np.mean(cv2.absdiff(prior[180:920,:420],self._rgb[180:920,:420])) > 6:
+                # Re-recognize the actual controls, rather than comparing a
+                # large area of moving wallpaper beside them.
+                fresh_target = self._home_menu_target(self.takeScreenshot())
+                if fresh_target is None or math.dist(target,fresh_target)>8:
                     continue
                 print('Navigation: Opening the recognized Secret Shop menu.',flush=True)
-                self.tap(*target)
+                self.tap(*fresh_target)
                 return self._wait_for_shop()
             if not revealed and hidden_home_matches(frame):
                 fresh = self.takeScreenshot()
@@ -315,7 +336,33 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
             time.sleep(.5)
         if not self.loop_active:
             return False
-        raise MouseStopped('The home Secret Shop menu could not be recognized. Start from the English home screen or an already open Secret Shop.')
+        saved=self._save_home_failure(revealed)
+        detail=' A private menu crop was saved under mouse-failures.' if saved else ''
+        raise MouseStopped('The home Secret Shop menu could not be recognized. Start from the English home screen or an already open Secret Shop.'+detail)
+
+    def _home_menu_target(self,frame):
+        caption=self.navigation.menu_target(frame)
+        if caption is not None:
+            target=home_icon_target(self._rgb,caption)
+            if target is not None: return target
+        self._last_home_ocr=self.read_navigation_text(self._rgb)
+        if self._last_home_ocr.get('text','').strip():
+            self._home_failure_rgb=self._rgb.copy()
+            self._home_failure_ocr=self._last_home_ocr
+        return home_menu_target(self._last_home_ocr,self._rgb)
+
+    def _save_home_failure(self,revealed):
+        try:
+            folder=Path('mouse-failures')/uuid.uuid4().hex
+            folder.mkdir(parents=True)
+            rgb=getattr(self,'_home_failure_rgb',self._rgb)
+            Image.fromarray(rgb[180:920,:420]).save(folder/'home-menu.png')
+            (folder/'failure.json').write_text(json.dumps(dict(operation='home-entry',
+                reveal_clicked=revealed,shop_clicked=False,normalized_size=[1920,1080],
+                home_ocr=getattr(self,'_home_failure_ocr',getattr(self,'_last_home_ocr',{})))),encoding='utf-8')
+            return True
+        except OSError:
+            return False
 
     def _wait_for_shop(self):
         deadline = time.monotonic()+8
