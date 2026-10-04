@@ -1,4 +1,11 @@
-0.1.0 · First release preview (rc42)
+0.1.0 · First release preview (rc43)
+
+rc43
+• Mouse home entry rechecks the visible controls before clicking, allowing
+  animated wallpapers. Native icon matching ignores nearby bright particles.
+• Secret Shop text may be joined by OCR. Mouse targets the observed icon above
+  its caption, including when a saved menu reference supplies that caption.
+• Failed home entry saves a private menu-only crop and recognition details.
 
 rc42
 • Mouse startup can click once to reveal idle home controls without a saved

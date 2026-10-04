@@ -483,6 +483,7 @@ class NativeEngineTests(unittest.TestCase):
         app.read_navigation_text = Mock(return_value=dict(text='',words=[]))
         app.mouse = Mock()
         app._save_confirmation_failure=Mock(return_value=False)
+        app._save_home_failure=Mock(return_value=False)
         app.mouse.screenshot.return_value = Image.fromarray(shop())
         app.navigation = Mock()
         app.navigation.shop_visible.return_value = True
@@ -501,6 +502,12 @@ class NativeEngineTests(unittest.TestCase):
         self.assertIsNone(home_menu_target(dict(result,words=result['words']*2)))
         result['words'][1]['text']='shpp'
         self.assertEqual(home_menu_target(result),(97.5,635))
+
+    def test_home_ocr_accepts_joined_secret_shop_words(self):
+        for text in ('SecretShop','Secret Sh0p','Secret.Shop'):
+            result=dict(text='Sanctuary '+text,words=[dict(text=text,box=[20,620,175,650])])
+            self.assertEqual(home_menu_target(result),(97.5,635))
+        self.assertIsNone(home_menu_target(dict(text='Sanctuary',words=[dict(text='SecretShop',box=[600,620,775,650])])))
 
     def test_session_errors_emit_actual_reason_instead_of_stop_key_message(self):
         from e7_mouse_refresh import run_mouse_session
@@ -542,22 +549,25 @@ class NativeEngineTests(unittest.TestCase):
     def test_hidden_known_home_is_revealed_once_then_menu_selected(self):
         app=self.make_engine()
         app.navigation.shop_visible.side_effect=[False,False,True]
-        app.navigation.menu_target.side_effect=[None,(97,635)]
+        app.navigation.menu_target.side_effect=[None,(97,635),(97,635)]
+        visible=shop();visible[561:590,75:95]=230;visible[565:600,105:125]=230
+        app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (shop(),shop(),visible,visible,shop())]
         with patch('e7_mouse_refresh.hidden_home_matches',return_value=True),patch('e7_mouse_refresh.time.sleep'):
             self.assertTrue(app.clickShop())
         app.mouse.move.assert_not_called()
-        self.assertEqual([call.args for call in app.mouse.click.call_args_list],[(960,540),(97,635)])
+        self.assertEqual([call.args for call in app.mouse.click.call_args_list],[(960,540),(100,580.5)])
 
     def test_unfamiliar_idle_artwork_reveals_once_then_requires_observed_shop_menu(self):
         app=self.make_engine()
         artwork=np.random.default_rng(42).integers(0,255,(1080,1920,3),dtype=np.uint8)
-        app.mouse.screenshot.return_value=Image.fromarray(artwork)
+        visible=shop();visible[561:590,75:95]=230;visible[565:600,105:125]=230
+        app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (artwork,artwork,visible,visible,shop())]
         app.navigation.shop_visible.side_effect=[False,False,True]
-        app.navigation.menu_target.side_effect=[None,(97,635)]
+        app.navigation.menu_target.side_effect=[None,(97,635),(97,635)]
         self.ui_ocr.return_value=dict(text='',words=[])
         with patch('e7_mouse_refresh.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'):
             self.assertTrue(app.clickShop())
-        self.assertEqual([call.args for call in app.mouse.click.call_args_list],[(960,540),(97,635)])
+        self.assertEqual([call.args for call in app.mouse.click.call_args_list],[(960,540),(100,580.5)])
         app.mouse.move.assert_not_called()
         self.assertEqual(app.refresh_count,0)
 
@@ -589,6 +599,42 @@ class NativeEngineTests(unittest.TestCase):
         with patch('e7_mouse_refresh.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,31]):
             with self.assertRaises(MouseStopped): app.clickShop()
         app.mouse.click.assert_not_called()
+
+    def test_home_entry_ignores_animated_wallpaper_but_rechecks_icon(self):
+        app=self.make_engine();app.navigation.shop_visible.side_effect=[False,True]
+        app.navigation.menu_target.return_value=(97,635)
+        first=shop();first[561:590,75:95]=230;first[565:600,105:125]=230
+        second=first.copy();second[180:920,160:420]=190
+        app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (first,second,shop())]
+        with patch('e7_mouse_refresh.time.sleep'): self.assertTrue(app.clickShop())
+        app.mouse.click.assert_called_once_with(100,580.5)
+
+    def test_home_entry_rejects_controls_that_disappear_before_click(self):
+        app=self.make_engine();app.navigation.shop_visible.return_value=False
+        app.navigation.menu_target.return_value=(97,635)
+        visible=shop();visible[561:590,75:95]=230;visible[565:600,105:125]=230
+        app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (visible,shop())]
+        with patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,31]):
+            with self.assertRaises(MouseStopped): app.clickShop()
+        app.mouse.click.assert_not_called()
+
+    def test_native_icon_mask_ignores_bright_wallpaper_fragments(self):
+        icon=np.asarray(Image.open('adb-assets/builtin-navigation/native-secret-shop-icon.png'))
+        frame=shop();patch_rgb=frame[475:523,54:115];patch_rgb[icon>0]=230
+        target=home_icon_target(frame,(84,548.5))
+        self.assertIsNotNone(target)
+        frame[463:472,29:36]=230;frame[463:472,132:139]=230
+        self.assertEqual(home_icon_target(frame,(84,548.5)),target)
+
+    def test_home_failure_saves_only_menu_crop_and_actual_ocr(self):
+        app=self.make_engine();app._last_home_ocr=dict(text='sanctuary',words=[])
+        with tempfile.TemporaryDirectory() as temp,patch('e7_mouse_refresh.Path',side_effect=lambda path:Path(temp)/path):
+            self.assertTrue(E7MouseShopRefresh._save_home_failure(app,True))
+            folders=list((Path(temp)/'mouse-failures').iterdir());self.assertEqual(len(folders),1)
+            with Image.open(folders[0]/'home-menu.png') as image:self.assertEqual(image.size,(420,740))
+            data=json.loads((folders[0]/'failure.json').read_text())
+            self.assertTrue(data['reveal_clicked']);self.assertFalse(data['shop_clicked'])
+            self.assertEqual(data['home_ocr'],app._last_home_ocr)
 
     def test_unknown_screen_sends_no_pointer_input(self):
         app=self.make_engine(); app.navigation.shop_visible.return_value=False

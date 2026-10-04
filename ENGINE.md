@@ -249,3 +249,9 @@ client, but its remaining game area must still fit 16:9 and be at least 640 by
 360. A maximum eight-pixel edge may precede it; colored toolbars are rejected.
 Private known hidden-home matching additionally accepts native-home/google-hidden.png,
 without replacing native-home/hidden.png. These references stay outside ZIPs.
+
+rc43 re-recognizes the fresh home icon before clicking instead of comparing
+animated wallpaper pixels. A binary native Secret Shop icon mask supplements
+component detection, and joined SecretShop OCR is accepted. Menu templates
+authorize the icon above the caption, not caption clicks. Home-entry failure
+saves only a private left-menu crop and recognition details under mouse-failures.
