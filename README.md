@@ -1,67 +1,82 @@
 # E7 Secret Shop Refresh
 
-Windows app by **NitrogenSulfide (Blue Natto)**, based on Solunium's GPL-3.0
-Epic Seven Secret Shop Refresh engine.
+Automatically open Epic Seven's Secret Shop, buy Covenant Bookmarks and Mystic
+Medals, and refresh within your Skystone budget. Windows app by
+**NitrogenSulfide (Blue Natto)**, based on Solunium's GPL-3.0 engine.
+
+## EZ Mode · download, extract, start
 
 **[Download the Windows app — v0.1.1](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.1/E7ShopRefresh-0.1.1.zip)**
 
-1. Extract the **whole ZIP** and open **E7 Secret Shop Refresh.exe**. Python is included.
-2. Open English Epic Seven at home or in Secret Shop and close popups.
-3. Mouse is selected by default: select the game window. For ADB, switch modes and select the emulator.
-4. Check the Skystone budget, delay and Stop key, then press **Start Refresh**.
+1. Extract the **whole ZIP**, then open **E7 Secret Shop Refresh.exe**. Python is included.
+2. Open **English Epic Seven** at home or in Secret Shop. Close any popups; hidden idle home controls are handled automatically.
+3. Leave **Mouse** selected and choose your **game window**. Use **Scan** if needed.
+4. Set your **Skystone budget** and check the **Stop key**, then press **Start Refresh**.
+
+If the app offers to **restart as administrator**, accept the restart and Windows
+permission prompt. Once it reopens, select your game and press **Start Refresh**
+again. This is only needed when the selected game runs with administrator permission.
+
+**While Mouse runs:** leave the PC alone, keep the game uncovered, and avoid moving
+or resizing its window. **To stop:** press your configured Stop key (default: the
+backtick key, usually below Esc) or click **Stop Session**. Start with a small budget
+for your first run.
+
+**[Detailed setup / troubleshooting](release/SETUP.md)** ·
+**[What's new in v0.1.1](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.1.1)**
+
+## See it work · Mouse on STOVE
+
+Hidden home controls → Secret Shop → automatic Covenant Bookmark purchase.
+This real-time clip ends just after the purchase; account details are covered.
+
+[![Mouse mode on STOVE reveals home controls, opens Secret Shop and buys Covenant Bookmarks](docs/media/mouse-stove-demo.gif)](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.1/mouse-stove-demo.mp4)
+
+**[Watch / download the MP4](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.1/mouse-stove-demo.mp4)** · approximately 14 seconds
+
+## Tested game clients
 
 | Game client | Mouse | ADB |
 | --- | --- | --- |
-| Google Play Games on PC **Developer Emulator** | Supported | Supported |
-| Official native STOVE client | Supported | Unavailable |
+| Google Play Games on PC **Developer Emulator** | Tested | Tested |
+| Official native STOVE client | Tested | Unavailable |
 
-First-release testing is limited to these two clients. Other emulators and methods
-have not been tested. Use English game text and a readable landscape 16:9 view,
-at least 640 × 360. ADB calibration requires a 1920 × 1080 Android display.
+Testing is limited to these two clients. Other emulators and methods have not been
+tested. Use English game text and a readable landscape 16:9 game view of at least
+640 × 360. ADB calibration requires a 1920 × 1080 Android display.
 
-Mouse uses your actual pointer: leave the PC alone while it runs, keep the game
-visible and resize before Start. If the game runs as administrator, the app needs
-the same permission. Start offers a restart through Windows' permission prompt
-when needed. After reopening, select the game and press Start again.
-ADB works through the selected emulator and lets you use
-your PC pointer normally. Native STOVE cannot use ADB.
+## ADB mode · optional
 
-The app reveals idle home controls, recognizes the Secret Shop menu, buys detected
-Covenant Bookmarks/Mystic Medals, scans both pages and refreshes within your budget.
-It verifies shop controls and confirmation text before continuing; unknown or
-changed screens can stop the session. Start with a small supervised budget.
+ADB lets you use your PC pointer normally while the app runs through the emulator.
+Native STOVE does not support ADB.
 
-Features include live session counters, used/total Skystone budget, configurable
-Stop key, smooth Mouse movement/dragging, bounded tap offsets and timing variation
-up to ±0.10 seconds, session history, day/night themes and in-app Quickstart/release
-notes. Debug/calibration is ADB-only; Friendship purchases and Mouse preview are
-removed.
+1. Enable and authorize ADB debugging in your emulator.
+2. Switch **Control mode → ADB**, then select the device. Google Developer Emulator uses **localhost:6520**; use **Scan** if needed.
+3. Open Epic Seven at home or in Secret Shop, check your budget and Stop key, then press **Start Refresh**.
 
-**[Setup guide](release/SETUP.md)** · **[Release notes](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.1.1)**
+See the [setup guide](release/SETUP.md) if the device isn't detected.
 
-## Mouse demo · STOVE
+## Features and updates
 
-A short demo will show Start Refresh → home controls revealed → Secret Shop →
-automatic Covenant Bookmark or Mystic Medal purchase.
+Live counters, used/total Skystone budget, configurable Stop key, smooth Mouse
+movement and dragging, randomized tap offsets, adjustable timing variation up to
+±0.10 seconds, session history, day/night themes, and in-app Quickstart/release notes.
+Calibration is ADB-only. Only Covenant Bookmarks and Mystic Medals are purchased.
 
-<!-- Add the owner's reviewed GIF here, or a link to the uploaded MP4. -->
+The app verifies shop controls and confirmation text before continuing. Unknown or
+changed screens can stop a session. Passing tested cases does not establish support
+for every wallpaper/layout or uninterrupted long runs; insufficient-currency
+stopping has not been live-tested. See [regression coverage](docs/AUTOMATION-REGRESSIONS.md).
 
-The owner reports the ordinary live cases pass on both clients with rc51. The
-release preserves rc51's automation code. Automated source, package and saved-frame
-tests are recorded separately; they do not establish universal wallpaper/layout
-support or long-run reliability. Insufficient-currency stopping has not been
-live-tested.
-
-Settings, CSV history and private recognition captures live under `runtime`.
-Back them up when updating; there is no automatic updater or migration. Personal
-data is excluded from the release ZIPs.
+**Updating:** back up your settings and history under `runtime` before switching to
+a new extracted release. There is no automatic updater or migration. Personal
+runtime data is excluded from release ZIPs.
 
 ## Source and credits
 
 The optional **E7Source-0.1.1.zip** contains the maintained source and rebuild
 instructions. Matching GUI/engine source is also supplied with the player package.
-See [build instructions](release/BUILDING.md), [engine notes](ENGINE.md) and
-[regression coverage](docs/AUTOMATION-REGRESSIONS.md).
+See [build instructions](release/BUILDING.md) and [engine notes](ENGINE.md).
 
 Software is GPL-3.0; see [LICENSE](LICENSE), [CREDITS.txt](CREDITS.txt) and
 [upstream notices](UPSTREAM.md). Third-party artwork/audio retain their respective

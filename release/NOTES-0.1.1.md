@@ -11,11 +11,11 @@ Download **E7ShopRefresh-0.1.1.zip** and extract the whole ZIP. Python is includ
 Back up your existing `runtime` settings/history before updating. Tested clients:
 Google Play Games on PC Developer Emulator and native STOVE; other methods remain untested.
 
-<details>
-<summary>Mouse demo · STOVE</summary>
+## Mouse demo · STOVE
 
-Demo coming soon: Start → home controls → Secret Shop → automatic Bookmark/Medal purchase.
+Hidden home controls → Secret Shop → automatic Covenant Bookmark purchase.
+Account details are covered; the approximately 14-second clip runs at normal speed.
 
-<!-- Replace this paragraph with the owner's reviewed GIF or uploaded MP4 link. -->
+![Mouse mode on STOVE: home controls, Secret Shop and a Covenant purchase](https://raw.githubusercontent.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/main/docs/media/mouse-stove-demo.gif)
 
-</details>
+[Watch / download the MP4](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.1/mouse-stove-demo.mp4)
