@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 import E7ADBShopRefresh as adb_engine
 from e7_windows_capture import GameWindow
-from e7_native_mouse import WindowsMouse, MouseStopped, Input, verify_native_target
+from e7_native_mouse import WindowsMouse, MouseStopped, Input, verify_native_target, physical_pixel_coordinates
 from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons
 from e7_mouse_confirmation import confirmation_matches
 
@@ -113,6 +113,13 @@ class TransportTests(unittest.TestCase):
     def test_scroll_sends_wheel_without_held_button(self):
         self.mouse.screenshot(); self.mouse.scroll(1200,800)
         self.assertEqual(self.sender.call_args.args[1:],('wheel',-1200))
+
+    def test_physical_pixel_context_failure_blocks_native_input(self):
+        api = Mock(); api.SetThreadDpiAwarenessContext.return_value = None
+        with self.assertRaisesRegex(ValueError,'No Mouse input'):
+            physical_pixel_coordinates(api=api)
+        api.SetThreadDpiAwarenessContext.return_value = 1
+        physical_pixel_coordinates(api=api)
 
 
 class NativeEngineTests(unittest.TestCase):
