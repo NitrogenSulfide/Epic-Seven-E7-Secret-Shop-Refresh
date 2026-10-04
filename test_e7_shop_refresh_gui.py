@@ -294,7 +294,70 @@ class GuiTests(unittest.TestCase):
         target=GameWindow(123,456,'Epic Seven',(0,0,1920,1080))
         self.app.mouse_windows={target.label:target}
         self.app.mouse_target.set(target.label)
+        self.app._select_mouse_window()
         return target
+
+    def test_mouse_single_window_is_readable_selected_and_ready(self):
+        self.app.control_mode.set('Mouse (preview)'); self.app._change_control_mode()
+        target = GameWindow(123,456,'Epic Seven',(0,0,3840,2019))
+        with patch.object(gui,'capture_selected') as capture, patch.object(gui,'launch_engine') as launch:
+            self.app._apply_mouse_windows([target], '')
+        self.assertEqual(self.app.mouse_target.get(), 'Epic Seven')
+        self.assertEqual(self.app.mouse_windows['Epic Seven'], target)
+        self.assertIn('3840 × 2019', self.app.device_notice.get())
+        self.assertIn('countdown', self.app.device_notice.get())
+        self.assertFalse(self.app.start_button.instate(['disabled']))
+        capture.assert_not_called(); launch.assert_not_called()
+
+    def test_mouse_rescan_preserves_identity_when_labels_and_size_change(self):
+        self.app.control_mode.set('Mouse (preview)'); self.app._change_control_mode()
+        first = GameWindow(123,456,'Epic Seven',(0,0,1920,1080))
+        other = GameWindow(124,457,'Epic Seven',(0,0,1920,1080))
+        self.app._apply_mouse_windows([first,other], '')
+        self.assertEqual(self.app.mouse_target.get(), '')
+        self.assertTrue(self.app.start_button.instate(['disabled']))
+        self.assertEqual(len(self.app.mouse_windows), 2)
+        self.app.mouse_target.set(first.label); self.app._select_mouse_window()
+        moved = GameWindow(123,456,'Epic Seven',(10,20,3850,2039))
+        self.app._apply_mouse_windows([moved], '')
+        self.assertEqual(self.app.mouse_target.get(), 'Epic Seven')
+        self.assertEqual(self.app.mouse_windows['Epic Seven'], moved)
+        self.assertIn('3840 × 2019', self.app.device_notice.get())
+        self.app._apply_mouse_windows([other,moved], '')
+        self.assertEqual(self.app.mouse_target.get(), moved.label)
+
+    def test_mouse_closed_selection_clears_and_requires_new_choice(self):
+        self.choose_mouse_fixture()
+        others = [GameWindow(124,457,'Other Epic Seven',(0,0,1920,1080)),
+                  GameWindow(125,458,'Google Play Games',(0,0,1920,1080))]
+        self.app._apply_mouse_windows(others, '')
+        self.assertEqual(self.app.mouse_target.get(), '')
+        self.assertTrue(self.app.start_button.instate(['disabled']))
+        self.app._apply_mouse_windows([], '')
+        self.assertIn('No game window found', self.app.connection_warning)
+        self.assertTrue(self.app.start_button.instate(['disabled']))
+
+    def test_mouse_background_scan_keeps_preparation_guidance(self):
+        target = self.choose_mouse_fixture()
+        before = self.app.device_notice.get()
+        self.app._background_scan = True
+        with patch.object(gui.WindowsCapture,'list_windows',return_value=[target]), \
+                patch.object(gui,'check_connection') as adb:
+            self.app._scan_game_windows()
+            self.assertEqual(self.app.device_notice.get(), before)
+            self.pump_until(lambda:not self.app._mouse_scan_busy)
+        self.assertEqual(self.app.mouse_target.get(), 'Epic Seven')
+        self.assertEqual(self.app.device_notice.get(), before)
+        adb.assert_not_called()
+
+    def test_switch_from_empty_mouse_selector_restores_adb_start(self):
+        before = self.app._device_address()
+        self.app.control_mode.set('Mouse (preview)'); self.app._change_control_mode()
+        self.app._apply_mouse_windows([], '')
+        self.assertTrue(self.app.start_button.instate(['disabled']))
+        self.app.control_mode.set('ADB'); self.app._change_control_mode()
+        self.assertFalse(self.app.start_button.instate(['disabled']))
+        self.assertEqual(self.app._device_address(), before)
 
     def test_mouse_preview_captures_without_adb_or_refresh_session(self):
         target=self.choose_mouse_fixture()
@@ -320,12 +383,15 @@ class GuiTests(unittest.TestCase):
         target=self.choose_mouse_fixture()
         with patch.object(gui,'capture_selected') as capture, patch.object(gui,'launch_engine') as launch:
             self.app.start_button.invoke();token=self.app._preview_token
+            self.assertEqual(self.app.stop_button.cget('text'), 'Cancel preview')
+            self.assertIn('Ready check in', self.app.detail.get())
             self.app.stop_refresh()
             self.app._mouse_preview_countdown(token,target,0)
             self.app._finish_mouse_preview(token,None,None,'')
         capture.assert_not_called();launch.assert_not_called()
         self.assertIsNone(self.app.preview_window)
         self.assertEqual(self.app.status.get(),'Preview cancelled')
+        self.assertEqual(self.app.stop_button.cget('text'), 'Stop Session')
 
     def test_mouse_waiting_can_be_cancelled_without_capture_or_engine(self):
         target=self.choose_mouse_fixture();entered=threading.Event();exited=threading.Event()
@@ -358,7 +424,8 @@ class GuiTests(unittest.TestCase):
     def test_missing_mouse_target_blocks_capture_and_red_warning_is_clear(self):
         self.app.control_mode.set('Mouse (preview)');self.app._change_control_mode()
         with patch.object(gui,'capture_selected') as capture, patch.object(gui,'launch_engine') as launch:
-            self.app.start_button.invoke()
+            self.assertTrue(self.app.start_button.instate(['disabled']))
+            self.app._start_mouse_preview()
         capture.assert_not_called();launch.assert_not_called()
         self.assertIn('Choose an open game window',self.app.home_ui_hint.get())
 

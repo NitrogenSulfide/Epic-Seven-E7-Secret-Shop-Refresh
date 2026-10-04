@@ -20,11 +20,17 @@ Epic Seven and a **1920 × 1080** Android display. Other emulators are unverifie
 The original upstream source and Git history are preserved, alongside the GUI,
 launchers, tests, sounds and icon. The first public preview is **0.1.0-rc20**.
 
-The local **rc27** candidate adds **Control mode → Mouse (preview)** for checking
+The local **rc28** candidate offers **Control mode → Mouse (preview)** for checking
 capture and recognized targets in a selected Windows game window. It makes no
 mouse movements, clicks, refreshes or purchases; regular Google Play Games and
 STOVE compatibility remains unverified. ADB refreshing stays available as before.
 See [Mouse preview instructions](release/SETUP.md#mouse-preview--experimental).
+
+The window selector uses readable names, keeps your selection across rescans,
+and shows the selected capture size and preparation steps. The countdown starts
+a readiness check; the app then waits for you to switch to the unobstructed game.
+**Cancel preview** remains available. Native STOVE shop recognition has succeeded
+in an owner-run rc27 preview; live Mouse refreshes and purchases are not implemented.
 Plain symmetric black letterboxing is cropped before recognition; a maximized
 client area is not required to have exactly the same aspect ratio as the game.
 Wider native STOVE views are preserved without cropping or stretching the

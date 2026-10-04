@@ -1,7 +1,7 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.1.0-rc23** is a local candidate. The previous rc20 public preview is unchanged.
-Players need only **E7ShopRefresh-0.1.0-rc23.zip**.
+Version **0.1.0-rc28** is a local candidate. The previous rc20 public preview is unchanged.
+Players need only **E7ShopRefresh-0.1.0-rc28.zip**.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
 Pillow are included in this EXE. Artwork, the matching compiled engine, ADB tools
@@ -11,8 +11,9 @@ automatic shop recognition. A guided recognition helper is offered only when
 startup recognition fails. The optional Source ZIP is for developers.
 
 Use Google Play Games on PC Developer Emulator, English Epic Seven and a
-1920 × 1080 Android display. Native STOVE is unsupported; other emulators are
-unverified. Press Start to try the built-in English templates. If the helper is
+1920 × 1080 Android display for ADB refreshing. Native STOVE supports the read-only
+Mouse preview described below; other emulators are unverified. Press Start in ADB
+mode to try the built-in English templates. If the helper is
 needed, it only reads screenshots; press Start again after it succeeds.
 Start checks the selected ADB connection first. A red banner explains missing
 connections without launching the refresh engine; open the emulator, enable ADB
@@ -22,6 +23,18 @@ emulator, and the Google Play Games window must be open. Its background VM can
 stay connected after closing the window. Other PC apps can retain focus.
 Normal fresh settings are 12 skystones, 0.3-second
 delay, backtick stop key and randomized offsets; saved settings take precedence.
+
+For a read-only native STOVE or regular Google Play Games capture, choose
+**Control mode → Mouse (preview)**. Windows are scanned automatically; one result
+is selected for you, and multiple results need your choice. The selector uses
+readable names and shows the selected game's capture size and preparation steps.
+Open Secret Shop manually, press **Preview targets**, then switch to that game.
+The three-second countdown starts a readiness check, followed by up to 20 seconds
+of waiting for the game to be in front and unobstructed. **Cancel preview** cancels
+the attempt. Return here to inspect the capture and recognized targets.
+This mode sends no mouse movements, clicks, refreshes, purchases or ADB commands.
+Captures stay private under `runtime/mouse-previews`. Live Mouse refreshing is
+not implemented; an owner-run rc27 native STOVE shop preview succeeded.
 
 Live counters report engine-completed buys/refreshes, not confirmed balances.
 Insufficient-currency stopping remains unverified. Keep initial runs supervised.
