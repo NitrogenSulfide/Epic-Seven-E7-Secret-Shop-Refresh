@@ -2,6 +2,7 @@
 
 Version **0.1.1** adds a guided administrator restart to the first release.
 Players need only **E7ShopRefresh-0.1.1.zip**.
+New settings start in Mouse mode; your existing saved mode is preserved.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
 Pillow are included in this EXE. Artwork, the matching compiled engine, ADB tools

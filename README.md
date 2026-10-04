@@ -3,11 +3,11 @@
 Windows app by **NitrogenSulfide (Blue Natto)**, based on Solunium's GPL-3.0
 Epic Seven Secret Shop Refresh engine.
 
-**[Download the Windows app — v0.1.0](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.0/E7ShopRefresh-0.1.0.zip)**
+**[Download the Windows app — v0.1.1](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.1/E7ShopRefresh-0.1.1.zip)**
 
 1. Extract the **whole ZIP** and open **E7 Secret Shop Refresh.exe**. Python is included.
 2. Open English Epic Seven at home or in Secret Shop and close popups.
-3. Choose Mouse and select the game window, or choose ADB and select the emulator.
+3. Mouse is selected by default: select the game window. For ADB, switch modes and select the emulator.
 4. Check the Skystone budget, delay and Stop key, then press **Start Refresh**.
 
 | Game client | Mouse | ADB |
@@ -21,8 +21,8 @@ at least 640 × 360. ADB calibration requires a 1920 × 1080 Android display.
 
 Mouse uses your actual pointer: leave the PC alone while it runs, keep the game
 visible and resize before Start. If the game runs as administrator, the app needs
-the same permission. The upcoming v0.1.1 offers a restart through Windows' permission
-prompt when needed; v0.1.0 users can right-click the EXE → **Run as administrator**.
+the same permission. Start offers a restart through Windows' permission prompt
+when needed. After reopening, select the game and press Start again.
 ADB works through the selected emulator and lets you use
 your PC pointer normally. Native STOVE cannot use ADB.
 
@@ -37,7 +37,14 @@ up to ±0.10 seconds, session history, day/night themes and in-app Quickstart/re
 notes. Debug/calibration is ADB-only; Friendship purchases and Mouse preview are
 removed.
 
-**[Setup guide](release/SETUP.md)** · **[Release notes](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.1.0)**
+**[Setup guide](release/SETUP.md)** · **[Release notes](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.1.1)**
+
+## Mouse demo · STOVE
+
+A short demo will show Start Refresh → home controls revealed → Secret Shop →
+automatic Covenant Bookmark or Mystic Medal purchase.
+
+<!-- Add the owner's reviewed GIF here, or a link to the uploaded MP4. -->
 
 The owner reports the ordinary live cases pass on both clients with rc51. The
 release preserves rc51's automation code. Automated source, package and saved-frame
@@ -51,7 +58,7 @@ data is excluded from the release ZIPs.
 
 ## Source and credits
 
-The optional **E7Source-0.1.0.zip** contains the maintained source and rebuild
+The optional **E7Source-0.1.1.zip** contains the maintained source and rebuild
 instructions. Matching GUI/engine source is also supplied with the player package.
 See [build instructions](release/BUILDING.md), [engine notes](ENGINE.md) and
 [regression coverage](docs/AUTOMATION-REGRESSIONS.md).

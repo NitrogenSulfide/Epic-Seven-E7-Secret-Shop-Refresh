@@ -13,7 +13,7 @@ TESTED_CLIENTS = (
 QUICKSTART = (
     'Mouse mode\n\n'
     '1. Open English Epic Seven at home or in Secret Shop. Close popups.\n'
-    '2. Choose Mouse → select your game window. Use Scan if needed.\n'
+    '2. Mouse is selected by default. Select your game window; use Scan if needed.\n'
     '3. Press Start Refresh. The app opens the shop if needed. Leave the PC '
     'alone; keep the game visible and its window still.\n\n'
     'ADB mode\n\n'

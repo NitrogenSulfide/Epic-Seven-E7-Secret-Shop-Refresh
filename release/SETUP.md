@@ -19,7 +19,7 @@ Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.1.zip'
 
 ## Emulator setup
 
-**ADB** remains the default mode for refreshing. **Mouse** automates the visible
+**Mouse** is the default for new settings and automates the visible
 game in STOVE or an emulator, including Google Play Games Developer Emulator.
 
 Use [Google Play Games on PC Developer Emulator](https://developer.android.com/games/playgames/emulator),
@@ -168,7 +168,8 @@ The owner reports the ordinary live cases pass on both clients with rc51.
 This release preserves that automation code. Long runs remain unverified;
 begin with a small supervised budget and check Stop and your Stop key.
 Save Settings retains your control mode and other preferences. Reopening the app
-scans that mode without starting a session. ADB remains the fresh-install default.
+scans that mode without starting a session. Mouse is the fresh-install default;
+an existing saved ADB preference is preserved.
 No ADB connection is made by a Mouse session.
 
 Native stops show their actual reason on the main screen. Detailed text logs stay

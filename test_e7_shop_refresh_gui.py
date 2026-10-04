@@ -265,6 +265,8 @@ class GuiTests(unittest.TestCase):
             (references/name).write_bytes(b'Fake-engine fixture; not a game reference')
         self.config = self.root / "ADBconfig.ini"
         self.gui_config = self.root / "ShopRefreshGUI.ini"
+        # Legacy fake-engine tests explicitly exercise the ADB transport.
+        self.gui_config.write_text('[GUI]\ncontrol_mode = ADB\n', encoding='utf-8')
         self.assets = self.root / 'assets'
         self.assets.mkdir()
         for name in ('start.wav', 'end.wav'):
@@ -431,6 +433,30 @@ class GuiTests(unittest.TestCase):
             self.assertFalse(hasattr(self.app, '_start_mouse_preview'))
             self.assertIsNone(self.app.process)
             launch.assert_not_called(); activate.assert_not_called()
+
+    def test_fresh_settings_default_to_mouse_without_adb_or_game_input(self):
+        gui.GUI_CONFIG_FILE.unlink()
+        with patch.object(gui.RefreshGui,'refresh_devices') as scan, \
+                patch.object(gui,'check_connection') as adb, patch.object(gui,'activate_native_target') as activate, \
+                patch.object(gui,'launch_engine') as launch:
+            fresh = gui.RefreshGui()
+            fresh.withdraw()
+            try:
+                self.assertEqual(fresh.control_mode.get(),'Mouse')
+                self.assertTrue(fresh.debug_check.instate(['disabled']))
+                scan.assert_called_once(); adb.assert_not_called()
+                activate.assert_not_called(); launch.assert_not_called()
+            finally:
+                fresh.destroy()
+
+    def test_saved_mode_is_preserved_and_missing_or_invalid_mode_uses_mouse(self):
+        for saved, expected in (('ADB','ADB'),('Mouse','Mouse'),('Mouse (preview)','Mouse'),('unknown','Mouse'),(None,'Mouse')):
+            with self.subTest(saved=saved):
+                text = '[GUI]\n' + (f'control_mode = {saved}\n' if saved is not None else '')
+                gui.GUI_CONFIG_FILE.write_text(text,encoding='utf-8')
+                self.app.control_mode.set('ADB')
+                self.app._load_config()
+                self.assertEqual(self.app.control_mode.get(),expected)
 
     def test_help_and_links_are_available_without_game_input(self):
         import e7_about
