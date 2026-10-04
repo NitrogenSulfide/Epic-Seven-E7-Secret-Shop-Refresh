@@ -1,7 +1,7 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.1.0-rc41** is a local candidate. The previous rc20 public preview is unchanged.
-Players need only **E7ShopRefresh-0.1.0-rc41.zip**.
+Version **0.1.0-rc42** is a local candidate. The previous rc20 public preview is unchanged.
+Players need only **E7ShopRefresh-0.1.0-rc42.zip**.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
 Pillow are included in this EXE. Artwork, the matching compiled engine, ADB tools
@@ -27,12 +27,14 @@ delay, backtick stop key and randomized offsets; saved settings take precedence.
 For STOVE or Google Play Games Developer Emulator, choose **Control mode → Mouse**, select Epic Seven and press
 **Start Refresh**. The app brings that game forward and uses your actual pointer
 to open its recognized shop, buy Covenant/Mystic items, scroll and refresh.
+If idle controls are hidden, startup can click the artwork-only view once to
+reveal them, then locate the Secret Shop icon. No saved wallpaper is required.
 Your budget, delay, randomized offsets, counters and Stop key apply. Leave the PC
 alone until it stops. Focus or coverage changes pause input for up to 10 seconds;
 a changed window or an unrecognized confirmation stops the session. The game keeps its current size. Use normal settings; Debug
 remains an ADB feature. Saving settings also saves your control mode without
 starting a session next time. Native checks succeeded in earlier candidates. Google developer-emulator live
-actions in rc41 remain unverified; begin with a small supervised budget. Keep English game text readable.
+actions in rc42 remain unverified; begin with a small supervised budget. Keep English game text readable.
 
 Live counters report engine-completed buys/refreshes, not confirmed balances.
 Insufficient-currency stopping remains unverified. Keep initial runs supervised.

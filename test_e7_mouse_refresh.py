@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw
 import E7ADBShopRefresh as adb_engine
 from e7_windows_capture import GameWindow
 from e7_native_mouse import WindowsMouse, MouseStopped, Input, verify_native_target, physical_pixel_coordinates, process_is_elevated, require_mouse_permissions, pointer_glide
-from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons, home_menu_target, home_icon_target, hidden_home_matches, reframed_home_matches, currency_button, IncompleteCurrencyRow, inspect_mouse_items
+from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons, home_menu_target, home_icon_target, hidden_home_matches, reframed_home_matches, idle_home_candidate, currency_button, IncompleteCurrencyRow, inspect_mouse_items
 from e7_mouse_confirmation import confirmation_matches
 
 
@@ -541,12 +541,54 @@ class NativeEngineTests(unittest.TestCase):
 
     def test_hidden_known_home_is_revealed_once_then_menu_selected(self):
         app=self.make_engine()
-        app.navigation.shop_visible.side_effect=[False,False,False,True]
-        app.navigation.menu_target.side_effect=[None,None,(97,635)]
+        app.navigation.shop_visible.side_effect=[False,False,True]
+        app.navigation.menu_target.side_effect=[None,(97,635)]
         with patch('e7_mouse_refresh.hidden_home_matches',return_value=True),patch('e7_mouse_refresh.time.sleep'):
             self.assertTrue(app.clickShop())
-        app.mouse.move.assert_called_once_with(960,540)
+        app.mouse.move.assert_not_called()
         self.assertEqual([call.args for call in app.mouse.click.call_args_list],[(960,540),(97,635)])
+
+    def test_unfamiliar_idle_artwork_reveals_once_then_requires_observed_shop_menu(self):
+        app=self.make_engine()
+        artwork=np.random.default_rng(42).integers(0,255,(1080,1920,3),dtype=np.uint8)
+        app.mouse.screenshot.return_value=Image.fromarray(artwork)
+        app.navigation.shop_visible.side_effect=[False,False,True]
+        app.navigation.menu_target.side_effect=[None,(97,635)]
+        self.ui_ocr.return_value=dict(text='',words=[])
+        with patch('e7_mouse_refresh.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'):
+            self.assertTrue(app.clickShop())
+        self.assertEqual([call.args for call in app.mouse.click.call_args_list],[(960,540),(97,635)])
+        app.mouse.move.assert_not_called()
+        self.assertEqual(app.refresh_count,0)
+
+    def test_idle_artwork_probe_does_not_repeat_or_refresh_without_home_controls(self):
+        app=self.make_engine()
+        app.mouse.screenshot.return_value=Image.fromarray(np.random.default_rng(42).integers(0,255,(1080,1920,3),dtype=np.uint8))
+        app.navigation.shop_visible.return_value=False
+        app.navigation.menu_target.return_value=None
+        self.ui_ocr.return_value=dict(text='',words=[])
+        with patch('e7_mouse_refresh.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,0,31]):
+            with self.assertRaises(MouseStopped): app.clickShop()
+        app.mouse.click.assert_called_once_with(960,540)
+        self.assertEqual(app.refresh_count,0)
+
+    def test_idle_reveal_rejects_dialog_text_and_blank_loading_frames(self):
+        artwork=np.random.default_rng(42).integers(0,255,(1080,1920,3),dtype=np.uint8)
+        self.assertTrue(idle_home_candidate(artwork,dict(text='',words=[])))
+        for text in ('Cancel Confirm','Connecting','Buy','Battle','Secret Shop','確認'):
+            self.assertFalse(idle_home_candidate(artwork,dict(text=text,words=[])))
+            self.assertFalse(idle_home_candidate(artwork,dict(words=[dict(text=text)])))
+        self.assertFalse(idle_home_candidate(shop(),dict(text='',words=[])))
+
+    def test_idle_reveal_rechecks_full_screen_for_new_dialog_before_click(self):
+        app=self.make_engine()
+        app.mouse.screenshot.return_value=Image.fromarray(np.random.default_rng(42).integers(0,255,(1080,1920,3),dtype=np.uint8))
+        app.navigation.shop_visible.return_value=False
+        app.navigation.menu_target.return_value=None
+        self.ui_ocr.side_effect=[dict(text='',words=[]),dict(text='Cancel Confirm',words=[])]
+        with patch('e7_mouse_refresh.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,31]):
+            with self.assertRaises(MouseStopped): app.clickShop()
+        app.mouse.click.assert_not_called()
 
     def test_unknown_screen_sends_no_pointer_input(self):
         app=self.make_engine(); app.navigation.shop_visible.return_value=False
