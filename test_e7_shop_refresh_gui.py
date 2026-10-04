@@ -150,7 +150,7 @@ class GuiTests(unittest.TestCase):
             app._checking_connection = True
             app._complete_connection_check(app._connection_check_id, settings,
                 gui.ConnectionCheck((settings.device,), '', '', True))
-        self.patches = [patch.object(gui, "CONFIG_FILE", self.config), patch.object(gui, "GUI_CONFIG_FILE", self.gui_config), patch.object(gui, "ASSET_DIR", self.assets), patch.object(gui, "HISTORY_FILE", self.history), patch.object(gui, "ENGINE_EXE", self.fake), patch.object(gui.RefreshGui, "refresh_devices", lambda _: None), patch.object(gui.RefreshGui, '_start_connection_check', connected), patch("winsound.PlaySound")]
+        self.patches = [patch.object(gui, "APP_DIR", self.root), patch.object(gui, "CONFIG_FILE", self.config), patch.object(gui, "GUI_CONFIG_FILE", self.gui_config), patch.object(gui, "ASSET_DIR", self.assets), patch.object(gui, "HISTORY_FILE", self.history), patch.object(gui, "ENGINE_EXE", self.fake), patch.object(gui.RefreshGui, "refresh_devices", lambda _: None), patch.object(gui.RefreshGui, '_start_connection_check', connected), patch("winsound.PlaySound")]
         for p in self.patches:
             p.start()
         self.credits_auto_patch = patch.object(gui.RefreshGui, '_maybe_show_credits', lambda _: None)
@@ -444,7 +444,7 @@ class GuiTests(unittest.TestCase):
         self.app._apply_mouse_windows([target],'')
         self.fake.write_text('print("E7GUI_STARTED",flush=True)\nprint(\'E7GUI_STATS {"refreshes":4,"skystone_spent":12,"covenant":0,"mystic":0,"friendship":0}\',flush=True)\nprint("---Result---\\nCovenant bookmark:0\\nMystic medal:0\\nSkystone spent:12",flush=True)\n')
         self.fake.with_suffix('.sha256').write_text(hashlib.sha256(self.fake.read_bytes()).hexdigest())
-        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='native mouse v1')), \
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='native mouse v2')), \
                 patch.object(gui,'activate_native_target',return_value=target) as activate, \
                 patch.object(gui,'check_connection') as adb,patch.object(gui,'launch_engine',wraps=gui.launch_engine) as launch:
             self.start_fake()
@@ -465,7 +465,31 @@ class GuiTests(unittest.TestCase):
                 patch.object(gui,'activate_native_target') as activate,patch.object(gui,'launch_engine') as launch:
             self.app.start_refresh()
         activate.assert_not_called(); launch.assert_not_called()
-        self.assertIn('matching rc29',self.app.connection_warning)
+        self.assertIn('matching rc30',self.app.connection_warning)
+
+    def test_native_focus_failure_stays_visible_and_is_saved_without_stop_key_claim(self):
+        target=self.choose_mouse_fixture()
+        self.app.control_mode.set('Mouse');self.app._change_control_mode()
+        self.app._apply_mouse_windows([target],'')
+        reason='The selected game lost focus. No input sent.'
+        self.fake.write_text('print("E7GUI_STARTED",flush=True)\nprint(\'E7GUI_MOUSE_STOPPED {"reason":"The selected game lost focus. No input sent."}\',flush=True)\nprint("---Result---\\nSkystone spent:0",flush=True)\n')
+        self.fake.with_suffix('.sha256').write_text(hashlib.sha256(self.fake.read_bytes()).hexdigest())
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='native mouse v2')),patch.object(gui,'activate_native_target',return_value=target):
+            self.start_fake()
+            self.pump_until(lambda:self.app.status.get()=='Needs attention' and self.app.process.poll() is not None)
+            self.pump_until(lambda:self.app._finalized_run_id==self.app.run_id)
+        self.assertEqual(self.app.detail.get(),reason)
+        self.assertFalse(self.app.stop_key_pressed)
+        self.assertIn('E7GUI_MOUSE_STOPPED',self.app._session_log_path.read_text(encoding='utf-8'))
+
+    def test_native_pause_and_resume_show_actual_state(self):
+        self.app._handle_line('E7GUI_MOUSE_PAUSED {"reason":"The mouse target is covered."}')
+        self.assertEqual(self.app.status.get(),'Paused')
+        self.assertIn('target is covered',self.app.detail.get())
+        self.assertFalse(self.app.stop_key_pressed)
+        self.app._handle_line('E7GUI_MOUSE_RESUMED')
+        self.assertEqual(self.app.status.get(),'Running')
+        self.assertIn('Checking the current screen',self.app.detail.get())
 
     def test_saved_mouse_mode_restores_without_starting_session(self):
         self.app.control_mode.set('Mouse'); self.app._change_control_mode()

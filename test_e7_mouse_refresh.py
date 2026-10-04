@@ -3,6 +3,8 @@ import contextlib
 import ctypes
 import io
 import json
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import Mock, patch
 import numpy as np
@@ -10,7 +12,7 @@ from PIL import Image, ImageDraw
 import E7ADBShopRefresh as adb_engine
 from e7_windows_capture import GameWindow
 from e7_native_mouse import WindowsMouse, MouseStopped, Input, verify_native_target, physical_pixel_coordinates
-from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons
+from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons, home_menu_target, hidden_home_matches
 from e7_mouse_confirmation import confirmation_matches
 
 
@@ -55,8 +57,9 @@ class TransportTests(unittest.TestCase):
 
     def test_focus_loss_stops_before_pointer_input(self):
         self.mouse.screenshot(); self.backend.unobstructed.return_value = False
-        with self.assertRaisesRegex(MouseStopped,'focus'):
-            self.mouse.click(960,540)
+        with patch('e7_native_mouse.time.sleep'),patch('e7_native_mouse.time.monotonic',side_effect=[0,0,11]):
+            with self.assertRaisesRegex(MouseStopped,'focus'):
+                self.mouse.click(960,540)
         self.sender.assert_not_called()
 
     def test_stop_key_state_stops_click_and_scroll(self):
@@ -75,8 +78,9 @@ class TransportTests(unittest.TestCase):
         self.sender.assert_not_called()
 
     def test_lost_focus_during_capture_discards_frame(self):
-        self.backend.unobstructed.side_effect = [True,False]
-        with self.assertRaises(MouseStopped): self.mouse.screenshot()
+        self.backend.unobstructed.side_effect = [True,False,False]
+        with patch('e7_native_mouse.time.sleep'),patch('e7_native_mouse.time.monotonic',side_effect=[0,0,11]):
+            with self.assertRaises(MouseStopped): self.mouse.screenshot()
         self.assertIsNone(self.mouse.view)
         self.sender.assert_not_called()
 
@@ -121,6 +125,46 @@ class TransportTests(unittest.TestCase):
         api.SetThreadDpiAwarenessContext.return_value = 1
         physical_pixel_coordinates(api=api)
 
+    def test_transient_capture_focus_loss_pauses_then_recaptures_without_input(self):
+        self.backend.unobstructed.side_effect = [False,True,True]
+        with patch('e7_native_mouse.time.sleep'),patch('e7_native_mouse.time.monotonic',side_effect=[0,0]),contextlib.redirect_stdout(io.StringIO()) as output:
+            self.mouse.screenshot()
+        self.assertIn('E7GUI_MOUSE_PAUSED',output.getvalue())
+        self.assertIn('E7GUI_MOUSE_RESUMED',output.getvalue())
+        self.sender.assert_not_called()
+
+    def test_covered_exact_click_target_never_receives_input(self):
+        self.mouse.screenshot(); self.backend.point_visible.return_value = False
+        with patch('e7_native_mouse.time.sleep'),patch('e7_native_mouse.time.monotonic',side_effect=[0,0,11]):
+            with self.assertRaisesRegex(MouseStopped,'target is covered'):
+                self.mouse.click(436,994)
+        self.sender.assert_not_called()
+
+    def test_stop_during_focus_pause_is_immediate(self):
+        self.backend.unobstructed.return_value = False
+        with patch('e7_native_mouse.time.sleep',side_effect=lambda _:setattr(self,'active',False)):
+            with self.assertRaisesRegex(MouseStopped,'session stopped'):
+                self.mouse.screenshot()
+        self.sender.assert_not_called()
+
+    def test_resumed_focus_cannot_send_a_previously_prepared_click(self):
+        self.mouse.screenshot(); self.backend.unobstructed.side_effect = [False,True]
+        with patch('e7_native_mouse.time.sleep'):
+            with self.assertRaisesRegex(MouseStopped,'restart to recognize'):
+                self.mouse.click(436,994)
+        self.sender.assert_not_called()
+
+    def test_native_interior_sampling_ignores_border_coverage_and_checks_real_target(self):
+        from e7_windows_capture import WindowsCapture
+        backend=WindowsCapture.__new__(WindowsCapture); backend.user=Mock()
+        backend.user.GetForegroundWindow.return_value=self.target.handle
+        backend.user.GetAncestor.side_effect=lambda handle,_:handle
+        left,top,right,bottom=self.target.rectangle
+        backend.user.WindowFromPoint.side_effect=lambda point:self.target.handle if left+50<point.x<right-50 and top+50<point.y<bottom-50 else 789
+        self.assertFalse(backend.unobstructed(self.target))
+        self.assertTrue(backend.unobstructed(self.target,margin=.06))
+        self.assertFalse(backend.point_visible(self.target,(left+8,top+8)))
+
 
 class NativeEngineTests(unittest.TestCase):
     def make_engine(self):
@@ -132,6 +176,7 @@ class NativeEngineTests(unittest.TestCase):
         app.generateOffset = lambda:(0,0)
         app._rgb = shop(); app._item = None; app._item_name = None
         app.read_confirmation_text = lambda _:'Cancel Confirm Refresh Secret Shop 3 Skystone Covenant bookmark 184,000 Mystic medal 280,000'
+        app.read_navigation_text = Mock(return_value=dict(text='',words=[]))
         app.mouse = Mock()
         app.mouse.screenshot.return_value = Image.fromarray(shop())
         app.navigation = Mock()
@@ -143,6 +188,63 @@ class NativeEngineTests(unittest.TestCase):
         app.storage.inventory = {}
         app.storage.writeToCSV = Mock()
         return app
+
+    def test_home_ocr_menu_requires_home_labels_and_unambiguous_observed_text(self):
+        result=dict(text='Sanctuary Secret Shop Epic Pass',words=[dict(text='secret',box=[20,620,100,650]),dict(text='shop',box=[110,620,175,650])])
+        self.assertEqual(home_menu_target(result),(97.5,635))
+        self.assertIsNone(home_menu_target(dict(result,text='Secret Shop')))
+        self.assertIsNone(home_menu_target(dict(result,words=result['words']*2)))
+        result['words'][1]['text']='shpp'
+        self.assertEqual(home_menu_target(result),(97.5,635))
+
+    def test_session_errors_emit_actual_reason_instead_of_stop_key_message(self):
+        from e7_mouse_refresh import run_mouse_session
+        app=Mock(); app.start.side_effect=ValueError('Unreadable home text')
+        args=['--mouse-session',json.dumps(dict(handle=123,pid=456,title='Epic Seven',rectangle=[0,0,1920,1080])),
+              '--budget','12','--delay','.3','--stop-key','`','--random-offset','yes']
+        with patch('e7_mouse_refresh.E7MouseShopRefresh',return_value=app),contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(run_mouse_session(args),3)
+        self.assertIn('E7GUI_MOUSE_STOPPED',output.getvalue())
+        self.assertIn('Unreadable home text',output.getvalue())
+        self.assertNotIn('Shop refresh terminated!',output.getvalue())
+
+    def test_home_ocr_opens_shop_without_manual_entry_or_refresh(self):
+        app=self.make_engine()
+        app.navigation.shop_visible.side_effect=[False,True]
+        app.navigation.menu_target.return_value=None
+        app.read_navigation_text.return_value=dict(text='Sanctuary Secret Shop',words=[dict(text='secret',box=[20,620,100,650]),dict(text='shop',box=[110,620,175,650])])
+        with patch('e7_mouse_refresh.time.sleep'),patch.object(adb_engine.subprocess,'run') as adb:
+            self.assertTrue(app.clickShop())
+        app.mouse.click.assert_called_once_with(97.5,635)
+        adb.assert_not_called(); self.assertEqual(app.refresh_count,0)
+
+    def test_hidden_known_home_is_revealed_once_then_menu_selected(self):
+        app=self.make_engine()
+        app.navigation.shop_visible.side_effect=[False,False,False,True]
+        app.navigation.menu_target.side_effect=[None,None,(97,635)]
+        with patch('e7_mouse_refresh.hidden_home_matches',return_value=True),patch('e7_mouse_refresh.time.sleep'):
+            self.assertTrue(app.clickShop())
+        app.mouse.move.assert_called_once_with(960,540)
+        self.assertEqual([call.args for call in app.mouse.click.call_args_list],[(960,540),(97,635)])
+
+    def test_unknown_screen_gets_only_hover_without_guessed_clicks(self):
+        app=self.make_engine(); app.navigation.shop_visible.return_value=False
+        app.navigation.menu_target.return_value=None
+        with patch('e7_mouse_refresh.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,0,31]):
+            with self.assertRaisesRegex(MouseStopped,'home Secret Shop menu'):
+                app.clickShop()
+        app.mouse.click.assert_not_called()
+        app.mouse.move.assert_called_once_with(960,540)
+
+    def test_private_home_reference_rejects_changed_page_or_popup(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/'hidden.png'
+            frame=np.random.default_rng(23).integers(30,230,(1080,1920),dtype=np.uint8)
+            Image.fromarray(frame).save(path)
+            self.assertTrue(hidden_home_matches(frame,path))
+            popup=frame.copy(); popup[300:900,500:1450]=30
+            self.assertFalse(hidden_home_matches(popup,path))
+            self.assertFalse(hidden_home_matches(np.full_like(frame,50),path))
 
     def test_constructor_uses_mouse_capture_without_adb(self):
         mouse = Mock(); mouse.screenshot.return_value = Image.fromarray(shop())

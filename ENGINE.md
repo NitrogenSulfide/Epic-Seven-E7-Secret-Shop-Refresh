@@ -14,18 +14,26 @@ Counts describe engine-completed actions, not an independent reading of game
 balances. Purchase labels count buys, not individual bookmarks/medals awarded.
 ADB tap failures abort rather than incrementing the affected counter.
 
-rc29 adds a native STOVE Mouse transport around this same loop. The selected
+rc30 adds a native STOVE Mouse transport around this same loop. The selected
 EpicSeven.exe process, window identity, client geometry and foreground visibility
 are checked before input. Capture keeps the full native client (or clearly bounded
 black-bar crop); normalized recognition points map back to desktop coordinates.
 Mouse mode brings the game forward once after Start, does not resize it, uses
-single click batches and wheel scrolling, and stops after focus/geometry changes.
+single click batches and wheel scrolling. Native capture samples the client
+interior; each action checks its exact destination. Focus/coverage changes pause
+input for up to 10 seconds. Changed geometry or a stale prepared click stops it.
 Item detection is restricted to the shop icon column; Buy and confirmation clicks
 use observed button bounds. Refresh uses the recognized label. Confirmation text
 is read locally using Windows' built-in English OCR and must match the intended
 item/price or three-skystone refresh. Unexpected, changed or unreadable dialogs
 stop before confirmation. Debug/calibration remains an ADB feature. No ADB call
 is made by a Mouse session. Native live behavior remains unverified.
+
+Native home entry supplements menu templates with observed OCR word bounds and
+home labels. A private known hidden-home reference permits one reveal click; no
+home image is shipped in the public package. Native pause/stop events carry a
+reason rather than claiming a Stop key was pressed. The GUI saves private native
+session diagnostics under `runtime/mouse-session-logs`.
 
 `--check-mouse-confirmation FILE --operation refresh` reads a saved full-client
 image offline and reports a text match without input, hooks or ADB. A buy check

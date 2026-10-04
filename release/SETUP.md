@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc27.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc30.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,16 +14,17 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc27.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc30.zip'
 ```
 
 ## Emulator setup
 
 **ADB** remains the default mode for refreshing. **Mouse (preview)** is a separate
-experimental, read-only option described below; it cannot refresh or buy items.
+experimental, read-only option described below; **Mouse** is the separate native
+STOVE automation mode.
 
 Use [Google Play Games on PC Developer Emulator](https://developer.android.com/games/playgames/emulator),
-English Epic Seven and a **1920 × 1080 Android display**. Native STOVE is unsupported;
+English Epic Seven and a **1920 × 1080 Android display**. Native STOVE uses the separate experimental Mouse mode;
 other emulators are unverified. Different home-screen artwork is fine.
 Enable/authorize ADB debugging in the emulator. ADB is the connection that lets
 the tool interact with the game while leaving your PC mouse free.
@@ -103,10 +104,14 @@ window and check your budget, delay and Stop key. Press **Start Refresh**. The a
 brings the game forward, opens the recognized Secret Shop menu, buys detected
 Covenant/Mystic items, scrolls and refreshes using your actual mouse pointer.
 Leave the PC alone while it runs. Your Stop key and Stop Session remain available;
-losing focus, covering, moving or resizing the game stops the session.
+focus or coverage changes pause input for up to 10 seconds. Moving or resizing
+the game stops it. A prepared click is cancelled if focus changed before input.
 The game keeps its current size. Mouse requires normal settings; turn off Debug.
-If home controls are hidden, click the game once to reveal them, as in ADB mode.
-An unknown screen does not receive guessed navigation clicks.
+Start from the English home screen or an already open Secret Shop. Mouse mode
+locates the home Secret Shop label using templates and local Windows OCR. It first
+tries a hover to reveal idle controls. A locally saved known hidden-home image at
+`runtime/adb-assets/native-home/hidden.png` permits one verified reveal click.
+Unknown screens receive no guessed clicks.
 
 The app checks each confirmation before clicking it and stops on unexpected text
 or an insufficient-currency message. Keep English confirmation text readable.
@@ -147,6 +152,9 @@ private under `runtime/mouse-previews`; keep them out of shared
 ZIPs. A closed, covered, unfocused, moved or blank window fails with an explanation.
 Fresh settings use ADB mode; saved settings retain your mode. Switching back
 preserves your ADB address.
+
+Native stops show their actual reason on the main screen. Detailed text logs stay
+private under `runtime/mouse-session-logs`; do not include these in shared ZIPs.
 
 ## Updates and troubleshooting
 

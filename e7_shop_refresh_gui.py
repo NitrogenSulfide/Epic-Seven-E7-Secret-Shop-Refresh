@@ -243,6 +243,8 @@ class RefreshGui(tk.Tk):
         self.started_at = None
         self.stopping = False
         self.finished = False
+        self._mouse_failure = None
+        self._session_log_path = None
         self.partial_line = ""
         self.raw_output = ""
         self.budget = tk.StringVar(value="12")
@@ -1254,8 +1256,8 @@ class RefreshGui(tk.Tk):
             verify_setup_engine(ENGINE_EXE)
             check = subprocess.run([str(ENGINE_EXE),'--verify'],cwd=APP_DIR,capture_output=True,text=True,
                                    timeout=15,creationflags=NO_WINDOW)
-            if check.returncode or 'native mouse v1' not in check.stdout:
-                raise ValueError('Real Mouse mode needs the matching rc29 or newer engine. Use the complete new player folder.')
+            if check.returncode or 'native mouse v2' not in check.stdout:
+                raise ValueError('Real Mouse mode needs the matching rc30 or newer engine. Use the complete new player folder.')
             target = activate_native_target(target)
         except (ValueError,OSError,RuntimeError,subprocess.SubprocessError) as error:
             self._set_connection_warning(str(error),reveal=True)
@@ -1277,6 +1279,16 @@ class RefreshGui(tk.Tk):
         self.run_id += 1
         run_id = self.run_id
         self.stopping = self.finished = False
+        self._mouse_failure = None
+        self._session_log_path = None
+        if mouse_target:
+            try:
+                folder = APP_DIR/'mouse-session-logs'
+                folder.mkdir(exist_ok=True)
+                self._session_log_path = folder/f'{time.time_ns()}-{uuid.uuid4().hex}.log'
+                self._session_log_path.write_text('Native Mouse session diagnostics\n',encoding='utf-8')
+            except OSError:
+                self._session_log_path = None
         self._exit_seen = False
         self._session_started = False
         self.stop_key_pressed = False
@@ -1381,6 +1393,27 @@ class RefreshGui(tk.Tk):
             return
         if line == 'E7GUI_STARTED':
             self._engine_started()
+            return
+        if line.startswith(('E7GUI_MOUSE_PAUSED ','E7GUI_MOUSE_STOPPED ')):
+            try:
+                reason = str(json.loads(line.split(' ',1)[1])['reason'])
+            except (ValueError,KeyError,TypeError):
+                return
+            if line.startswith('E7GUI_MOUSE_STOPPED '):
+                self._mouse_failure = reason
+                self.status.set('Needs attention')
+                self._freeze_elapsed()
+            else:
+                self.status.set('Paused')
+                self.progress_text.set('Paused · no input while the game is covered or unfocused')
+            self.detail.set(reason)
+            self._event(reason)
+            return
+        if line == 'E7GUI_MOUSE_RESUMED':
+            if not self.stopping and not self.stop_key_pressed:
+                self.status.set('Running')
+                self.detail.set('Game visible again. Checking the current screen before continuing.')
+                self.progress_text.set('Checking the game again…')
             return
         if line.startswith('E7GUI_SETUP_REQUIRED '):
             if not self.stopping and not self.stop_key_pressed:
@@ -1540,7 +1573,11 @@ class RefreshGui(tk.Tk):
         self._freeze_elapsed()
         if self.process_tree:
             self.process_tree.close()
-        if self.stopping or self.stop_key_pressed or (process.returncode == 0 and self.run_settings and self.run_settings.debug and self._session_started and not self.finished):
+        if self._mouse_failure and not self.stopping and not self.stop_key_pressed:
+            self.status.set('Needs attention')
+            self.detail.set(self._mouse_failure)
+            self.progress_text.set('Mouse session stopped · see the reason above')
+        elif self.stopping or self.stop_key_pressed or (process.returncode == 0 and self.run_settings and self.run_settings.debug and self._session_started and not self.finished):
             self.status.set("Stopped")
             self.detail.set("Session stopped. History contains only runs recorded by the engine.")
             self.progress_text.set("Stopped")
@@ -1621,6 +1658,12 @@ class RefreshGui(tk.Tk):
         self.after(100, self._drain_log_queue)
 
     def _append_log(self, text):
+        if self._session_log_path:
+            try:
+                with self._session_log_path.open('a',encoding='utf-8') as file:
+                    file.write(text)
+            except OSError:
+                self._session_log_path = None
         self.raw_output = (self.raw_output + text)[-150000:]
         at_bottom = self.log.yview()[1] >= 0.99
         self.log.configure(state=tk.NORMAL)

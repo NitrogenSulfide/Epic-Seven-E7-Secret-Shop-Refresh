@@ -1,7 +1,7 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.1.0-rc29** is a local candidate. The previous rc20 public preview is unchanged.
-Players need only **E7ShopRefresh-0.1.0-rc29.zip**.
+Version **0.1.0-rc30** is a local candidate. The previous rc20 public preview is unchanged.
+Players need only **E7ShopRefresh-0.1.0-rc30.zip**.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
 Pillow are included in this EXE. Artwork, the matching compiled engine, ADB tools
@@ -28,8 +28,8 @@ For native STOVE, choose **Control mode → Mouse**, select Epic Seven and press
 **Start Refresh**. The app brings that game forward and uses your actual pointer
 to open its recognized shop, buy Covenant/Mystic items, scroll and refresh.
 Your budget, delay, randomized offsets, counters and Stop key apply. Leave the PC
-alone until it stops. Focus loss, a changed window or an unrecognized confirmation
-stops the session. The game keeps its current size. Use normal settings; Debug
+alone until it stops. Focus or coverage changes pause input for up to 10 seconds;
+a changed window or an unrecognized confirmation stops the session. The game keeps its current size. Use normal settings; Debug
 remains an ADB feature. Saving settings also saves your control mode without
 starting a session next time. The first native live session is unverified; begin
 with a supervised 12-skystone trial. Keep English game text readable.
@@ -44,7 +44,7 @@ of waiting for the game to be in front and unobstructed. **Cancel preview** canc
 the attempt. Return here to inspect the capture and recognized targets.
 This mode sends no mouse movements, clicks, refreshes, purchases or ADB commands.
 Captures stay private under `runtime/mouse-previews`. An owner-run rc27 native
-STOVE shop preview succeeded; that does not verify rc29's new live actions.
+STOVE shop preview succeeded; that does not verify rc30's new live actions.
 
 Live counters report engine-completed buys/refreshes, not confirmed balances.
 Insufficient-currency stopping remains unverified. Keep initial runs supervised.

@@ -1,5 +1,7 @@
 """Native mouse transport. Inputs run only inside an explicitly started session."""
 import ctypes
+import json
+import time
 from ctypes import wintypes as w
 from pathlib import Path
 try:
@@ -87,16 +89,39 @@ class WindowsMouse:
         self.grabber = grabber or ImageGrab.grab
         self.sender = sender or self._send
         self.view = None
+        self.session_active = False
 
-    def guard(self, *, action=False):
-        if action and not self.active():
-            raise MouseStopped('Mouse session stopped.')
-        current = self.backend.inspect(self.target.handle)
-        if current != self.target:
-            raise MouseStopped('The game moved, resized or changed identity. Mouse session stopped.')
-        if not self.backend.unobstructed(current):
-            raise MouseStopped('The game lost focus or became covered. Mouse session stopped.')
-        return current
+    def guard(self, *, action=False, point=None):
+        deadline = None
+        while True:
+            active = self.active()
+            self.session_active = self.session_active or active
+            if (action or self.session_active) and not active:
+                raise MouseStopped('Mouse session stopped.')
+            current = self.backend.inspect(self.target.handle)
+            if current != self.target:
+                raise MouseStopped('The game moved, resized or changed identity. Mouse session stopped.')
+            # Native clients can extend beneath a taskbar or have border overlays.
+            # Sample the interior and separately check the exact action target.
+            visible = self.backend.unobstructed(current,margin=.06)
+            target_visible = point is None or self.backend.point_visible(current,point)
+            if visible and target_visible:
+                if deadline is not None:
+                    if action:
+                        raise MouseStopped('Focus or target visibility changed after preparing this click. No input sent; restart to recognize the current screen.')
+                    print('E7GUI_MOUSE_RESUMED',flush=True)
+                return current
+            reason = ('The selected game lost focus or its view is covered.' if not visible else
+                      'The mouse target is covered by another window.')
+            problem = getattr(self.backend,'visibility_problem','')
+            if not visible and isinstance(problem,str) and problem:
+                reason = problem
+            if deadline is None:
+                print('E7GUI_MOUSE_PAUSED '+json.dumps({'reason':reason}),flush=True)
+                deadline = time.monotonic()+10
+            if time.monotonic() >= deadline:
+                raise MouseStopped(reason+' No input sent while paused; focus did not return within 10 seconds.')
+            time.sleep(.1)
 
     def screenshot(self):
         before = self.guard()
@@ -121,12 +146,17 @@ class WindowsMouse:
 
     def click(self,x,y):
         point = self._point(x,y)
-        self.guard(action=True)
+        self.guard(action=True,point=point)
         self.sender(point,'click',0)
+
+    def move(self,x,y):
+        point = self._point(x,y)
+        self.guard(action=True,point=point)
+        self.sender(point,'move',0)
 
     def scroll(self,x,y):
         point = self._point(x,y)
-        self.guard(action=True)
+        self.guard(action=True,point=point)
         # A wheel event avoids leaving a held drag button if Stop kills the job.
         self.sender(point,'wheel',-1200)
 
@@ -142,9 +172,9 @@ class WindowsMouse:
         events = [Input(0,InputUnion(mouse=move))]
         if kind == 'click':
             events.extend(Input(0,InputUnion(mouse=MouseInput(0,0,0,flag,0,0))) for flag in (2,4))
-        else:
+        elif kind == 'wheel':
             events.append(Input(0,InputUnion(mouse=MouseInput(0,0,data & 0xffffffff,0x800,0,0))))
-        self.guard(action=True)
+        self.guard(action=True,point=point)
         batch = (Input*len(events))(*events)
         if api.SendInput(len(events),batch,ctypes.sizeof(Input)) != len(events):
             # Release after a partial click insertion; never leave the button held.

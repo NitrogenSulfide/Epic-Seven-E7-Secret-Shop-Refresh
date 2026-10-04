@@ -9,7 +9,7 @@ import tempfile
 from PIL import Image
 
 
-def read_confirmation_text(rgb):
+def read_ui_text(rgb, region):
     helper = Path('mouse_confirmation_ocr.ps1')
     if not helper.is_file():
         raise ValueError('The Mouse confirmation helper is missing. Use the complete player folder.')
@@ -20,7 +20,8 @@ def read_confirmation_text(rgb):
     # are read, moved or deleted. The text is kept in memory and not logged.
     with tempfile.TemporaryDirectory(prefix='e7-confirm-') as temp:
         path = Path(temp)/'dialog.png'
-        Image.fromarray(rgb[260:950,500:1450]).save(path)
+        left,top,right,bottom = region
+        Image.fromarray(rgb[top:bottom,left:right]).save(path)
         environment = dict(os.environ); environment['E7_MOUSE_OCR_FRAME'] = str(path)
         child = subprocess.run([str(powershell),'-NoProfile','-NonInteractive','-EncodedCommand',encoded],
                                env=environment,capture_output=True,text=True,
@@ -29,9 +30,17 @@ def read_confirmation_text(rgb):
         raise ValueError('Windows could not read the confirmation. No confirmation click sent.')
     try:
         result = json.loads(child.stdout)
-        return str(result['text']).lower()
+        result['text'] = str(result['text']).lower()
+        result['words'] = [dict(text=str(word['text']).lower(),
+            box=[word['box'][0]+left,word['box'][1]+top,word['box'][2]+left,word['box'][3]+top])
+            for word in result.get('words',[])]
+        return result
     except (ValueError,KeyError,TypeError):
         raise ValueError('The confirmation text was unreadable. No confirmation click sent.') from None
+
+
+def read_confirmation_text(rgb):
+    return read_ui_text(rgb,(500,260,1450,950))['text']
 
 
 def confirmation_matches(text,operation,item_name=None):

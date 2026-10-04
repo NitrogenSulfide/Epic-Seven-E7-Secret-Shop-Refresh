@@ -26,7 +26,13 @@ try {
         $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new('en-US'))
         if ($null -eq $engine) { throw 'English Windows OCR is unavailable.' }
         $result = Await-Ocr ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
-        @{ text = $result.Text } | ConvertTo-Json -Compress
+        $words = @($result.Lines | ForEach-Object {
+            $_.Words | ForEach-Object {
+                @{ text = $_.Text; box = @($_.BoundingRect.X, $_.BoundingRect.Y,
+                    ($_.BoundingRect.X + $_.BoundingRect.Width), ($_.BoundingRect.Y + $_.BoundingRect.Height)) }
+            }
+        })
+        @{ text = $result.Text; words = $words } | ConvertTo-Json -Compress -Depth 5
     }
     finally { $bitmap.Dispose() }
 }
