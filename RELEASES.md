@@ -12,7 +12,7 @@ Build only from a clean exact commit with an explicit private Python environment
 using engine-build-requirements.txt. Preserve earlier outputs:
 
 ```powershell
-.\.local-state\engine-build-venv\Scripts\python.exe -m unittest test_e7_shop_refresh_gui.ProtocolTests test_e7_engine_location test_e7_live_engine test_e7_shop_navigation test_e7_setup -v
+.\.local-state\engine-build-venv\Scripts\python.exe -m unittest test_e7_connection test_e7_shop_refresh_gui.ProtocolTests test_e7_engine_location test_e7_live_engine test_e7_shop_navigation test_e7_setup -v
 .\build_release_assets.ps1 -BuildPython .local-state\engine-build-venv\Scripts\python.exe -OutputDirectory C:\absolute\new\candidate-directory
 ```
 
@@ -45,6 +45,13 @@ failure must stop the engine and offer setup; Stop/stale output must not start
 another engine or bypass an explicit Start after setup.
 
 ## Extracted and GUI checks
+
+Verify the selected-device preflight with fake ADB replies: no devices, offline,
+unauthorized, a different device, connect/recheck success, missing ADB and timeout.
+Failures must show an actionable red banner, keep Start retryable, and launch no
+engine or recognition helper. Stop/close must invalidate pending start results;
+stale scans must not overwrite newer results. Idle rescans must not replace an
+edited address when the device list is unchanged. Never kill the ADB server.
 
 Verify ZIP integrity, member hashes/allowlists, required files/document links and
 extraction/portable configuration in paths with spaces/non-English characters.

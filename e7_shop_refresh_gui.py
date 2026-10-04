@@ -20,6 +20,7 @@ from e7_process import launch_engine
 from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon
 from e7_about import AboutDialog
 from e7_setup import missing_references, has_builtin_references, RecognitionSetup
+from e7_connection import check_connection, ConnectionCheck
 
 PROJECT_DIR = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
 DEFAULT_ENGINE_DIR = Path.home() / "Downloads" / "E7 Secret Shop Refresh"
@@ -223,6 +224,11 @@ class RefreshGui(tk.Tk):
         self.run_settings = None
         self.setup_window = None
         self._recognition_setup_needed = False
+        self._connection_check_id = 0
+        self._checking_connection = False
+        self._device_scan_busy = False
+        self._background_scan = False
+        self.connection_warning = ''
         self.started_at = None
         self.stopping = False
         self.finished = False
@@ -264,6 +270,7 @@ class RefreshGui(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._close)
         self.after(100, self._drain_log_queue)
         self.after(300, self._maybe_show_credits)
+        self.after(10000, self._rescan_idle_devices)
 
     def _configure_scaling(self):
         self.ui_scale = self.winfo_fpixels("1i") / 96.0
@@ -390,14 +397,7 @@ class RefreshGui(tk.Tk):
             style.configure(name, background=bg, foreground=fg, bordercolor=border)
         style.configure('Muted.TLabel', foreground=muted)
         style.configure('Status.TLabel', foreground=('#fbbf24' if dark else '#92400e') if self.status.get() == 'Waiting for game' else ('#60a5fa' if dark else '#2563eb'))
-        hint_bg, hint_fg = ('#422006', '#fbbf24') if dark else ('#fff4d6', '#92400e')
-        self.home_ui_banner.configure(bg=hint_bg, highlightbackground='#b45309' if dark else '#f59e0b')
-        self.home_ui_notice.configure(bg=hint_bg, fg=hint_fg)
-        style.configure('Dismiss.TButton', background=hint_bg, foreground=hint_fg,
-                        bordercolor=hint_bg, lightcolor=hint_bg, darkcolor=hint_bg,
-                        borderwidth=0, padding=0, font=self.heading_font)
-        style.map('Dismiss.TButton', background=[('active','#78350f' if dark else '#fde68a')],
-                  foreground=[('active',hint_fg)])
+        self._style_home_ui_banner()
         for name in ('TEntry', 'TCombobox'):
             style.configure(name, background=field, fieldbackground=field, foreground=fg, insertcolor=fg, bordercolor=border, lightcolor=border, darkcolor=border, arrowcolor=fg)
             style.map(name, background=[('disabled', bg), ('readonly', field)], fieldbackground=[('disabled', bg), ('readonly', field)], foreground=[('disabled', muted), ('readonly', fg)], arrowcolor=[('disabled', muted), ('!disabled', fg)])
@@ -463,12 +463,36 @@ class RefreshGui(tk.Tk):
                     'Hidden UI? Click the game once before Start.')
         if not self.adb_hint_dismissed.get() and not waiting:
             reminder = 'Use an emulator with ADB enabled.'
-        self.home_ui_hint.set(reminder)
+        self.home_ui_hint.set(self.connection_warning or reminder)
+        self._style_home_ui_banner()
         dark = self.dark_mode.get()
         ttk.Style(self).configure('Status.TLabel', foreground=('#fbbf24' if dark else '#92400e') if waiting else ('#60a5fa' if dark else '#2563eb'))
 
+    def _style_home_ui_banner(self):
+        dark = self.dark_mode.get()
+        error = bool(self.connection_warning)
+        bg, fg, border, hover = (('#450a0a', '#fecaca', '#ef4444', '#7f1d1d') if dark else
+                                 ('#fff1f2', '#991b1b', '#dc2626', '#ffe4e6')) if error else (
+                                 ('#422006', '#fbbf24', '#b45309', '#78350f') if dark else
+                                 ('#fff4d6', '#92400e', '#f59e0b', '#fde68a'))
+        self.home_ui_banner.configure(bg=bg, highlightbackground=border)
+        self.home_ui_notice.configure(bg=bg, fg=fg)
+        style = ttk.Style(self)
+        style.configure('Dismiss.TButton', background=bg, foreground=fg, bordercolor=bg,
+                        lightcolor=bg, darkcolor=bg, borderwidth=0, padding=0, font=self.heading_font)
+        style.map('Dismiss.TButton', background=[('active', hover)], foreground=[('active', fg)])
+
+    def _set_connection_warning(self, warning, *, reveal=False):
+        changed = warning != self.connection_warning
+        self.connection_warning = warning
+        if warning and (changed or reveal):
+            self.home_ui_hint_dismissed = False
+            self.home_ui_banner.grid()
+        self._update_home_ui_hint()
+        self._schedule_layout()
+
     def _dismiss_home_ui_hint(self):
-        if not self.adb_hint_dismissed.get() and self.status.get() != 'Waiting for game':
+        if not self.connection_warning and not self.adb_hint_dismissed.get() and self.status.get() != 'Waiting for game':
             self.adb_hint_dismissed.set(True)
             try:
                 self._write_sound_preference()
@@ -873,7 +897,7 @@ class RefreshGui(tk.Tk):
         labels = [f"{address} (default)" if len(self.connected_devices) == 1 else address for address in self.connected_devices]
         self.device_labels = dict(zip(labels, self.connected_devices))
         self.device_box.configure(values=labels)
-        running = self.process is not None and self.process.poll() is None
+        running = self._checking_connection or (self.process is not None and self.process.poll() is None)
         if self.connected_devices:
             if len(self.connected_devices) == 1:
                 if not running:
@@ -894,9 +918,9 @@ class RefreshGui(tk.Tk):
         if not self.process:
             self._append_log(raw + "\n")
 
-    def save_settings(self):
+    def save_settings(self, settings=None):
         try:
-            settings = self._settings()
+            settings = settings or self._settings()
             parser = configparser.ConfigParser()
             parser.read(CONFIG_FILE)
             if not parser.has_section("Settings"):
@@ -914,22 +938,59 @@ class RefreshGui(tk.Tk):
         return settings
 
     def refresh_devices(self):
-        if self.process and self.process.poll() is None:
+        if self._device_scan_busy or self._checking_connection or (self.process and self.process.poll() is None):
             return
+        if self.setup_window is not None and self.setup_window.winfo_exists():
+            return
+        self._device_scan_busy = True
+        token = self._connection_check_id
+        background = self._background_scan
         self.device_button.configure(state=tk.DISABLED)
-        self.start_button.configure(state=tk.DISABLED)
         self.device_notice.set("Checking ADB devices…")
         def scan():
-            try:
-                result = subprocess.run([str(ADB_EXE), "devices"], cwd=APP_DIR, capture_output=True, text=True, errors="replace", timeout=8, creationflags=NO_WINDOW)
-                devices = [p[0] for line in result.stdout.splitlines() if len(p := line.split()) >= 2 and p[1] == "device"]
-                note = f"{len(devices)} connected device(s)." if devices else "No connected device found. You can enter an address."
-                if result.returncode:
-                    note = "ADB scan failed. Check Diagnostics."
-                self.log_queue.put((None, "devices", (devices, note, result.stdout + result.stderr)))
-            except (OSError, subprocess.SubprocessError) as exc:
-                self.log_queue.put((None, "devices", ([], "ADB unavailable. Check Diagnostics.", str(exc))))
+            result = check_connection(ADB_EXE, APP_DIR)
+            self.log_queue.put((None, 'devices', (token, result, background)))
         threading.Thread(target=scan, daemon=True).start()
+
+    def _rescan_idle_devices(self):
+        self._background_scan = True
+        try:
+            self.refresh_devices()
+        finally:
+            self._background_scan = False
+        self.after(10000, self._rescan_idle_devices)
+
+    def _start_connection_check(self, settings):
+        self._connection_check_id += 1
+        token = self._connection_check_id
+        self._checking_connection = True
+        self._set_controls(True)
+        self.status.set('Checking connection')
+        self.detail.set('Checking the selected emulator before starting. No game actions are sent.')
+        def check():
+            result = check_connection(ADB_EXE, APP_DIR, settings.device)
+            self.log_queue.put((None, 'connection', (token, settings, result)))
+        threading.Thread(target=check, daemon=True).start()
+
+    def _complete_connection_check(self, token, settings, result):
+        if token != self._connection_check_id or not self._checking_connection:
+            return
+        self._checking_connection = False
+        self._set_controls(False)
+        self._apply_devices(result.devices, result.warning, result.diagnostics)
+        self._set_connection_warning(result.warning, reveal=True)
+        if not result.ready:
+            self.status.set('Not connected')
+            self.detail.set(result.warning)
+            self._event('Emulator connection unavailable. No refresh engine started.')
+            return
+        if self.setup_window is not None and self.setup_window.winfo_exists():
+            self.setup_window.lift()
+            return
+        if missing_references(ENGINE_EXE.parent) and not has_builtin_references(ENGINE_EXE.parent):
+            self._show_recognition_setup()
+            return
+        self._begin_refresh(settings)
 
     def _show_recognition_setup(self):
         if self.process and self.process.poll() is None:
@@ -956,7 +1017,7 @@ class RefreshGui(tk.Tk):
         self._show_recognition_setup()
 
     def start_refresh(self):
-        if self.process and self.process.poll() is None:
+        if self._checking_connection or (self.process and self.process.poll() is None):
             return
         if not ENGINE_EXE.is_file():
             messagebox.showerror("Missing engine", f"Could not find {ENGINE_EXE}", parent=self)
@@ -964,14 +1025,19 @@ class RefreshGui(tk.Tk):
         if self.setup_window is not None and self.setup_window.winfo_exists():
             self.setup_window.lift()
             return
-        if missing_references(ENGINE_EXE.parent) and not has_builtin_references(ENGINE_EXE.parent):
-            self._show_recognition_setup()
+        try:
+            settings = self._settings()
+        except ValueError as error:
+            messagebox.showerror('Check settings', str(error), parent=self)
             return
-        if self.debug_mode.get():
+        self._start_connection_check(settings)
+
+    def _begin_refresh(self, settings):
+        if settings.debug:
             message = "Debug uses a fixed 100-skystone test budget, the Esc stop key, and randomized offsets. It includes Friendship Points when detected, and pauses BEFORE each click. Check each image, then press a key other than Esc in that image to continue. Buy and confirmation each have a pause. Continue?"
             if not messagebox.askyesno("Start calibration?", message, parent=self):
                 return
-        settings = self.save_settings()
+        settings = self.save_settings(settings)
         if settings is None:
             return
         if settings.debug:
@@ -1154,6 +1220,13 @@ class RefreshGui(tk.Tk):
             self._event("Calibration image open. Check the highlighted area before continuing.")
 
     def stop_refresh(self):
+        if self._checking_connection:
+            self._connection_check_id += 1
+            self._checking_connection = False
+            self._set_controls(False)
+            self.status.set('Stopped')
+            self.detail.set('Connection check cancelled. No refresh engine started.')
+            return
         process = self.process
         if not process:
             return
@@ -1270,8 +1343,17 @@ class RefreshGui(tk.Tk):
             elif kind == "io_error":
                 self._append_log(f"\nEngine I/O ended: {value}\n")
             elif kind == "devices":
-                devices, note, raw = value
-                self._apply_devices(devices, note, raw)
+                self._device_scan_busy = False
+                token, value, background = value
+                if token == self._connection_check_id and not self._checking_connection and not (self.process and self.process.poll() is None):
+                    if not background or list(value.devices) != self.connected_devices:
+                        self._apply_devices(value.devices, value.warning, value.diagnostics)
+                    else:
+                        self.device_button.configure(state=tk.NORMAL)
+                        self.device_notice.set(value.warning or f'{len(value.devices)} connected device(s).')
+                    self._set_connection_warning(value.warning)
+            elif kind == 'connection':
+                self._complete_connection_check(*value)
         if output:
             self._handle_output(''.join(output))
         self.after(100, self._drain_log_queue)
@@ -1340,6 +1422,8 @@ class RefreshGui(tk.Tk):
             self.ev.set("Enter a valid budget to see the estimate.")
 
     def _close(self):
+        self._connection_check_id += 1
+        self._checking_connection = False
         if self.process and self.process.poll() is None:
             if not messagebox.askyesno("Stop and close?", "A refresh session is active. Stop it and close the app? The engine may not record an interrupted session.", parent=self):
                 return

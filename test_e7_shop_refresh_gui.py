@@ -18,6 +18,7 @@ import e7_shop_refresh_gui as gui
 from e7_setup import REFERENCE_NAMES
 PACKAGED_ASSETS = gui.ASSET_DIR
 DEVICE_SCAN = gui.RefreshGui.refresh_devices
+CONNECTION_CHECK = gui.RefreshGui._start_connection_check
 CREDITS_AUTO = gui.RefreshGui._maybe_show_credits
 BUILTIN_ASSETS = gui.PROJECT_DIR/'adb-assets/builtin-navigation'
 if not BUILTIN_ASSETS.is_dir():
@@ -142,7 +143,11 @@ class GuiTests(unittest.TestCase):
         for name in ('start.wav', 'end.wav'):
             shutil.copyfile(PACKAGED_ASSETS / name, self.assets / name)
         self.history = self.root / "history.csv"
-        self.patches = [patch.object(gui, "CONFIG_FILE", self.config), patch.object(gui, "GUI_CONFIG_FILE", self.gui_config), patch.object(gui, "ASSET_DIR", self.assets), patch.object(gui, "HISTORY_FILE", self.history), patch.object(gui, "ENGINE_EXE", self.fake), patch.object(gui.RefreshGui, "refresh_devices", lambda _: None), patch("winsound.PlaySound")]
+        def connected(app, settings):
+            app._checking_connection = True
+            app._complete_connection_check(app._connection_check_id, settings,
+                gui.ConnectionCheck((settings.device,), '', '', True))
+        self.patches = [patch.object(gui, "CONFIG_FILE", self.config), patch.object(gui, "GUI_CONFIG_FILE", self.gui_config), patch.object(gui, "ASSET_DIR", self.assets), patch.object(gui, "HISTORY_FILE", self.history), patch.object(gui, "ENGINE_EXE", self.fake), patch.object(gui.RefreshGui, "refresh_devices", lambda _: None), patch.object(gui.RefreshGui, '_start_connection_check', connected), patch("winsound.PlaySound")]
         for p in self.patches:
             p.start()
         self.credits_auto_patch = patch.object(gui.RefreshGui, '_maybe_show_credits', lambda _: None)
@@ -725,13 +730,73 @@ time.sleep(30)
         self.app.stop_refresh()
         self.pump_until(lambda: self.app.status.get() == 'Stopped')
 
-    def test_device_scan_waits_before_enabling_start(self):
+    def test_device_scan_keeps_start_available_to_retry(self):
         with patch.object(gui.threading, 'Thread'):
             DEVICE_SCAN(self.app)
-        self.assertEqual(str(self.app.start_button.cget('state')), 'disabled')
+        self.assertEqual(str(self.app.start_button.cget('state')), 'normal')
         self.app._apply_devices(['localhost:6520'], 'Connected.', '')
         self.assertEqual(str(self.app.start_button.cget('state')), 'normal')
         self.assertEqual(self.app._device_address(), 'localhost:6520')
+
+    def test_no_emulator_warning_blocks_engine_but_keeps_start_blue(self):
+        result = gui.ConnectionCheck((), 'No connected emulator detected. Open it with ADB enabled.', '')
+        with patch.object(gui, 'check_connection', return_value=result), patch.object(gui, 'launch_engine') as launch:
+            CONNECTION_CHECK(self.app, self.app._settings())
+            self.pump_until(lambda: self.app.status.get() == 'Not connected')
+        launch.assert_not_called()
+        self.assertIsNone(self.app.setup_window)
+        self.assertIsNone(self.app.process)
+        self.assertEqual(self.app.run_id, 0)
+        self.assertFalse(self.history.exists())
+        self.assertFalse(self.config.exists())
+        self.assertEqual(str(self.app.start_button.cget('state')), 'normal')
+        for dark, background in ((False, '#fff1f2'), (True, '#450a0a')):
+            self.app.dark_mode.set(dark)
+            self.app._apply_theme()
+            self.assertEqual(self.app.home_ui_banner.cget('bg'), background)
+            self.assertIn('No connected emulator', self.app.home_ui_hint.get())
+        self.app._dismiss_home_ui_hint()
+        self.assertFalse(self.app.adb_hint_dismissed.get())
+        self.app._set_connection_warning(result.warning, reveal=True)
+        self.assertFalse(self.app.home_ui_hint_dismissed)
+        self.start_fake()
+        self.pump_until(lambda: self.app.status.get() == 'Finished')
+        self.assertEqual(self.app.connection_warning, '')
+
+    def test_cancelled_connection_check_cannot_launch_or_open_setup(self):
+        settings = self.app._settings()
+        with patch.object(gui.threading, 'Thread'), patch.object(gui, 'launch_engine') as launch:
+            CONNECTION_CHECK(self.app, settings)
+            token = self.app._connection_check_id
+            self.app.stop_refresh()
+            self.app._complete_connection_check(token, settings, gui.ConnectionCheck((settings.device,), '', '', True))
+        launch.assert_not_called()
+        self.assertIsNone(self.app.setup_window)
+        self.assertEqual(self.app.status.get(), 'Stopped')
+
+    def test_stale_scan_cannot_replace_new_connection_result(self):
+        self.app._connection_check_id = 2
+        self.app.log_queue.put((None, 'devices', (1, gui.ConnectionCheck((), 'Old failed scan', ''), False)))
+        self.app._drain_log_queue()
+        self.assertEqual(self.app.connection_warning, '')
+        self.assertEqual(str(self.app.start_button.cget('state')), 'normal')
+
+    def test_background_scan_does_not_overwrite_manual_address(self):
+        self.app._apply_devices(['localhost:6520'], 'Connected.', '')
+        self.app.device.set('localhost:6530')
+        self.app.log_queue.put((None, 'devices', (self.app._connection_check_id,
+            gui.ConnectionCheck(('localhost:6520',), '', ''), True)))
+        self.app._drain_log_queue()
+        self.assertEqual(self.app._device_address(), 'localhost:6530')
+
+    def test_async_success_checks_connection_before_launch(self):
+        settings = self.app._settings()
+        success = gui.ConnectionCheck((settings.device,), '', '', True)
+        with patch.object(gui, 'check_connection', return_value=success), patch.object(self.app, '_begin_refresh') as begin:
+            CONNECTION_CHECK(self.app, settings)
+            self.pump_until(lambda: not self.app._checking_connection)
+        begin.assert_called_once_with(settings)
+        self.assertEqual(self.app.connection_warning, '')
 
     def test_mixed_history_labels_debug_without_rewriting_csv(self):
         self.history.write_text('Duration,Skystone spent,Gold spent,Covenant bookmark,Mystic medal\n10,9,0,0,0\n20,6,0,0,0,0\n30,3,18000,0,0,1\n')

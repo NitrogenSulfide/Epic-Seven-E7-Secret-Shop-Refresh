@@ -35,6 +35,7 @@ $mapping = [ordered]@{
     'e7_appearance.py' = 'e7_appearance.py'
     'e7_about.py' = 'e7_about.py'
     'e7_setup.py' = 'e7_setup.py'
+    'e7_connection.py' = 'e7_connection.py'
     'e7_windows_icon.py' = 'e7_windows_icon.py'
     'engine-location.example.ini' = 'engine-location.example.ini'
     'LICENSE' = 'LICENSE'

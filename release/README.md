@@ -1,7 +1,7 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.1.0-rc21** is a local candidate. The previous rc20 public preview is unchanged.
-Players need only **E7ShopRefresh-0.1.0-rc21.zip**.
+Version **0.1.0-rc22** is a local candidate. The previous rc20 public preview is unchanged.
+Players need only **E7ShopRefresh-0.1.0-rc22.zip**.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
 Pillow are included in this EXE. Artwork, the matching compiled engine, ADB tools
@@ -14,6 +14,9 @@ Use Google Play Games on PC Developer Emulator, English Epic Seven and a
 1920 × 1080 Android display. Native STOVE is unsupported; other emulators are
 unverified. Press Start to try the built-in English templates. If the helper is
 needed, it only reads screenshots; press Start again after it succeeds.
+Start checks the selected ADB connection first. A red banner explains missing
+connections without launching the refresh engine; open the emulator, enable ADB
+and press Start again. Idle scans update every 10 seconds.
 Normal fresh settings are 12 skystones, 0.3-second
 delay, backtick stop key and randomized offsets; saved settings take precedence.
 
