@@ -7,8 +7,8 @@ from e7_shop_navigation import create_navigator, FRAME_SIZE
 
 def inspect_mouse_frame(path, assets):
     frame = cv2.imdecode(np.frombuffer(Path(path).read_bytes(),dtype=np.uint8),cv2.IMREAD_GRAYSCALE)
-    if frame is None or abs(frame.shape[1]/frame.shape[0]-16/9) > .03:
-        raise ValueError('Use a valid 16:9 game-client screenshot.')
+    if frame is None or frame.shape[1] < 640 or frame.shape[0] < 360:
+        raise ValueError('Use a valid game-client screenshot at least 640 × 360 pixels.')
     size = (frame.shape[1],frame.shape[0])
     frame = cv2.resize(frame,FRAME_SIZE,interpolation=cv2.INTER_AREA)
     navigation = create_navigator(assets)

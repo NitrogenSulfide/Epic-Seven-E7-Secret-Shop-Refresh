@@ -11,7 +11,7 @@ from unittest.mock import Mock
 from PIL import Image, ImageDraw
 import cv2
 import numpy as np
-from e7_window_preview import GameWindow, capture_selected, analyze_capture, game_view, wait_for_window
+from e7_window_preview import GameWindow, capture_selected, analyze_capture, game_view, wait_for_window, annotated_capture
 from e7_mouse_analysis import inspect_mouse_frame
 import test_e7_shop_navigation as navigation_tests
 
@@ -81,7 +81,7 @@ class CaptureTests(unittest.TestCase):
             self.assertEqual(saved.size,game.size)
             self.assertEqual(saved.getpixel((100,100)),(255,255,255))
 
-    def test_top_bottom_bars_crop_but_chrome_or_asymmetric_borders_do_not(self):
+    def test_top_bottom_bars_crop_but_other_shapes_preserve_full_view(self):
         game=Image.new('RGB',(1280,720),(40,60,80))
         letterbox=Image.new('RGB',(1280,800));letterbox.paste(game,(0,40))
         result,bounds=game_view(letterbox)
@@ -91,7 +91,22 @@ class CaptureTests(unittest.TestCase):
             image.paste(game,(0,0 if mode=='asymmetric' else 40))
             if mode=='chrome':ImageDraw.Draw(image).rectangle((0,0,1279,30),fill='gray')
             if mode=='wrong_ratio':image=Image.new('RGB',(1600,1000),'gray')
-            with self.assertRaisesRegex(ValueError,'Could not identify'):game_view(image)
+            view,bounds=game_view(image)
+            self.assertEqual(view.size,image.size)
+            self.assertEqual(bounds,(0,0,*image.size))
+
+    def test_native_wide_client_is_saved_and_annotations_preserve_aspect(self):
+        image=Image.new('RGB',(3840,2019),(40,60,80))
+        ImageDraw.Draw(image).rectangle((50,50,250,250),fill='white')
+        target=GameWindow(123,456,'Epic Seven',(0,45,3840,2064))
+        self.backend.inspect.return_value=target
+        actual=capture_selected(target,self.destination,backend=self.backend,grabber=Mock(return_value=image))
+        self.assertEqual(actual.rectangle,target.rectangle)
+        with Image.open(self.destination) as saved:self.assertEqual(saved.size,image.size)
+        self.assertTrue((self.root/'client-capture.png').is_file())
+        rendered=annotated_capture(self.destination,dict(targets=[dict(point=[960,540])],detections=[]))
+        self.assertAlmostEqual(rendered.width/rendered.height,image.width/image.height,places=2)
+        self.assertEqual(rendered.getpixel((rendered.width//2,rendered.height//2)),(251,191,36))
 
     def test_changed_identity_closed_minimized_or_obstructed_never_capture(self):
         for mode in ('identity','closed','obstructed'):
@@ -170,11 +185,18 @@ class AnalysisTests(unittest.TestCase):
             report=self.inspect(frame)
             self.assertEqual([d['label'] for d in report['detections']],['Covenant Bookmark'] if shop else [])
 
-    def test_normalized_resolution_and_invalid_aspect(self):
+    def test_normalized_resolution_and_too_small_image(self):
         frame=cv2.resize(self.fixture.frame(['menu-secret-shop.png']),(2560,1440))
         report=self.inspect(frame);self.assertEqual(report['original_size'],[2560,1440])
         self.assertEqual(report['state'],'home')
-        with self.assertRaises(ValueError):self.inspect(np.zeros((1000,1600),dtype=np.uint8))
+        with self.assertRaises(ValueError):self.inspect(np.zeros((300,600),dtype=np.uint8))
+
+    def test_native_wide_frames_recognize_visible_labels_or_return_unknown(self):
+        for markers,state in ((['shop-title.png','refresh-label.png'],'shop'),([], 'unrecognized')):
+            frame=cv2.resize(self.fixture.frame(markers),(3840,2019))
+            report=self.inspect(frame)
+            self.assertEqual(report['state'],state)
+            self.assertEqual(report['original_size'],[3840,2019])
 
     def test_shop_recognition_after_letterbox_crop(self):
         frame=self.fixture.frame(['shop-title.png','refresh-label.png'])

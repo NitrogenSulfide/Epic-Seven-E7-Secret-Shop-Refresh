@@ -148,7 +148,7 @@ sends no ADB commands, starts no keyboard hooks and makes no game actions.
 ## Read-only Mouse preview
 
 The rc24 engine also supports `--preview-mouse-frame PATH --output REPORT.json`.
-This early CLI branch analyzes an existing 16:9 screenshot with the same shop
+This early CLI branch analyzes an existing game-client screenshot with the same shop
 references and writes normalized targets/item detections. It exits before ADB
 initialization, keyboard hooks or the refresh loop. The GUI's Mouse preview uses
 this branch only; screenshots/reports are private runtime data. Actual mouse

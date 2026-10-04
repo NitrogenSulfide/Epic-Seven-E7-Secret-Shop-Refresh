@@ -82,8 +82,11 @@ aspect ratio, blank images and negative monitor coordinates. Confirm cancellatio
 stale-result handling, mode switching and the offline-only engine command.
 Also check maximized STOVE dimensions with symmetric black side bars, top/bottom
 bars, exact cropped screen coordinates and recognition on the resulting image;
-reject colored chrome, asymmetric borders and images that do not contain a
-16:9 viewport.
+preserve the full client view for other shapes, colored chrome or asymmetric
+borders. Native wide frames and hidden home controls must yield a preview,
+not an aspect-ratio error. The displayed image must keep its proportions and
+map normalized annotations back to that image correctly. Original client
+captures remain private runtime data.
 Verify readiness waiting without activation/input, timeout, cancellation while
 waiting/grabbing and stale-result handling. A delayed user focus change must
 continue to the read-only preview; Stop/close must prevent a waiting capture.
