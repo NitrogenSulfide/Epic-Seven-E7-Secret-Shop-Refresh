@@ -72,7 +72,48 @@ def hidden_home_matches(frame, reference=None):
         difference = cv2.absdiff(frame,saved)
         if float(difference.mean()) <= 10 and float(np.quantile(difference,.95)) <= 28:
             return True
+        if reframed_home_matches(frame, saved):
+            return True
     return False
+
+
+def reframed_home_matches(frame, saved):
+    """Recognize the same private home artwork after STOVE reframes its width.
+
+    Feature agreement establishes alignment, not permission to click: most of
+    the aligned image must still match in brightness, including any dialog area.
+    This rejects a popup laid over otherwise recognizable home artwork.
+    """
+    size = (960, 540)
+    current = cv2.resize(frame, size, interpolation=cv2.INTER_AREA)
+    reference = cv2.resize(saved, size, interpolation=cv2.INTER_AREA)
+    orb = cv2.ORB_create(nfeatures=2500)
+    a, da = orb.detectAndCompute(reference, None)
+    b, db = orb.detectAndCompute(current, None)
+    if da is None or db is None or len(a) < 60 or len(b) < 60:
+        return False
+    pairs = cv2.BFMatcher(cv2.NORM_HAMMING).knnMatch(da, db, k=2)
+    matches = [pair[0] for pair in pairs if len(pair) == 2 and pair[0].distance < .7*pair[1].distance]
+    if len(matches) < 60:
+        return False
+    source = np.float32([a[match.queryIdx].pt for match in matches])
+    target = np.float32([b[match.trainIdx].pt for match in matches])
+    matrix, inliers = cv2.estimateAffine2D(source, target, method=cv2.RANSAC, ransacReprojThreshold=3)
+    if matrix is None or inliers is None or inliers.sum() < 60 or inliers.mean() < .75:
+        return False
+    if not (.75 <= matrix[0,0] <= 1.35 and .85 <= matrix[1,1] <= 1.15
+            and abs(matrix[0,1]) <= .01 and abs(matrix[1,0]) <= .01
+            and abs(matrix[0,2]) <= size[0]*.20 and abs(matrix[1,2]) <= size[1]*.12):
+        return False
+    spread = np.ptp(target[inliers.ravel().astype(bool)], axis=0)
+    if spread[0] < size[0]*.55 or spread[1] < size[1]*.55:
+        return False
+    aligned = cv2.warpAffine(reference, matrix, size)
+    valid = cv2.warpAffine(np.full_like(reference, 255), matrix, size) > 254
+    if valid.mean() < .85:
+        return False
+    difference = cv2.absdiff(current, aligned)[valid]
+    return bool(difference.mean() <= 10 and np.quantile(difference, .95) <= 28)
 
 
 class IncompleteCurrencyRow(MouseStopped):
