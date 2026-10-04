@@ -3,16 +3,18 @@ import contextlib
 import ctypes
 import io
 import json
+import math
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
 import numpy as np
+import cv2
 from PIL import Image, ImageDraw
 import E7ADBShopRefresh as adb_engine
 from e7_windows_capture import GameWindow
 from e7_native_mouse import WindowsMouse, MouseStopped, Input, verify_native_target, physical_pixel_coordinates, process_is_elevated, require_mouse_permissions, pointer_glide
-from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons, home_menu_target, home_icon_target, hidden_home_matches, reframed_home_matches, idle_home_candidate, currency_button, IncompleteCurrencyRow, inspect_mouse_items
+from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_buttons, home_menu_target, home_icon_target, native_home_control_target, hidden_home_matches, reframed_home_matches, idle_home_candidate, currency_button, IncompleteCurrencyRow, inspect_mouse_items
 from e7_mouse_confirmation import confirmation_matches
 
 
@@ -516,6 +518,38 @@ class NativeEngineTests(unittest.TestCase):
         self.assertIsNotNone(home_menu_target(result,frame))
         self.assertIsNone(home_menu_target(result,shop()))
         self.assertIsNone(home_menu_target(dict(result,text='secr.et shoo'),frame))
+
+    def home_controls_frame(self,background,*,omitted=None,epic_shift=0):
+        frame=np.full((1080,1920,3),background,dtype=np.uint8)
+        positions={'sanctuary':(84,267),'secret-shop':(84,498),'epic-pass':(84,615+epic_shift)}
+        for name,(x,y) in positions.items():
+            if name==omitted:continue
+            icon=np.asarray(Image.open(f'adb-assets/builtin-navigation/native-{name}-icon.png'))
+            h,w=icon.shape;crop=frame[round(y-h/2):round(y-h/2)+h,round(x-w/2):round(x-w/2)+w]
+            outline=cv2.dilate(icon,np.ones((3,3),dtype=np.uint8))>0
+            crop[outline]=35;crop[icon>0]=240
+        return frame
+
+    def test_native_home_controls_match_both_bright_and_dark_artwork_without_ocr(self):
+        for background in (40,220):
+            frame=self.home_controls_frame(background)
+            point=native_home_control_target(frame)
+            self.assertIsNotNone(point);self.assertLess(math.dist(point,(84,498)),5)
+            app=self.make_engine();app._rgb=frame
+            self.assertIsNotNone(app._home_menu_target(np.zeros((1080,1920),dtype=np.uint8)))
+            app.read_navigation_text.assert_not_called()
+
+    def test_native_home_controls_require_all_three_correctly_arranged_visible_icons(self):
+        for name in ('sanctuary','secret-shop','epic-pass'):
+            self.assertIsNone(native_home_control_target(self.home_controls_frame(220,omitted=name)))
+        self.assertIsNone(native_home_control_target(self.home_controls_frame(220,epic_shift=250)))
+        self.assertIsNone(native_home_control_target((self.home_controls_frame(220)*.4).astype('uint8')))
+        self.assertIsNone(native_home_control_target(np.full((1080,1920,3),220,dtype=np.uint8)))
+
+    def test_native_home_controls_reject_two_equally_plausible_menu_columns(self):
+        frame=self.home_controls_frame(40)
+        frame[:,176:336]=frame[:,:160]
+        self.assertIsNone(native_home_control_target(frame))
 
     def test_session_errors_emit_actual_reason_instead_of_stop_key_message(self):
         from e7_mouse_refresh import run_mouse_session

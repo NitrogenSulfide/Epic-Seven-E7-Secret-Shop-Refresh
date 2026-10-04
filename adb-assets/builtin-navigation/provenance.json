@@ -1,8 +1,8 @@
 {
-  "description": "Generic English Secret Shop text labels and native Secret Shop icon mask for normalized 1920x1080 recognition.",
+  "description": "Generic English shop labels and native home control icon masks for normalized 1920x1080 recognition.",
   "source": "UI-only crops derived from owner-supplied game screenshots and visually inspected; original screenshots and personal calibration remain private.",
   "credit": "Epic Seven, Smilegate and respective game/artwork rights holders. Software GPL does not relicense third-party game artwork.",
-  "processing": "Existing grayscale text labels retained byte-for-byte. Native icon is a tightly cropped binary mask of its four white question-mark components, from an authorized STOVE home capture on 2026-10-04. No wallpaper, account details or original screen is included.",
+  "processing": "Existing grayscale text labels retained byte-for-byte. Native icon is a tightly cropped binary mask of its four white question-mark components, from an authorized STOVE home capture on 2026-10-04. No wallpaper, account details or original screen is included. Sanctuary and Epic Pass binary UI masks were isolated from the same authorized STOVE controls capture; matching their joint layout does not require wallpaper or OCR text.",
   "files": {
     "menu-secret-shop.png": {
       "sha256": "1e9dd7ebde1a6fd2c1a86e87ccea65f038f5b37ea02f3505b0eaf0cddef631fa",
@@ -23,6 +23,16 @@
       "sha256": "07c188b21ed456174f69c0b6c80a8c79a07518e5b2b40792e2fb8b0a36d37e9e",
       "width": 61,
       "height": 48
+    },
+    "native-sanctuary-icon.png": {
+      "sha256": "23d510cff2eb92b3887bcbb9b9778d83c9f0ca07e048efc25d2b50878267a9ae",
+      "width": 49,
+      "height": 54
+    },
+    "native-epic-pass-icon.png": {
+      "sha256": "39341fbd4b97749c859bbd683aeec6f3c3003ae60349c21f34e122bf2f512a12",
+      "width": 65,
+      "height": 65
     }
   }
 }

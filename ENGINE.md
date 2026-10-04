@@ -259,3 +259,9 @@ saves only a private left-menu crop and recognition details under mouse-failures
 rc44 accepts the observed native Shop-to-Shoo OCR descender error in the
 same home context. A supervised live native hidden-home reveal and Secret Shop
 entry passed without refreshing or purchasing. Capture/input APIs were unchanged.
+
+rc45 identifies the native home controls by the Sanctuary, Secret Shop and
+Epic Pass glyph edges in their joint layout, with foreground brightness and
+ambiguity checks. This path needs neither wallpaper references nor readable
+caption OCR. The existing caption fallback remains for other skins. The saved
+Mouse-home CLI uses the same grouped-control recognition as live startup.
