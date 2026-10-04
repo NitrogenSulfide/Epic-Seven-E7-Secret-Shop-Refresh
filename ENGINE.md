@@ -14,10 +14,16 @@ Counts describe engine-completed actions, not an independent reading of game
 balances. Purchase labels count buys, not individual bookmarks/medals awarded.
 ADB tap failures abort rather than incrementing the affected counter.
 
-rc31 adds a native STOVE Mouse transport around this same loop. The selected
-EpicSeven.exe process, window identity, client geometry and foreground visibility
+rc31 adds a Mouse transport around this same loop. rc37 also accepts selected
+emulator windows, including Google Play Games Developer Emulator, without an
+EpicSeven.exe requirement. Process access, window identity, client geometry and foreground visibility
 are checked before input. Capture keeps the full native client (or clearly bounded
 black-bar crop); normalized recognition points map back to desktop coordinates.
+Google Play Games windows can additionally crop an observed mostly black custom
+title bar when the remaining image fits the game aspect ratio. No fixed toolbar
+height is assumed. Home/shop recognition is required before input, including
+hover; unknown emulator screens receive none. The GUI requires window mouse v4
+so an older STOVE-only engine cannot be used accidentally.
 The native preflight checks process elevation: a normal app cannot control an
 elevated game. It stops with a Run as administrator instruction before activation.
 Mouse mode brings the game forward once after Start, does not resize it, uses

@@ -90,11 +90,23 @@ class WindowsCapture:
         return True
 
 
-def game_view(image):
-    """Preserve the client view; crop only clearly identifiable black bars."""
+def game_view(image, *, google_emulator=False):
+    """Preserve the client view; crop observed bars or Google's custom header."""
     width, height = image.size
     if abs(width/height - 16/9) <= .03:
         return image, (0,0,width,height)
+    if google_emulator:
+        # Google's custom title bar is inside its client rectangle. Identify
+        # the mostly black band in pixels; never assume a DPI-specific height.
+        gray = image.convert('L')
+        top = 0
+        for y in range(min(round(height*.09), height)):
+            histogram = gray.crop((0,y,width,y+1)).histogram()
+            if sum(histogram[:25])/width < .80:
+                break
+            top = y+1
+        if 8 <= top <= height*.09 and height-top >= 360 and abs(width/(height-top)-16/9) <= .03:
+            return image.crop((0,top,width,height)), (0,top,width,height)
     bounds = image.convert('L').point(lambda value: 255 if value > 12 else 0).getbbox()
     if bounds:
         left, top, right, bottom = bounds

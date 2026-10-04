@@ -157,12 +157,25 @@ class TransportTests(unittest.TestCase):
             with self.assertRaises(MouseStopped): self.mouse.click(x,y)
         self.sender.assert_not_called()
 
-    def test_process_validation_rejects_title_spoof_and_changed_identity(self):
-        with self.assertRaisesRegex(ValueError,'native STOVE'):
-            verify_native_target(self.target,backend=self.backend,lookup=lambda _:'chrome.exe')
+    def test_selected_client_is_not_restricted_to_stove_but_identity_is_verified(self):
+        for process in ('EpicSeven.exe','crosvm.exe','HD-Player.exe','MuMuPlayer.exe'):
+            self.assertEqual(verify_native_target(self.target,backend=self.backend,lookup=lambda _:process),self.target)
+        with self.assertRaisesRegex(ValueError,'verify'):
+            verify_native_target(self.target,backend=self.backend,lookup=lambda _:'')
         self.backend.inspect.return_value = GameWindow(123,999,'Epic Seven',self.target.rectangle)
         with self.assertRaisesRegex(ValueError,'changed'):
             verify_native_target(self.target,backend=self.backend,lookup=lambda _:'EpicSeven.exe')
+
+    def test_google_custom_title_bar_is_excluded_from_physical_click_mapping(self):
+        target=GameWindow(123,456,'Google Play Games on PC Emulator',(150,0,2710,1512))
+        self.backend.inspect.return_value=target
+        frame=Image.new('RGB',(2560,1512),(0,0,0))
+        ImageDraw.Draw(frame).rectangle((20,20,380,40),fill='white')
+        frame.paste(Image.new('RGB',(2560,1440),(80,90,100)),(0,72))
+        mouse=WindowsMouse(target,lambda:True,backend=self.backend,grabber=Mock(return_value=frame),lookup=lambda _:'crosvm.exe',sender=self.sender)
+        self.assertEqual(mouse.screenshot().size,(2560,1440))
+        mouse.click(960,540)
+        self.sender.assert_called_once_with((1430,792),'click',0)
 
     def test_elevated_game_requires_matching_app_permissions_before_input(self):
         with patch('e7_native_mouse.process_is_elevated',side_effect=[True,False]),self.assertRaisesRegex(ValueError,'Run as administrator'):
@@ -513,14 +526,14 @@ class NativeEngineTests(unittest.TestCase):
         app.mouse.move.assert_called_once_with(960,540)
         self.assertEqual([call.args for call in app.mouse.click.call_args_list],[(960,540),(97,635)])
 
-    def test_unknown_screen_gets_only_hover_without_guessed_clicks(self):
+    def test_unknown_screen_sends_no_pointer_input(self):
         app=self.make_engine(); app.navigation.shop_visible.return_value=False
         app.navigation.menu_target.return_value=None
         with patch('e7_mouse_refresh.hidden_home_matches',return_value=False),patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,0,31]):
             with self.assertRaisesRegex(MouseStopped,'home Secret Shop menu'):
                 app.clickShop()
         app.mouse.click.assert_not_called()
-        app.mouse.move.assert_called_once_with(960,540)
+        app.mouse.move.assert_not_called()
 
     def test_private_home_reference_rejects_changed_page_or_popup(self):
         with tempfile.TemporaryDirectory() as temp:

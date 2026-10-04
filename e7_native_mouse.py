@@ -92,8 +92,11 @@ def verify_native_target(target, *, backend=None, lookup=process_name):
     current = backend.inspect(target.handle)
     if (current.pid,current.title) != (target.pid,target.title):
         raise ValueError('The selected window changed. Scan and select it again.')
-    if lookup(current.pid).lower() != 'epicseven.exe':
-        raise ValueError('Real Mouse mode currently supports native STOVE Epic Seven. Use ADB or preview for other clients.')
+    # The selected emulator hosts the game in its own process. Verify that the
+    # process is readable, then let observed game controls authorize actions.
+    # A process name or window title alone cannot establish a game screen.
+    if not lookup(current.pid):
+        raise ValueError('Could not verify the selected game process. Scan again.')
     return current
 
 
@@ -198,7 +201,7 @@ class WindowsMouse:
         width,height = before.rectangle[2]-before.rectangle[0],before.rectangle[3]-before.rectangle[1]
         if image.size != (width,height) or max(hi-lo for lo,hi in image.getextrema()) < 12:
             raise MouseStopped('The client capture is blank or has the wrong size. Mouse session stopped.')
-        image,bounds = game_view(image)
+        image,bounds = game_view(image,google_emulator='google play games' in self.target.title.lower())
         left,top = before.rectangle[:2]
         view = (left+bounds[0],top+bounds[1],left+bounds[2],top+bounds[3])
         if self.view is not None and self.view != view:
