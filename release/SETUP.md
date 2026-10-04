@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc49.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc50.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,7 +14,7 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc49.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc50.zip'
 ```
 
 ## Emulator setup
@@ -142,10 +142,13 @@ fixed during the session, including dimmed confirmation dialogs. Actual window
 moves and resizes still stop input. Restored Google windows with a thin light
 frame above the header are supported. Set the window size before pressing Start;
 you can begin directly in the open Secret Shop.
-Google developer-emulator live actions in rc49 remain unverified.
+Google developer-emulator live actions in rc50 remain unverified.
 
 The app checks each confirmation before clicking it and stops on unexpected text
 or an insufficient-currency message. Keep English confirmation text readable.
+If brief coverage clears before a click is delivered, it discards that prepared
+click and recognizes the current screen again. Repeated visibility failures,
+window movement/resizing and visibility loss after mouse-down still stop input.
 It checks the prompt again on a fresh capture and allows small OCR shifts in
 the observed button bounds. Animated artwork behind the dialog does not need
 to stay still. Changed confirmations save both private dialog crops for diagnosis.

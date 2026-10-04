@@ -28,6 +28,7 @@ class WindowsCapture:
             'IsWindowVisible': ([w.HWND], w.BOOL), 'IsIconic': ([w.HWND], w.BOOL),
             'GetWindowTextLengthW': ([w.HWND], ctypes.c_int),
             'GetWindowTextW': ([w.HWND, w.LPWSTR, ctypes.c_int], ctypes.c_int),
+            'GetClassNameW': ([w.HWND,w.LPWSTR,ctypes.c_int],ctypes.c_int),
             'GetWindowThreadProcessId': ([w.HWND, ctypes.POINTER(w.DWORD)], w.DWORD),
             'GetClientRect': ([w.HWND, ctypes.POINTER(w.RECT)], w.BOOL),
             'ClientToScreen': ([w.HWND, ctypes.POINTER(w.POINT)], w.BOOL),
@@ -71,11 +72,24 @@ class WindowsCapture:
         return sorted(windows, key=lambda window: (window.title.lower(), window.pid, window.handle))
 
     def point_visible(self, target, point):
-        return self.user.GetAncestor(self.user.WindowFromPoint(w.POINT(*point)), 2) == target.handle
+        hit=self.user.WindowFromPoint(w.POINT(*point))
+        root=self.user.GetAncestor(hit,2)
+        if root==target.handle:
+            return True
+        self._record_coverage(target,point,hit,root)
+        return False
+
+    def _record_coverage(self,target,point,hit,root):
+        pid=w.DWORD();self.user.GetWindowThreadProcessId(root,ctypes.byref(pid))
+        name=ctypes.create_unicode_buffer(256);self.user.GetClassNameW(root,name,len(name))
+        self.visibility_details=dict(client_point=[point[0]-target.rectangle[0],point[1]-target.rectangle[1]],
+            hit_window=int(hit or 0),root_window=int(root or 0),process_id=pid.value,
+            window_class=name.value,target_window=target.handle)
 
     def unobstructed(self, target, *, margin=None):
         u = self.user
         self.visibility_problem = ''
+        self.visibility_details = None
         if u.GetAncestor(u.GetForegroundWindow(), 2) != target.handle:
             self.visibility_problem = 'Epic Seven is no longer the foreground window.'
             return False
@@ -84,7 +98,7 @@ class WindowsCapture:
         inset_y = 8 if margin is None else max(8,round((bottom-top)*margin))
         for x in (left+inset_x, (left+right)//2, right-inset_x-1):
             for y in (top+inset_y, (top+bottom)//2, bottom-inset_y-1):
-                if u.GetAncestor(u.WindowFromPoint(w.POINT(x,y)), 2) != target.handle:
+                if not self.point_visible(target,(x,y)):
                     self.visibility_problem = f'The game view is covered at client point {x-left}, {y-top}.'
                     return False
         return True
