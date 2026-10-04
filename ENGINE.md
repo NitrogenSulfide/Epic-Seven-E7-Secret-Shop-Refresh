@@ -22,7 +22,7 @@ black-bar crop); normalized recognition points map back to desktop coordinates.
 Google Play Games windows can additionally crop an observed mostly black custom
 title bar when the remaining image fits the game aspect ratio. No fixed toolbar
 height is assumed. Home/shop recognition is required before input, including
-hover; unknown emulator screens receive none. The GUI requires window mouse v4
+hover; unknown emulator screens receive none. The GUI requires window mouse v5
 so an older STOVE-only engine cannot be used accidentally.
 The native preflight checks process elevation: a normal app cannot control an
 elevated game. It stops with a Run as administrator instruction before activation.
@@ -226,3 +226,9 @@ initialization, keyboard hooks or the refresh loop. The GUI's Mouse preview uses
 this branch only; screenshots/reports are private runtime data. This preview branch sends no mouse
 input. The engine builder includes `e7_mouse_analysis.py` in
 both the binary and corresponding source distribution.
+
+rc38 fixes dialog-induced crop changes in Google Play Games Mouse sessions.
+The Google client crop is established by the initial screenshot and reused while
+window identity and physical client bounds remain unchanged. Confirmation dimming
+cannot shift that crop. Real moves/resizes still stop before input; dialog text
+and button stability checks still apply.

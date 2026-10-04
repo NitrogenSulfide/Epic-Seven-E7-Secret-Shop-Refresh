@@ -177,6 +177,28 @@ class TransportTests(unittest.TestCase):
         mouse.click(960,540)
         self.sender.assert_called_once_with((1430,792),'click',0)
 
+    def test_google_dialog_dimming_keeps_startup_crop_and_resize_still_stops(self):
+        target=GameWindow(123,456,'Google Play Games on PC Emulator',(150,0,2710,1512))
+        self.backend.inspect.return_value=target
+        frame=Image.new('RGB',(2560,1512))
+        ImageDraw.Draw(frame).rectangle((20,20,380,40),fill='white')
+        frame.paste(Image.new('RGB',(2560,1440),(80,90,100)),(0,72))
+        grabber=Mock(return_value=frame)
+        mouse=WindowsMouse(target,lambda:True,backend=self.backend,grabber=grabber,lookup=lambda _:'crosvm.exe',sender=self.sender)
+        self.assertEqual(mouse.screenshot().size,(2560,1440))
+        dark=frame.copy();dark.paste(Image.new('RGB',(2560,1440),(12,16,20)),(0,72))
+        ImageDraw.Draw(dark).rectangle((1400,920,1800,1040),fill=(30,80,130))
+        grabber.return_value=dark
+        self.assertEqual(mouse.screenshot().size,(2560,1440))
+        self.assertEqual(mouse.view,(150,72,2710,1512))
+        mouse.click(960,540)
+        self.sender.assert_called_once_with((1430,792),'click',0)
+        self.sender.reset_mock()
+        self.backend.inspect.return_value=GameWindow(123,456,target.title,(150,0,2610,1512))
+        with self.assertRaisesRegex(MouseStopped,'resized'):
+            mouse.screenshot()
+        self.sender.assert_not_called()
+
     def test_elevated_game_requires_matching_app_permissions_before_input(self):
         with patch('e7_native_mouse.process_is_elevated',side_effect=[True,False]),self.assertRaisesRegex(ValueError,'Run as administrator'):
             require_mouse_permissions(self.target)

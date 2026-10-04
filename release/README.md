@@ -1,7 +1,7 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.1.0-rc37** is a local candidate. The previous rc20 public preview is unchanged.
-Players need only **E7ShopRefresh-0.1.0-rc37.zip**.
+Version **0.1.0-rc38** is a local candidate. The previous rc20 public preview is unchanged.
+Players need only **E7ShopRefresh-0.1.0-rc38.zip**.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
 Pillow are included in this EXE. Artwork, the matching compiled engine, ADB tools
@@ -32,7 +32,7 @@ alone until it stops. Focus or coverage changes pause input for up to 10 seconds
 a changed window or an unrecognized confirmation stops the session. The game keeps its current size. Use normal settings; Debug
 remains an ADB feature. Saving settings also saves your control mode without
 starting a session next time. Native checks succeeded in earlier candidates. Google developer-emulator live
-actions in rc37 remain unverified; begin with a small supervised budget. Keep English game text readable.
+actions in rc38 remain unverified; begin with a small supervised budget. Keep English game text readable.
 
 For an optional read-only native STOVE or regular Google Play Games capture, choose
 **Control mode → Mouse (preview)**. Windows are scanned automatically; one result
@@ -44,7 +44,7 @@ of waiting for the game to be in front and unobstructed. **Cancel preview** canc
 the attempt. Return here to inspect the capture and recognized targets.
 This mode sends no mouse movements, clicks, refreshes, purchases or ADB commands.
 Captures stay private under `runtime/mouse-previews`. An owner-run rc27 native
-STOVE shop preview succeeded; that does not verify rc37's new live actions.
+STOVE shop preview succeeded; that does not verify rc38's new live actions.
 
 Live counters report engine-completed buys/refreshes, not confirmed balances.
 Insufficient-currency stopping remains unverified. Keep initial runs supervised.
