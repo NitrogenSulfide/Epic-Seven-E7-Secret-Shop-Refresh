@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc32.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc33.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,7 +14,7 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc32.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc33.zip'
 ```
 
 ## Emulator setup
@@ -110,6 +110,10 @@ The game keeps its current size. Mouse requires normal settings; turn off Debug.
 The pointer glides smoothly between targets. Tap delay still applies between
 shop actions. **Randomize tap offsets** also adds a small variation to Refresh
 clicks, bounded inside its observed button; turn it off for the fixed label point.
+Shop scrolling uses a short upward mouse drag. The same checkbox adds small
+position and timing variations while keeping the vertical travel consistent.
+Stop or lost focus releases the drag button immediately. Begin with a small
+supervised run to verify the new drag reaches the bottom shop items.
 If STOVE runs the game as administrator, right-click **E7 Secret Shop Refresh.exe**
 and choose **Run as administrator**, accepting the Windows prompt yourself.
 The app checks this permission mismatch before bringing the game forward.
