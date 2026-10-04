@@ -8,6 +8,17 @@ except ImportError:
     Image = None
 
 
+def avatar_icon(master, asset_dir, size):
+    if Image is None:
+        return None
+    try:
+        with Image.open(asset_dir / 'blue-natto-minimal-mark.png') as source:
+            icon = source.convert('RGBA').resize((size, size), Image.Resampling.LANCZOS)
+        return ImageTk.PhotoImage(icon, master=master)
+    except OSError:
+        return None
+
+
 def theme_icon(master, size, dark):
     if Image is None:
         return None

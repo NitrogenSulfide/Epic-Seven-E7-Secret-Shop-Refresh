@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from tkinter import font as tkfont, messagebox, ttk
 from e7_process import launch_engine
-from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon
+from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon, avatar_icon
 from e7_about import AboutDialog
 from e7_setup import missing_references, has_builtin_references, RecognitionSetup, verify_setup_engine
 from e7_native_mouse import activate_native_target, release_native_button
@@ -100,29 +100,34 @@ def configure_engine_directory(directory):
 @dataclass(frozen=True)
 class RunSettings:
     device: str
-    budget: float
+    budget: int
     tap_sleep: float
     stop_key: str
     random_offset: bool
     debug: bool
+    tap_jitter: float = 0.03
 
 
-def validate_settings(device, budget, delay, stop_key, random_offset, debug):
+def validate_settings(device, budget, delay, stop_key, random_offset, debug, tap_jitter=0.03):
+    if not re.fullmatch(r'[0-9]+', str(budget).strip()):
+        raise ValueError("The skystone budget must be a whole number of at least 3.")
     try:
-        amount, sleep = float(budget), float(delay)
-    except ValueError:
+        amount, sleep, jitter = int(budget), float(delay), float(tap_jitter)
+    except (ValueError, TypeError):
         raise ValueError("Enter numbers for the skystone budget and tap delay.") from None
-    if not math.isfinite(amount) or amount < 3:
-        raise ValueError("The skystone budget must be a finite number of at least 3.")
+    if amount < 3:
+        raise ValueError("The skystone budget must be a whole number of at least 3.")
     if not math.isfinite(sleep) or sleep <= 0:
         raise ValueError("The tap delay must be a finite number greater than zero.")
+    if not math.isfinite(jitter) or not 0 <= jitter <= 0.1:
+        raise ValueError("Timing variation must be between 0 and 0.10 seconds.")
     device = device.strip() or "localhost:5555"
     key = stop_key.strip().lower() or "esc"
     if any(c in device for c in "\r\n"):
         raise ValueError("The device must be a single ADB address.")
     if key != "esc" and (len(key) != 1 or key not in STOP_KEY_CHARACTERS):
         raise ValueError("Use Esc or a single letter, number, or / . , ' ; [ ] ` as the stop key.")
-    return RunSettings(device, amount, sleep, key, bool(random_offset), bool(debug))
+    return RunSettings(device, amount, sleep, key, bool(random_offset), bool(debug), jitter)
 
 
 def duration_text(value):
@@ -256,6 +261,10 @@ class RefreshGui(tk.Tk):
         self.connected_devices = []
         self.debug_mode = tk.BooleanVar(value=False)
         self.random_offset = tk.BooleanVar(value=True)
+        self.tap_jitter = tk.DoubleVar(value=0.03)
+        self.tap_jitter_text = tk.StringVar()
+        self.details_expanded = False
+        self._history_signature = None
         self.status = tk.StringVar(value="Ready")
         self.detail = tk.StringVar(value="Open Epic Seven’s Secret Shop, then start a session.")
         self.home_ui_hint = tk.StringVar(value="Hidden UI? Click the game once before Start.")
@@ -265,6 +274,8 @@ class RefreshGui(tk.Tk):
         self.history_notice = tk.StringVar(value="")
         self.elapsed = tk.StringVar(value="0m 00s")
         self.spent = tk.StringVar(value="—")
+        self.spent_display = tk.StringVar(value="0 / 12")
+        self.spent.trace_add('write', lambda *_: self._update_spent_display())
         self.covenant = tk.StringVar(value="—")
         self.mystic = tk.StringVar(value="—")
         self.friendship = tk.StringVar(value="—")
@@ -288,6 +299,7 @@ class RefreshGui(tk.Tk):
         self.after(100, self._drain_log_queue)
         self.after(300, self._maybe_show_credits)
         self.after(10000, self._rescan_idle_devices)
+        self.after(3000, self._poll_history)
 
     def _configure_scaling(self):
         self.ui_scale = self.winfo_fpixels("1i") / 96.0
@@ -428,6 +440,12 @@ class RefreshGui(tk.Tk):
         style.map('Treeview', background=[('selected', '#2563eb')], foreground=[('selected', '#ffffff')])
         self.history.tag_configure('even', background=bg, foreground=fg)
         self.history.tag_configure('debug', background='#422006' if dark else '#fff4d6', foreground='#fcd34d' if dark else '#92400e')
+        for tag, color in (('covenant', '#67e8f9' if dark else '#0e7490'),
+                           ('mystic', '#c4b5fd' if dark else '#6d28d9'),
+                           ('success', '#86efac' if dark else '#166534'),
+                           ('warning', '#fcd34d' if dark else '#92400e'),
+                           ('error', '#fca5a5' if dark else '#b91c1c')):
+            self.activity.tag_configure(tag, foreground=color)
         style.configure('TNotebook', background=bg, bordercolor=border)
         tabs = [('selected', bg), ('active', active), ('!selected', field)]
         style.map('TNotebook.Tab', background=tabs, lightcolor=tabs, darkcolor=tabs, foreground=[('selected', fg), ('!selected', muted)])
@@ -435,6 +453,10 @@ class RefreshGui(tk.Tk):
             style.configure(name, background=active, troughcolor=bg, arrowcolor=fg, bordercolor=border, lightcolor=border, darkcolor=border)
             style.map(name, background=[('active', border), ('!disabled', active)], arrowcolor=[('disabled', muted), ('!disabled', fg)])
         style.configure('Horizontal.TProgressbar', troughcolor=active, bordercolor=border)
+        style.configure('Horizontal.TScale', background='#60a5fa' if dark else '#2563eb',
+                        troughcolor=active, bordercolor=border, lightcolor=border, darkcolor=border,
+                        sliderlength=self._dp(18), sliderthickness=self._dp(12))
+        style.map('Horizontal.TScale', background=[('disabled', muted), ('active', '#3b82f6')])
         self.log.configure(bg=field, fg=fg, insertbackground=fg, selectbackground='#2563eb', selectforeground='#ffffff')
         for option, color in (('background', field), ('foreground', fg), ('selectBackground', '#2563eb'), ('selectForeground', '#ffffff')):
             self.option_add('*TCombobox*Listbox.' + option, color)
@@ -637,7 +659,8 @@ class RefreshGui(tk.Tk):
         ttk.Label(header, textvariable=self.status, font=("Segoe UI", 12, "bold"), style='Status.TLabel').grid(row=0, column=1, sticky="e")
         header_actions = ttk.Frame(header)
         header_actions.grid(row=1,column=1,sticky='e')
-        self.about_button = ttk.Button(header_actions, text='ⓘ', command=self._show_about, width=3, padding=dp(8), cursor='hand2', takefocus=True)
+        self.about_image = avatar_icon(self, ASSET_DIR, dp(28))
+        self.about_button = ttk.Button(header_actions, image=self.about_image, text='' if self.about_image else 'Credits', command=self._show_about, padding=dp(6), cursor='hand2', takefocus=True)
         self.about_button.pack(side='left',padx=(0,dp(6)))
         self.about_hint = ThemeHint(self.about_button, lambda: 'About & Credits')
         self.theme_button = ttk.Button(header_actions, command=self._toggle_dark_mode, width=3, padding=dp(8), cursor='hand2', takefocus=True)
@@ -679,25 +702,46 @@ class RefreshGui(tk.Tk):
         self.device_button.grid(row=0, column=1, padx=(dp(12), 0))
         self.settings_widgets.extend([self.device_box, self.device_button])
         ttk.Label(controls, textvariable=self.device_notice, style="Muted.TLabel", wraplength=dp(350)).grid(row=3, column=0, sticky="w", pady=(dp(4), dp(10)))
-        for row, label, var in ((4, "Skystone budget", self.budget), (6, "Tap delay · seconds", self.tap_sleep), (8, "Stop key", self.stop_key)):
-            if var is self.stop_key:
-                label = "Stop key · click the box, then press a key"
-            ttk.Label(controls, text=label).grid(row=row, column=0, sticky="w")
-            entry = ttk.Entry(controls, textvariable=var, font=self.ui_font)
-            if var is self.stop_key:
-                self.stop_key_entry = entry
-                entry.state(["readonly"])
-                entry.bind("<KeyPress>", self._capture_stop_key)
-            entry.grid(row=row+1, column=0, sticky="ew", pady=(dp(4), dp(8)))
+        amounts = ttk.Frame(controls)
+        amounts.grid(row=4, column=0, sticky='ew', pady=(0, dp(6)))
+        amounts.columnconfigure((0, 1), weight=1, uniform='amounts')
+        for column, label, var in ((0, 'Skystone budget', self.budget), (1, 'Tap delay (s)', self.tap_sleep)):
+            ttk.Label(amounts, text=label).grid(row=0, column=column, sticky='w', padx=(0 if column==0 else dp(8), 0))
+            entry = ttk.Entry(amounts, textvariable=var, font=self.ui_font, width=10)
+            if var is self.budget:
+                entry.configure(validate='key', validatecommand=(self.register(lambda value: not value or re.fullmatch(r'[0-9]+', value) is not None), '%P'))
+                self.budget_entry = entry
+            entry.grid(row=1, column=column, sticky='ew', pady=(dp(3), 0), padx=(0 if column==0 else dp(8), 0))
             self.settings_widgets.append(entry)
+        ttk.Label(controls, text='Stop key · click the box, then press a key').grid(row=5, column=0, sticky='w')
+        self.stop_key_entry = ttk.Entry(controls, textvariable=self.stop_key, font=self.ui_font)
+        self.stop_key_entry.state(['readonly'])
+        self.stop_key_entry.bind('<KeyPress>', self._capture_stop_key)
+        self.stop_key_entry.grid(row=6, column=0, sticky='ew', pady=(dp(3), dp(6)))
+        self.settings_widgets.append(self.stop_key_entry)
         self.random_check = ttk.Checkbutton(controls, text="Randomize tap offsets (recommended)", variable=self.random_offset, style="Large.TCheckbutton")
-        self.random_check.grid(row=10, column=0, sticky="w")
-        self.tap_timing_hint = ttk.Label(controls, text="Also varies tap delay by up to 10%\n(max 0.05 seconds faster or slower).", style="Muted.TLabel", wraplength=dp(350))
-        self.tap_timing_hint.grid(row=11, column=0, sticky="w", pady=(dp(4), dp(6)))
+        self.random_check.configure(command=self._update_tap_jitter)
+        self.random_check.grid(row=7, column=0, sticky="w")
+        timing = ttk.Frame(controls)
+        timing.grid(row=8, column=0, sticky='ew', pady=(0, dp(5)))
+        timing.columnconfigure(0, weight=1)
+        ttk.Label(timing, textvariable=self.tap_jitter_text).grid(row=0, column=0, sticky='w')
+        self.tap_jitter_slider = ttk.Scale(timing, from_=0, to=0.1, variable=self.tap_jitter, command=self._update_tap_jitter)
+        self.tap_jitter_slider.grid(row=1, column=0, sticky='ew', pady=(dp(2), 0))
+        self.tap_jitter_slider.bind('<Left>', lambda _event: self._step_tap_jitter(-0.01))
+        self.tap_jitter_slider.bind('<Right>', lambda _event: self._step_tap_jitter(0.01))
+        self.settings_widgets.append(self.tap_jitter_slider)
+        self.tap_timing_hint = ttk.Label(timing, text="0–±0.10s · capped at half the base delay", style="Muted.TLabel", wraplength=dp(350))
+        self.tap_timing_hint.grid(row=2, column=0, sticky='w')
         self.debug_check = ttk.Checkbutton(controls, text="Debug / calibration mode\n(only in ADB mode)", variable=self.debug_mode, style="Large.TCheckbutton")
-        self.debug_check.grid(row=12, column=0, sticky="w")
+        self.debug_check.grid(row=9, column=0, sticky="w")
         self.settings_widgets.extend([self.random_check, self.debug_check])
-        ttk.Label(controls, text="Debug includes Friendship Points.\nPress a key (not Esc) in each image to continue.", style="Muted.TLabel", wraplength=dp(350)).grid(row=13, column=0, sticky="w", pady=(dp(4), dp(12)))
+        self.details_button = ttk.Button(controls, text='▸ Estimate & calibration help', command=self._toggle_settings_details)
+        self.details_button.grid(row=10, column=0, sticky='ew', pady=(dp(4), 0))
+        self.settings_details = ttk.Frame(controls)
+        self.settings_details.grid(row=11, column=0, sticky='ew', pady=(dp(6), 0))
+        self.settings_details.columnconfigure(0, weight=1)
+        ttk.Label(self.settings_details, text="ADB Debug includes Friendship Points.\nPress a key (not Esc) in each image to continue.", style="Muted.TLabel", wraplength=dp(350)).grid(row=0, column=0, sticky="w", pady=(0, dp(6)))
         self.start_button = ttk.Button(action_dock, text="Start Refresh", style="Accent.TButton", command=self.start_refresh)
         self.start_button.grid(row=0, column=0, sticky="ew", padx=(0, dp(4)))
         self.stop_button = ttk.Button(action_dock, text="Stop Session", command=self.stop_refresh, state=tk.DISABLED)
@@ -708,12 +752,16 @@ class RefreshGui(tk.Tk):
         self.sound_button = ttk.Checkbutton(action_dock, text="Sounds on start and end", variable=self.sound_enabled, style="Large.TCheckbutton", command=self._save_sound_preference)
         self.sound_button.grid(row=2, column=0, columnspan=2, sticky="w", pady=(dp(6), 0))
         ttk.Label(action_dock, textvariable=self.setting_notice, style="Muted.TLabel", wraplength=dp(350)).grid(row=3, column=0, columnspan=2, sticky="w", pady=(dp(4), 0))
-        estimate = ttk.LabelFrame(controls, text="Budget estimate", padding=dp(12))
-        estimate.grid(row=14, column=0, sticky="ew", pady=(dp(4), 0))
+        estimate = ttk.LabelFrame(self.settings_details, text="Budget estimate", padding=dp(8))
+        estimate.grid(row=1, column=0, sticky="ew")
         ttk.Label(estimate, textvariable=self.ev, wraplength=dp(320), justify=tk.LEFT).grid(sticky="w")
         ttk.Label(estimate, text="Statistical estimate; results vary.", style="Muted.TLabel", wraplength=dp(320)).grid(sticky="w", pady=(dp(8), 0))
         self.budget.trace_add("write", lambda *_: self._update_ev())
+        self.tap_sleep.trace_add('write', lambda *_: self._update_tap_jitter())
+        self.random_offset.trace_add('write', lambda *_: self._update_tap_jitter())
+        self.debug_mode.trace_add('write', lambda *_: self._update_tap_jitter())
         self._update_ev()
+        self._update_tap_jitter()
         # Insert one compact mode section; existing session fields retain their
         # order and use the existing scrolling layout on smaller screens.
         for widget in controls.winfo_children():
@@ -728,6 +776,7 @@ class RefreshGui(tk.Tk):
         self.mode_box.grid(row=1,column=0,sticky='ew',pady=(dp(4),0))
         self.mode_box.bind('<<ComboboxSelected>>',self._change_control_mode)
         self.settings_widgets.append(self.mode_box)
+        self.settings_details.grid_remove()
         def bind_wheel(widget):
             def scroll_settings(event):
                 settings_canvas.yview_scroll(-int(event.delta / 120), "units")
@@ -772,7 +821,7 @@ class RefreshGui(tk.Tk):
         self.metric_captions = []
         self.currency_images = currency_icons(self, ASSET_DIR, dp(34))
         self.currency_labels = {}
-        for i, (label, var, key) in enumerate((("Elapsed", self.elapsed, None), ("Skystone spent ≈", self.spent, 'spent'), ("Covenant buys", self.covenant, 'covenant'), ("Mystic buys", self.mystic, 'mystic'))):
+        for i, (label, var, key) in enumerate((("Elapsed", self.elapsed, None), ("Skystone spent", self.spent_display, 'spent'), ("Covenant buys", self.covenant, 'covenant'), ("Mystic buys", self.mystic, 'mystic'))):
             metrics.columnconfigure(i, weight=1, uniform="metrics")
             card = ttk.Frame(metrics, padding=dp(10))
             card.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 6, 0))
@@ -835,7 +884,9 @@ class RefreshGui(tk.Tk):
         history_header.grid(row=5, column=0, sticky="ew", pady=(16, 6))
         history_header.columnconfigure(0, weight=1)
         ttk.Label(history_header, text="Recent sessions", font=("Segoe UI", 13, "bold")).grid(row=0, column=0, sticky="w")
-        ttk.Button(history_header, text="Reload", command=self.refresh_history).grid(row=0, column=1)
+        self.clear_history_button = ttk.Button(history_header, text="Clear", command=self._clear_history)
+        self.clear_history_button.grid(row=0, column=1)
+        self.clear_history_hint = ThemeHint(self.clear_history_button, lambda: 'Archive recorded sessions, then clear the list')
         self.history_frame = history_frame = ttk.Frame(right)
         history_frame.grid(row=6, column=0, sticky="nsew")
         history_frame.columnconfigure(0, weight=1)
@@ -867,6 +918,10 @@ class RefreshGui(tk.Tk):
                 settings = parser["Settings"]
                 for key, var in (("tap_sleep", self.tap_sleep), ("budget", self.budget), ("stop_refresh_key", self.stop_key)):
                     var.set(settings.get(key, var.get()))
+                # Migrate whole-valued budgets written by older float-based releases.
+                legacy_budget = float(self.budget.get())
+                if math.isfinite(legacy_budget) and legacy_budget.is_integer():
+                    self.budget.set(str(int(legacy_budget)))
                 self.random_offset.set(settings.get("random_offset", str(self.random_offset.get())).lower() == "true")
         except (OSError, ValueError, configparser.Error) as exc:
             self.setting_notice.set(f"Settings could not be read: {exc}")
@@ -881,6 +936,9 @@ class RefreshGui(tk.Tk):
             self.device.set(parser.get("GUI", "device", fallback=self.device.get()))
             mode = parser.get('GUI','control_mode',fallback='ADB')
             self.control_mode.set(mode if mode in ('ADB','Mouse','Mouse (preview)') else 'ADB')
+            legacy_jitter = min(float(self.tap_sleep.get()) * .1, .05)
+            jitter = parser.getfloat('GUI', 'tap_jitter', fallback=legacy_jitter)
+            self.tap_jitter.set(jitter if math.isfinite(jitter) and 0 <= jitter <= .1 else .03)
         except (OSError, ValueError, configparser.Error) as exc:
             self.setting_notice.set(f"Sound preference could not be read: {exc}")
 
@@ -898,6 +956,7 @@ class RefreshGui(tk.Tk):
         parser["GUI"]["adb_hint_dismissed"] = str(self.adb_hint_dismissed.get())
         parser["GUI"]["device"] = self._device_address()
         parser['GUI']['control_mode'] = self.control_mode.get()
+        parser['GUI']['tap_jitter'] = str(round(self.tap_jitter.get(), 2))
         temp = GUI_CONFIG_FILE.with_suffix(".ini.tmp")
         with temp.open("w", encoding="utf-8") as fh:
             parser.write(fh)
@@ -930,7 +989,7 @@ class RefreshGui(tk.Tk):
         if self.control_mode.get() == 'ADB' and len(self.connected_devices) > 1 and not self.device.get().strip():
             raise ValueError("Choose the emulator you want to use from the device list.")
         device = self._device_address() or ('native-mouse' if self.control_mode.get() != 'ADB' else '')
-        return validate_settings(device, self.budget.get(), self.tap_sleep.get(), self.stop_key.get(), self.random_offset.get(), self.debug_mode.get())
+        return validate_settings(device, self.budget.get(), self.tap_sleep.get(), self.stop_key.get(), self.random_offset.get(), self.debug_mode.get(), round(self.tap_jitter.get(), 2))
 
     def _device_address(self):
         value = self.device.get().strip()
@@ -1260,8 +1319,8 @@ class RefreshGui(tk.Tk):
             verify_setup_engine(ENGINE_EXE)
             check = subprocess.run([str(ENGINE_EXE),'--verify'],cwd=APP_DIR,capture_output=True,text=True,
                                    timeout=15,creationflags=NO_WINDOW)
-            if check.returncode or 'native mouse v3' not in check.stdout:
-                raise ValueError('Real Mouse mode needs the matching rc31 or newer engine. Use the complete new player folder.')
+            if check.returncode or 'native mouse v3' not in check.stdout or 'tap timing v2' not in check.stdout:
+                raise ValueError('Mouse mode needs the matching rc36 or newer engine for adjustable timing. Use the complete new player folder.')
             target = activate_native_target(target)
         except (ValueError,OSError,RuntimeError,subprocess.SubprocessError) as error:
             self._set_connection_warning(str(error),reveal=True)
@@ -1278,7 +1337,7 @@ class RefreshGui(tk.Tk):
         if settings is None:
             return
         if settings.debug:
-            settings = RunSettings(settings.device, 100.0, settings.tap_sleep, "esc", True, True)
+            settings = RunSettings(settings.device, 100, settings.tap_sleep, "esc", True, True, settings.tap_jitter)
         self.run_settings = settings
         self.run_id += 1
         run_id = self.run_id
@@ -1311,6 +1370,7 @@ class RefreshGui(tk.Tk):
         self.activity.delete(*self.activity.get_children())
         for var in (self.spent, self.covenant, self.mystic, self.friendship):
             var.set("—")
+        self._update_spent_display()
         self.progress.configure(value=0)
         self.progress_text.set('Preparing Mouse input…' if mouse_target else "Connecting and preparing the engine…")
         self.status.set("Starting")
@@ -1323,7 +1383,10 @@ class RefreshGui(tk.Tk):
             arguments += ['--mouse-session',json.dumps(dict(handle=mouse_target.handle,pid=mouse_target.pid,
                           title=mouse_target.title,rectangle=mouse_target.rectangle)),
                           '--budget',str(settings.budget),'--delay',str(settings.tap_sleep),
-                          '--stop-key',settings.stop_key,'--random-offset','yes' if settings.random_offset else 'no']
+                          '--stop-key',settings.stop_key,'--random-offset','yes' if settings.random_offset else 'no',
+                          '--tap-jitter',str(settings.tap_jitter)]
+        else:
+            arguments += ['--tap-jitter',str(settings.tap_jitter)]
         try:
             process, self.process_tree = launch_engine(arguments, cwd=APP_DIR, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1, creationflags=NO_WINDOW)
         except OSError as exc:
@@ -1625,6 +1688,8 @@ class RefreshGui(tk.Tk):
         for widget in self.settings_widgets:
             widget.state(["disabled"] if running else ["!disabled"])
         self._update_debug_availability(running)
+        self._update_tap_jitter(running=running)
+        self.clear_history_button.state(['disabled'] if running else ['!disabled'])
         self.start_button.configure(state=tk.DISABLED if running else tk.NORMAL)
         self.stop_button.configure(state=tk.NORMAL if running else tk.DISABLED)
         if not running and self.control_mode.get() != 'ADB':
@@ -1705,7 +1770,12 @@ class RefreshGui(tk.Tk):
         required = self.ui_font.measure(text) + self._dp(24)
         if required > self.activity.column("event", "minwidth"):
             self.activity.column("event", minwidth=required, width=required)
-        item = self.activity.insert("", tk.END, values=(time.strftime("%H:%M:%S"), text))
+        tag = ('covenant' if text.startswith('Covenant purchases:') else
+               'mystic' if text.startswith('Mystic purchases:') else
+               'error' if re.search(r'failed|error|exception|traceback|not recognized|could not|cannot', text, re.I) else
+               'warning' if re.search(r'stop|pause|waiting|cancel|needs help', text, re.I) else
+               'success' if re.search(r'completed|finished|refresh ended|resumed', text, re.I) else '')
+        item = self.activity.insert("", tk.END, tags=(tag,) if tag else (), values=(time.strftime("%H:%M:%S"), text))
         items = self.activity.get_children()
         if len(items) > 100:
             self.activity.delete(items[0])
@@ -1742,15 +1812,98 @@ class RefreshGui(tk.Tk):
             tags = ('debug',) if mode == 'Debug' else ('even',) if i % 2 == 0 else ()
             self.history.insert("", tk.END, tags=tags, values=(mode, duration_text(row.get("Duration")), *(number_text(row.get(key)) for key in ("Skystone spent", "Gold spent", "Covenant bookmark", "Mystic medal"))))
         self.history_notice.set(f"{len(rows)} recent sessions · newest first · bookmark/medal columns count purchases" if rows else "No recorded sessions yet.")
+        self._history_signature = self._get_history_signature()
+
+    def _get_history_signature(self):
+        try:
+            stat = HISTORY_FILE.stat()
+            return stat.st_mtime_ns, stat.st_size
+        except FileNotFoundError:
+            return None
+        except OSError:
+            return self._history_signature
+
+    def _poll_history(self):
+        if self._get_history_signature() != self._history_signature:
+            self.refresh_history()
+        self.after(3000, self._poll_history)
+
+    def _clear_history(self):
+        if self._checking_connection or self._mouse_preview_busy or (self.process and self.process.poll() is None):
+            return
+        if not HISTORY_FILE.exists() or not self.history.get_children():
+            return
+        if not messagebox.askyesno('Clear session history?', 'Archive all recorded sessions and clear the list? The archived CSV stays in ShopRefreshHistory/archive.', parent=self):
+            return
+        try:
+            original = HISTORY_FILE.read_bytes()
+            # Keep the exact old CSV, including its debug/normal header schema.
+            header = original.splitlines(keepends=True)[0]
+            folder = HISTORY_FILE.parent/'archive'
+            folder.mkdir(exist_ok=True)
+            archive = folder/f'{HISTORY_FILE.stem}-{time.time_ns()}-{uuid.uuid4().hex}.csv'
+            with archive.open('xb') as file:
+                file.write(original)
+            temporary = HISTORY_FILE.with_suffix('.csv.tmp')
+            temporary.write_bytes(header)
+            temporary.replace(HISTORY_FILE)
+        except (OSError, IndexError) as exc:
+            self._append_log(f'History clear failed: {exc}\n')
+            messagebox.showerror('History not cleared', str(exc), parent=self)
+            return
+        self.refresh_history()
+        self._event('Session history archived and cleared.')
+
+    def _toggle_settings_details(self):
+        self.details_expanded = not self.details_expanded
+        if self.details_expanded:
+            self.settings_details.grid()
+        else:
+            self.settings_details.grid_remove()
+        self.details_button.configure(text=('▾' if self.details_expanded else '▸')+' Estimate & calibration help')
+        self.update_idletasks()
+        self._update_settings_scroll()
+
+    def _step_tap_jitter(self, step):
+        if not self.tap_jitter_slider.instate(['disabled']):
+            self.tap_jitter.set(max(0, min(.1, round(self.tap_jitter.get()+step, 2))))
+            self._update_tap_jitter()
+        return 'break'
+
+    def _update_tap_jitter(self, _value=None, *, running=None):
+        if not hasattr(self, 'tap_jitter_slider'):
+            return
+        selected = max(0, min(.1, round(self.tap_jitter.get(), 2)))
+        self.tap_jitter.set(selected)
+        enabled = self.random_offset.get() and not self.debug_mode.get()
+        if running is None:
+            running = self._checking_connection or self._mouse_preview_busy or (self.process and self.process.poll() is None)
+        self.tap_jitter_slider.state(['disabled'] if running or not enabled else ['!disabled'])
+        try:
+            baseline = float(self.tap_sleep.get())
+            effective = min(selected, baseline * .5) if math.isfinite(baseline) and baseline > 0 else selected
+        except ValueError:
+            effective = selected
+        digits = 3 if 0 < effective < .01 else 2
+        self.tap_jitter_text.set(f'Timing variation: ±{effective:.{digits}f}s' if enabled else 'Timing variation: off')
+
+    def _update_spent_display(self):
+        try:
+            total = self.run_settings.budget if self.run_settings else int(self.budget.get())
+            count = '0' if self.spent.get() == '—' else self.spent.get()
+            self.spent_display.set(f'{count} / {total:,}' if total >= 3 else '—')
+        except ValueError:
+            self.spent_display.set('—')
 
     def _update_ev(self):
         try:
-            budget = float(self.budget.get())
-            if not math.isfinite(budget) or budget < 0:
+            budget = int(self.budget.get())
+            if budget < 3:
                 raise ValueError
             self.ev.set(f"Gold needed ≈ {int(budget * 1691.04536):,}\nCovenant buys ≈ {budget * 0.006602509:.1f}\nMystic buys ≈ {budget * 0.001700646:.1f}")
         except (ValueError, OverflowError):
             self.ev.set("Enter a valid budget to see the estimate.")
+        self._update_spent_display()
 
     def _close(self):
         self._preview_cancel.set()

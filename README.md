@@ -20,7 +20,7 @@ Epic Seven and a **1920 × 1080** Android display. Other emulators are unverifie
 The original upstream source and Git history are preserved, alongside the GUI,
 launchers, tests, sounds and icon. The first public preview is **0.1.0-rc20**.
 
-The local **rc35** candidate includes **Control mode → Mouse** for native STOVE
+The local **rc36** candidate includes **Control mode → Mouse** for native STOVE
 Epic Seven. **Start Refresh** brings the selected game forward, opens its recognized
 Secret Shop menu, buys detected Covenant/Mystic items, scrolls and refreshes using
 your actual pointer and the existing budget, delay, counters and Stop key.
@@ -28,10 +28,15 @@ Mouse movement eases into each target. With randomized tap offsets enabled,
 Refresh clicks vary slightly inside the recognized button.
 Scrolling uses a short eased mouse drag. Its small position and timing variations
 follow the same randomization setting; vertical travel stays consistent.
-The recommended randomization checkbox also varies each tap delay by up to 10%,
-capped at 0.05 seconds faster or slower, in both ADB and Mouse modes. Turn it off
-for the exact configured delay. Debug/calibration is available only in ADB mode
-and keeps a fixed tap delay.
+The recommended randomization checkbox also enables the saved **Timing variation**
+slider in both ADB and Mouse modes. Choose up to ±0.10 seconds around the base tap
+delay; very short delays limit variation to half the baseline. Turn randomization
+off for fixed timing. Debug/calibration is available only in ADB mode and keeps a
+fixed tap delay. Budgets accept whole Skystone counts, and spending shows used/total.
+Recent sessions reload automatically. **Clear** archives the exact history CSV
+before clearing it and is unavailable during sessions. The compact sidebar keeps
+estimates and calibration help in an expandable section, with scrolling available
+when the display needs it. The blue-bean header button opens About & Credits.
 Native currency detection also verifies the observed summon name, gold price and
 Buy label when icon matching fails. A recognized but uncertain currency row
 stops before Refresh, so it cannot silently discard that row.

@@ -24,10 +24,12 @@ Mouse mode brings the game forward once after Start, does not resize it, uses
 verified cursor movement and an 80 ms click hold. rc32 adds
 an eased pointer glide lasting 0.12–0.38 seconds according to travel distance,
 scaled to the displayed game size. Stop and visibility are checked at each step;
-the configured tap delay still applies separately. rc35 varies each tap delay by
-up to ±10%, capped at ±0.05 seconds, when randomization is enabled in ADB or Mouse
-mode. The saved delay stays unchanged. Randomization off and ADB calibration use
+the configured tap delay still applies separately. rc36 accepts `--tap-jitter`
+from the GUI's saved slider in both ADB and Mouse modes: 0–0.10 seconds either
+side of the baseline, limited to half the base delay to keep short delays positive.
+The saved baseline stays unchanged. Randomization off and ADB calibration use
 the exact configured delay; loading waits and recognition deadlines stay fixed.
+Direct engine calls without the option retain rc35's ±10%/0.05-second default.
 rc33 replaces wheel scrolling
 with an eased upward drag along the original ADB swipe's vertical distance.
 Randomization translates the swipe by at most ±12 horizontal / ±6 vertical

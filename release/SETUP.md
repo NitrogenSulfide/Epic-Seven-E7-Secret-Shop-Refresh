@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc35.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc36.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,7 +14,7 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc35.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc36.zip'
 ```
 
 ## Emulator setup
@@ -111,9 +111,15 @@ and is available only in ADB mode.
 The pointer glides smoothly between targets. Tap delay still applies between
 shop actions. **Randomize tap offsets** also adds a small variation to Refresh
 clicks, bounded inside its observed button; turn it off for the fixed label point.
-The recommended checkbox also varies each tap delay by up to 10%, capped at
-0.05 seconds faster or slower, in both modes. Turning it off restores the exact
-configured delay. ADB calibration always keeps a fixed delay.
+The recommended checkbox enables the **Timing variation** slider in both modes.
+It adjusts extra delay or speed-up from ±0.00 to ±0.10 seconds; for very short base
+delays the variation is capped at half the baseline. Turning randomization off
+restores fixed timing. ADB calibration always keeps a fixed delay.
+Budget is a whole number, and the spending card shows used/total. Recent sessions
+reload automatically; **Clear** archives all recorded sessions before clearing
+them and is disabled during a run. Archives remain in `ShopRefreshHistory/archive`.
+Use **Estimate & calibration help** to expand those details in the compact sidebar.
+The blue-bean header button opens the existing About & Credits dialog.
 Shop scrolling uses a short upward mouse drag. The same checkbox adds small
 position and timing variations while keeping the vertical travel consistent.
 Stop or lost focus releases the drag button immediately. Begin with a small

@@ -453,13 +453,16 @@ def inspect_mouse_items(path,assets='adb-assets'):
 def run_mouse_session(arguments):
     parser = argparse.ArgumentParser(description='Native STOVE Mouse refresh session; uses the real pointer.')
     parser.add_argument('--mouse-session',required=True,help='selected window JSON')
-    parser.add_argument('--budget',type=float,required=True)
+    parser.add_argument('--budget',type=int,required=True)
     parser.add_argument('--delay',type=float,required=True)
     parser.add_argument('--stop-key',required=True)
     parser.add_argument('--random-offset',choices=('yes','no'),required=True)
+    parser.add_argument('--tap-jitter',type=float,default=None)
     args = parser.parse_args(arguments)
     if not math.isfinite(args.budget) or args.budget < 3 or not math.isfinite(args.delay) or args.delay < 0:
         parser.error('Invalid budget or delay')
+    if args.tap_jitter is not None and (not math.isfinite(args.tap_jitter) or not 0 <= args.tap_jitter <= .1):
+        parser.error('Timing variation must be between 0 and 0.10 seconds.')
     if args.stop_key != 'esc' and (len(args.stop_key)!=1 or args.stop_key not in "0123456789abcdefghijklmnopqrstuvwxyz/.,';[]`"):
         parser.error('Invalid Stop key')
     app = None; started = time.time()
@@ -467,7 +470,7 @@ def run_mouse_session(arguments):
         data = json.loads(args.mouse_session)
         target = GameWindow(int(data['handle']),int(data['pid']),str(data['title']),tuple(data['rectangle']))
         app = E7MouseShopRefresh(target,budget=args.budget,tap_sleep=args.delay,
-                                stop_refresh_key=args.stop_key,random_offset=args.random_offset=='yes',debug=False)
+                                stop_refresh_key=args.stop_key,random_offset=args.random_offset=='yes',debug=False,tap_jitter=args.tap_jitter)
         if sys.stdin is not None:
             threading.Thread(target=listen_for_stop,args=(sys.stdin,app),daemon=True).start()
         print('E7GUI_STARTED',flush=True)
