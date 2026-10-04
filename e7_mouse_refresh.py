@@ -85,6 +85,53 @@ def home_icon_target(rgb,caption):
     return left+(x1+x2)/2,top+(y1+y2)/2
 
 
+def native_home_control_target(rgb):
+    """Require three visible home symbols in their observed menu layout.
+
+    Glyph edges tolerate artwork behind the controls; foreground brightness
+    rejects dimmed/inactive home menus. The shop point is measured from its
+    matched icon, not assumed from a wallpaper or fixed coordinate.
+    """
+    gray=cv2.cvtColor(rgb[180:920,:360],cv2.COLOR_RGB2GRAY)
+    edges=cv2.Canny(gray,45,110)
+    distance=cv2.distanceTransform(255-edges,cv2.DIST_L2,3)
+    proximity=np.maximum(0,1-distance/2.5).astype('float32')
+    candidates={}
+    for name in ('sanctuary','secret-shop','epic-pass'):
+        path=Path(f'adb-assets/builtin-navigation/native-{name}-icon.png')
+        if not path.is_file():return None
+        mask=cv2.imdecode(np.frombuffer(path.read_bytes(),dtype=np.uint8),cv2.IMREAD_GRAYSCALE)
+        if mask is None:return None
+        if name=='secret-shop':mask=np.pad(mask,2)
+        matches=[]
+        for scale in np.linspace(.85,1.15,13):
+            icon=cv2.resize(mask,None,fx=float(scale),fy=float(scale),interpolation=cv2.INTER_NEAREST)
+            expected=(cv2.Canny(icon,45,110)>0).astype('float32')
+            if expected.sum()<40:return None
+            h,w=icon.shape
+            scores=cv2.matchTemplate(proximity,expected,cv2.TM_CCORR)/expected.sum()
+            for _ in range(5):
+                _,score,_,(x,y)=cv2.minMaxLoc(scores)
+                if score<.75:break
+                if gray[y:y+h,x:x+w][icon>170].mean()>=170:
+                    matches.append((score,float(scale),(x+w/2,180+y+h/2)))
+                scores[max(0,y-h//2):y+h//2+1,max(0,x-w//2):x+w//2+1]=-1
+        if not matches:return None
+        candidates[name]=matches
+    groups=[]
+    for shop in candidates['secret-shop']:
+        for castle in candidates['sanctuary']:
+            if abs(shop[2][0]-castle[2][0])>22 or not 100<=shop[2][1]-castle[2][1]<=340:continue
+            for epic in candidates['epic-pass']:
+                if abs(shop[2][0]-epic[2][0])>22 or not 65<=epic[2][1]-shop[2][1]<=175:continue
+                if max(shop[1],castle[1],epic[1])-min(shop[1],castle[1],epic[1])>.10:continue
+                groups.append(((shop[0]+castle[0]+epic[0])/3,shop[2]))
+    if not groups:return None
+    groups.sort(reverse=True)
+    if any(math.dist(point,groups[0][1])>20 and score>=groups[0][0]-.08 for score,point in groups[1:]):return None
+    return groups[0][1]
+
+
 def hidden_home_matches(frame, reference=None):
     """A private known home view permits one click to reveal hidden controls."""
     references = (reference,) if reference is not None else (
@@ -343,6 +390,8 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
         raise MouseStopped('The home Secret Shop menu could not be recognized. Start from the English home screen or an already open Secret Shop.'+detail)
 
     def _home_menu_target(self,frame):
+        target=native_home_control_target(self._rgb)
+        if target is not None:return target
         caption=self.navigation.menu_target(frame)
         if caption is not None:
             target=home_icon_target(self._rgb,caption)

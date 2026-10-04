@@ -1,5 +1,16 @@
 # Release checks
 
+## rc45 home controls across wallpapers
+
+Windows OCR read the bright field home's Secret Shop caption as `secietshop`.
+Recognize the native Sanctuary, Secret Shop and Epic Pass symbols as a group,
+using their edges, relative positions, scale and foreground brightness. The
+shop point comes from its observed symbol. All three must be visible; hidden,
+dimmed, missing or ambiguous groups fail. Fresh controls are recognized before
+input. Preserve label/component fallback for other skins. Check actual portrait
+and bright-field captures at four sizes with caption OCR disabled, negative
+frames and the frozen saved-frame CLI, plus Google viewport/navigation fixtures.
+
 ## rc44 native OCR descender
 
 The live STOVE capture at the owner's display scale read `secr.et shoo`.

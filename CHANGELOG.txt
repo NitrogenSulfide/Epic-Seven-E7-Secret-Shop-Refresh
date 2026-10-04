@@ -1,4 +1,10 @@
-0.1.0 · First release preview (rc44)
+0.1.0 · First release preview (rc45)
+
+rc45
+• Native Mouse home entry recognizes Sanctuary, Secret Shop and Epic Pass
+  icons together. It no longer needs readable captions on bright wallpapers.
+• Hidden, dimmed, incomplete or ambiguous icon layouts do not authorize entry.
+  The shop icon is measured again immediately before clicking.
 
 rc44
 • Fixed STOVE startup when Windows OCR reads Secret Shop as Secret Shoo.
