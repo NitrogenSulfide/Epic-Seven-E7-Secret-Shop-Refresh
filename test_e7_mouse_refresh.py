@@ -788,7 +788,7 @@ class NativeEngineTests(unittest.TestCase):
         app=self.make_engine();app._item_name='Mystic medal'
         app.read_confirmation_text=lambda _:'Cancel Buy Covenant Bookmarks 184,000'
         app.mouse.screenshot.return_value=Image.fromarray(frame)
-        with patch('e7_mouse_refresh.time.sleep'),self.assertRaisesRegex(MouseStopped,'does not match'):
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,1,6]),self.assertRaisesRegex(MouseStopped,'does not match'):
             app._confirm('buy',shop())
         app.mouse.click.assert_not_called()
         frame[718:809,896:1400]=(20,110,40)
@@ -1082,11 +1082,37 @@ class NativeEngineTests(unittest.TestCase):
                      'Cancel Confirm Purchase Skystone', 'Cancel Confirm Covenant 184,000', ''):
             app = self.make_engine()
             app.read_confirmation_text = lambda _,text=text:text
-            app.mouse.screenshot.side_effect = [Image.fromarray(shop()),Image.fromarray(dialog())]
-            with patch('e7_mouse_refresh.time.sleep'):
+            app.mouse.screenshot.side_effect = [Image.fromarray(shop()),Image.fromarray(dialog()),Image.fromarray(dialog())]
+            with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,1,6]):
                 with self.assertRaisesRegex(MouseStopped,'does not match'):
                     app.clickRefresh()
             self.assertEqual(app.mouse.click.call_count,1)
+            app._save_confirmation_failure.assert_called_once()
+
+    def test_partial_confirmation_text_is_recaptured_before_confirming_each_action(self):
+        for operation,name,text in (('refresh',None,'Use Skystone to refresh? Cancel Confirm'),
+                                    ('buy','Covenant bookmark','Cancel Buy Covenant Bookmarks 184,000'),
+                                    ('buy','Mystic medal','Cancel Buy Mystic Medals 280,000')):
+            with self.subTest(operation=operation,item=name):
+                app=self.make_engine();app._item_name=name
+                app.read_confirmation_text=Mock(side_effect=['Cancel Confirm',text])
+                app.mouse.screenshot.side_effect=[Image.fromarray(image) for image in (dialog(operation),dialog(operation),dialog(operation),shop())]
+                with patch('e7_mouse_refresh.time.sleep'):
+                    self.assertTrue(app._confirm(operation,shop()))
+                self.assertEqual(app.read_confirmation_text.call_count,2)
+                self.assertEqual(app.mouse.click.call_count,1)
+                app._save_confirmation_failure.assert_not_called()
+
+    def test_stop_during_rejected_confirmation_text_never_retries_or_clicks(self):
+        app=self.make_engine();app.mouse.screenshot.return_value=Image.fromarray(dialog())
+        def read(_):
+            app.loop_active=False
+            return 'Cancel Confirm'
+        app.read_confirmation_text=read
+        with patch('e7_mouse_refresh.time.sleep'):
+            self.assertFalse(app._confirm('refresh',shop()))
+        self.assertEqual(app.mouse.screenshot.call_count,1)
+        app.mouse.click.assert_not_called()
 
     def test_confirmation_changing_during_ocr_is_not_clicked(self):
         app = self.make_engine()

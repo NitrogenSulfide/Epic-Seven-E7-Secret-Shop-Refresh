@@ -1,5 +1,19 @@
 # Release checks
 
+## rc48 full Mouse confirmation flows
+
+The Google run stopped on confirmation text mismatch; its rejected frame was
+not retained. The user's settled screenshot and later capture pass local OCR.
+Do not claim the original cause was reproduced. Fix the confirmed timing
+weakness: a recognizable button with incomplete prompt text should be recaptured
+within the existing five-second wait, rather than aborting on the first mismatch.
+Require the same item/cost validation and fresh dialog before any click. Save
+private crops on persistent mismatch and changing dialogs. Replay actual Google
+and STOVE hidden home, shop and refresh dialog frames through navigation, drag,
+Refresh, real confirmation OCR and verified shop return at four sizes. Model a
+partial prompt explicitly, without claiming it was the original missing frame.
+Keep Covenant/Mystic, wrong-item/price, insufficient currency and Stop checks.
+
 ## rc47 wallpaper-independent reveal attempt
 
 The animated tavern wallpaper produced incidental OCR text and a consecutive
