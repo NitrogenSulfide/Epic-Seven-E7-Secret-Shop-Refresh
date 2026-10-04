@@ -1,10 +1,24 @@
 # E7 Secret Shop Refresh GUI
 
-Windows GUI maintained by NitrogenSulfide (Blue Natto), using Solunium's Epic Seven Secret
-Shop Refresh ADB engine. The original upstream source and Git history are
-preserved, alongside the imported GUI, launchers, tests, sounds and icon.
+Windows GUI by **NitrogenSulfide (Blue Natto)**, based on Solunium's GPL-3.0
+Epic Seven Secret Shop Refresh engine.
 
-This is a local development project. No GitHub fork or release has been published.
+## Easy mode — Windows 11
+
+**[Download the Windows app](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.0-rc20/E7ShopRefresh-0.1.0-rc20.zip)**
+
+1. Extract the **whole ZIP** and open **E7 Secret Shop Refresh.exe**. No Python install needed.
+2. Open Epic Seven in an emulator with **ADB enabled**.
+3. Follow the app's first-use recognition setup, check your budget, then press **Start refresh**.
+
+Initially tested with **Google Play Games on PC Developer Emulator**, English
+Epic Seven and a **1920 × 1080** Android display. Other emulators are unverified.
+[Easy setup guide](release/SETUP.md) · [Release page and optional source](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.1.0-rc20)
+
+## Project and development notes
+
+The original upstream source and Git history are preserved, alongside the GUI,
+launchers, tests, sounds and icon. The first public preview is **0.1.0-rc20**.
 
 For a new user's beta setup, see [SETUP.md](release/SETUP.md). Players need only the combined player ZIP, with the GUI, matching engine,
 upstream ADB tools/item templates and a portable runtime configuration. A separate
