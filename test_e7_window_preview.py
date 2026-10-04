@@ -10,7 +10,7 @@ from unittest.mock import Mock
 from PIL import Image, ImageDraw
 import cv2
 import numpy as np
-from e7_window_preview import GameWindow, capture_selected, analyze_capture
+from e7_window_preview import GameWindow, capture_selected, analyze_capture, game_view
 from e7_mouse_analysis import inspect_mouse_frame
 import test_e7_shop_navigation as navigation_tests
 
@@ -39,6 +39,30 @@ class CaptureTests(unittest.TestCase):
         self.grabber.assert_called_once_with(bbox=self.target.rectangle,all_screens=True)
         self.assertTrue(self.destination.exists())
         self.assertEqual(self.backend.unobstructed.call_count,2)
+
+    def test_stove_maximized_letterbox_uses_game_view_and_screen_offset(self):
+        game=Image.new('RGB',(3590,2019),(40,60,80))
+        ImageDraw.Draw(game).rectangle((50,50,250,250),fill='white')
+        window=Image.new('RGB',(3840,2019));window.paste(game,(125,0))
+        target=GameWindow(123,456,'Epic Seven',(-3840,45,0,2064))
+        self.backend.inspect.return_value=target
+        actual=capture_selected(target,self.destination,backend=self.backend,grabber=Mock(return_value=window))
+        self.assertEqual(actual.rectangle,(-3715,45,-125,2064))
+        with Image.open(self.destination) as saved:
+            self.assertEqual(saved.size,game.size)
+            self.assertEqual(saved.getpixel((100,100)),(255,255,255))
+
+    def test_top_bottom_bars_crop_but_chrome_or_asymmetric_borders_do_not(self):
+        game=Image.new('RGB',(1280,720),(40,60,80))
+        letterbox=Image.new('RGB',(1280,800));letterbox.paste(game,(0,40))
+        result,bounds=game_view(letterbox)
+        self.assertEqual(bounds,(0,40,1280,760));self.assertEqual(result.size,game.size)
+        for mode in ('chrome','asymmetric','wrong_ratio'):
+            image=Image.new('RGB',(1280,800))
+            image.paste(game,(0,0 if mode=='asymmetric' else 40))
+            if mode=='chrome':ImageDraw.Draw(image).rectangle((0,0,1279,30),fill='gray')
+            if mode=='wrong_ratio':image=Image.new('RGB',(1600,1000),'gray')
+            with self.assertRaisesRegex(ValueError,'Could not identify'):game_view(image)
 
     def test_changed_identity_closed_minimized_or_obstructed_never_capture(self):
         for mode in ('identity','closed','obstructed'):
@@ -122,6 +146,20 @@ class AnalysisTests(unittest.TestCase):
         report=self.inspect(frame);self.assertEqual(report['original_size'],[2560,1440])
         self.assertEqual(report['state'],'home')
         with self.assertRaises(ValueError):self.inspect(np.zeros((1000,1600),dtype=np.uint8))
+
+    def test_shop_recognition_after_letterbox_crop(self):
+        frame=self.fixture.frame(['shop-title.png','refresh-label.png'])
+        # The navigation fixture has black empty space; give its outer edge
+        # non-black game content so only the added bars can be identified.
+        frame[0,:]=frame[-1,:]=20
+        frame[:,0]=frame[:,-1]=20
+        image=Image.fromarray(frame).convert('RGB')
+        padded=Image.new('RGB',(2048,1080));padded.paste(image,(64,0))
+        view,bounds=game_view(padded)
+        self.assertEqual(bounds,(64,0,1984,1080))
+        report=self.inspect(np.array(view.convert('L')))
+        self.assertEqual(report['state'],'shop')
+        self.assertEqual([t['label'] for t in report['targets']],['Refresh button'])
 
 
 if __name__=='__main__':unittest.main()
