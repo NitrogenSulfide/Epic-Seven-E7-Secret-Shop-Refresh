@@ -13,6 +13,7 @@ import keyboard
 import random
 import configparser
 import json
+import math
 from e7_shop_navigation import create_navigator, NavigationSetupRequired, prepare_references
 
 class E7Item:
@@ -84,10 +85,17 @@ class E7Inventory:
             writer.writerow(data)
 
 class E7ADBShopRefresh:
-    def __init__(self, tap_sleep:float = 0.3, budget=None, ip_port=None, stop_refresh_key='esc', random_offset = False, debug=False):
+    def __init__(self, tap_sleep:float = 0.3, budget=None, ip_port=None, stop_refresh_key='esc', random_offset = False, debug=False, tap_jitter=None):
+        if budget is not None:
+            if isinstance(budget, bool) or not math.isfinite(float(budget)) or int(budget) != float(budget) or int(budget) < 3:
+                raise ValueError('Skystone budget must be a whole number of at least 3.')
+            budget = int(budget)
+        if tap_jitter is not None and (not math.isfinite(tap_jitter) or not 0 <= tap_jitter <= .1):
+            raise ValueError('Timing variation must be between 0 and 0.10 seconds.')
         self.loop_active = False
         self.end_of_refresh = True
         self.tap_sleep = tap_sleep
+        self.tap_jitter = tap_jitter
         self.budget = budget
         self.ip_port = ip_port
         self.stop_refresh_key = stop_refresh_key
@@ -306,7 +314,8 @@ class E7ADBShopRefresh:
         """Vary only tap pacing; retain the configured baseline and fixed calibration."""
         if not self.random_offset or self.debug:
             return self.tap_sleep
-        variation = min(self.tap_sleep * 0.10, 0.05)
+        selected = getattr(self, 'tap_jitter', None)
+        variation = min(self.tap_sleep * 0.10, 0.05) if selected is None else min(selected, self.tap_sleep * .5)
         return self.tap_sleep + random.uniform(-variation, variation)
 
     def generateOffset(self):
@@ -453,14 +462,16 @@ def getDevices(print_output):
 
 CONFIG_FILE = "ADBconfig.ini"
 
-def saveConfigFile(tap_sleep, budget, stop_refresh_key, random_offset):
+def saveConfigFile(tap_sleep, budget, stop_refresh_key, random_offset, tap_jitter=None):
     config = configparser.ConfigParser()
     config["Settings"] = {
         "tap_sleep": str(tap_sleep),
-        "budget": str(budget),
+        "budget": str(int(budget)),
         "stop_refresh_key": str(stop_refresh_key),
         "random_offset": str(random_offset)
     }
+    if tap_jitter is not None:
+        config['Settings']['tap_jitter'] = str(tap_jitter)
     with open(CONFIG_FILE, "w") as f:
         config.write(f)
     print('Setting saved')
@@ -539,7 +550,7 @@ if __name__ == '__main__':
         print('Private Secret Shop references prepared and checked offline.')
         sys.exit(0)
     if sys.argv[1:] == ['--verify']:
-        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
+        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; tap timing v2; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
         sys.exit(0)
     if sys.argv[1:2] == ['--check-navigation-frame']:
         import argparse
@@ -553,6 +564,13 @@ if __name__ == '__main__':
         target = None if visible else navigation.menu_target(frame)
         print(json.dumps(dict(state='shop' if visible else 'home' if target else 'unrecognized', target=target)))
         sys.exit(0 if visible or target else 2)
+
+    import argparse
+    parser = argparse.ArgumentParser(description='ADB shop refresh session')
+    parser.add_argument('--tap-jitter', type=float, default=None)
+    timing_args = parser.parse_args()
+    if timing_args.tap_jitter is not None and (not math.isfinite(timing_args.tap_jitter) or not 0 <= timing_args.tap_jitter <= .1):
+        parser.error('Timing variation must be between 0 and 0.10 seconds.')
 
     #intro
     print('Epic Seven Shop Refresh with ADB')
@@ -633,6 +651,7 @@ if __name__ == '__main__':
                                     ip_port=ip_port,
                                     stop_refresh_key=config["Settings"]["stop_refresh_key"],
                                     random_offset=config.getboolean("Settings", "random_offset"),
+                                    tap_jitter=timing_args.tap_jitter if timing_args.tap_jitter is not None else config.getfloat('Settings', 'tap_jitter', fallback=None),
                                     debug=False):
                 sys.exit(3)
             print()
@@ -686,7 +705,8 @@ if __name__ == '__main__':
 
     try:
         tap_sleep = float(input('Tap sleep(in seconds) Recommend - leave blank for 0.3 sec : '))
-        tap_sleep = max(0.3, tap_sleep)
+        if not math.isfinite(tap_sleep) or tap_sleep <= 0:
+            raise ValueError('Invalid tap delay')
     except:
         print('Default to tap sleep of 0.3 second')
         tap_sleep = 0.3
@@ -696,14 +716,16 @@ if __name__ == '__main__':
         if debug:
             print('Default to 100 skystone for debug testing')
         else:
-            budget = float(input('Amount of skystone that you want to spend: '))
-    except:
-        print('invalid input, default to 1000 skystone budget')
-        budget = 1000
+            budget = int(input('Amount of skystone that you want to spend: '))
+        if budget < 3:
+            raise ValueError('Budget below one refresh')
+    except ValueError:
+        print('Invalid skystone budget: enter a whole number of at least 3.')
+        sys.exit(2)
     
     if not debug:
         print()
-        saveConfigFile(tap_sleep=tap_sleep, budget=budget, stop_refresh_key=stop_refresh_key, random_offset=random_offset)
+        saveConfigFile(tap_sleep=tap_sleep, budget=budget, stop_refresh_key=stop_refresh_key, random_offset=random_offset, tap_jitter=timing_args.tap_jitter)
         print()
 
     if budget >= 1000:
@@ -724,6 +746,7 @@ if __name__ == '__main__':
                                ip_port=ip_port,
                                stop_refresh_key=stop_refresh_key,
                                random_offset=random_offset,
+                               tap_jitter=timing_args.tap_jitter,
                                debug=debug):
         sys.exit(3)
     print()

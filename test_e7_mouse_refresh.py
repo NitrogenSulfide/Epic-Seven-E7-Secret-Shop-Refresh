@@ -478,6 +478,15 @@ class NativeEngineTests(unittest.TestCase):
         self.assertIn('Unreadable home text',output.getvalue())
         self.assertNotIn('Shop refresh terminated!',output.getvalue())
 
+    def test_mouse_cli_passes_selected_timing_without_adb_or_input(self):
+        from e7_mouse_refresh import run_mouse_session
+        args=['--mouse-session',json.dumps(dict(handle=123,pid=456,title='Epic Seven',rectangle=[0,0,1920,1080])),
+              '--budget','100','--delay','.3','--stop-key','esc','--random-offset','yes','--tap-jitter','.1']
+        with patch('e7_mouse_refresh.E7MouseShopRefresh') as factory,patch('e7_mouse_refresh.sys.stdin',None),contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(run_mouse_session(args),0)
+        self.assertEqual((factory.call_args.kwargs['budget'],factory.call_args.kwargs['tap_jitter']),(100,.1))
+        factory.return_value.start.assert_called_once()
+
     def test_home_ocr_opens_shop_without_manual_entry_or_refresh(self):
         app=self.make_engine()
         app.navigation.shop_visible.side_effect=[False,True]
@@ -596,6 +605,22 @@ class NativeEngineTests(unittest.TestCase):
             self.assertTrue(app.clickRefresh())
         self.assertEqual([round(call.args[0],2) for call in sleep.call_args_list],[.27,.33])
         self.assertEqual(app.tap_sleep,.3)
+
+    def test_adjustable_mouse_timing_samples_full_selected_range(self):
+        app=self.make_engine();app.random_offset=True;app.tap_jitter=.1
+        app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (shop(),dialog(),dialog(),shop())]
+        with patch.object(adb_engine.random,'uniform',side_effect=[-.1,.1]),patch('e7_mouse_refresh.time.sleep') as sleep:
+            self.assertTrue(app.clickRefresh())
+        self.assertEqual([round(call.args[0],2) for call in sleep.call_args_list],[.2,.4])
+
+    def test_mouse_cli_rejects_fractional_budget_and_invalid_jitter_before_input(self):
+        from e7_mouse_refresh import run_mouse_session
+        args=['--mouse-session','{}','--budget','12','--delay','.3','--stop-key','esc','--random-offset','yes','--tap-jitter','.1']
+        for flag,value in (('--budget','3.5'),('--tap-jitter','.11'),('--tap-jitter','nan')):
+            altered=args.copy();altered[altered.index(flag)+1]=value
+            with patch('e7_mouse_refresh.E7MouseShopRefresh') as factory,contextlib.redirect_stderr(io.StringIO()),self.assertRaises(SystemExit):
+                run_mouse_session(altered)
+            factory.assert_not_called()
 
     def test_missing_confirmation_stops_after_one_refresh_click(self):
         app = self.make_engine()

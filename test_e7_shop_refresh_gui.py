@@ -14,7 +14,7 @@ import ctypes
 import shutil
 import wave
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 import e7_shop_refresh_gui as gui
 from e7_setup import REFERENCE_NAMES
@@ -70,7 +70,7 @@ class ProtocolTests(unittest.TestCase):
 
     def test_single_device_skips_selection(self):
         text = "when you finish reading, press enter to continue!\nLast Saved Setting:\nleave blank for yes, or type (yes/no): Launch in debug mode? leave bank for no (yes/no): Key: Enable randomize click (yes/no): Tap sleep(in seconds) Recommend - leave blank for 0.3 sec : Amount of skystone that you want to spend: Press enter to start!\nProgress:\npress enter to exit..."
-        self.assertEqual(self.drive(text), ["", "no", "no", "`", "yes", "0.3", "30.0", "", ""])
+        self.assertEqual(self.drive(text), ["", "no", "no", "`", "yes", "0.3", "30", "", ""])
 
     def test_multiple_devices_and_retried_device_prompt(self):
         self.assertEqual(self.drive("Device: Fail to connect, try again\nDevice: "), ["localhost:5555"] * 2)
@@ -80,9 +80,16 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(protocol.feed("Launch in debug mode? leave bank for no (yes/no): Tap sleep(in seconds) Recommend - leave blank for 0.3 sec : Press enter to start!"), ["yes", "0.3", ""])
 
     def test_invalid_values(self):
-        for amount, delay, key in (("nan", "0.3", "esc"), ("inf", "0.3", "esc"), ("2", "0.3", "esc"), ("30", "-1", "esc"), ("30", "nan", "esc"), ("30", "0.3", "hello")):
+        for amount, delay, key in (("nan", "0.3", "esc"), ("inf", "0.3", "esc"), ("2", "0.3", "esc"), ("3.5", ".3", "esc"), ("12.0", ".3", "esc"), ("30", "-1", "esc"), ("30", "nan", "esc"), ("30", "0.3", "hello")):
             with self.assertRaises(ValueError):
                 gui.validate_settings("x", amount, delay, key, False, False)
+
+    def test_whole_budget_and_adjustable_jitter_validation(self):
+        settings=gui.validate_settings('x','100','.3','esc',True,False,.1)
+        self.assertIs(type(settings.budget),int)
+        self.assertEqual((settings.budget,settings.tap_jitter),(100,.1))
+        for jitter in (-.01,.11,float('nan'),float('inf')):
+            with self.assertRaises(ValueError):gui.validate_settings('x','100','.3','esc',True,False,jitter)
 
     def test_formatting(self):
         self.assertEqual(gui.duration_text("5536.52"), "1h 32m 16s")
@@ -114,7 +121,7 @@ prompt("Launch in debug mode? leave bank for no (yes/no): ", "no")
 prompt("Key: ", "`")
 prompt("Enable randomize click (yes/no): ", "yes")
 prompt("Tap sleep(in seconds) Recommend - leave blank for 0.3 sec : ", "0.3")
-prompt("Amount of skystone that you want to spend: ", "12.0")
+prompt("Amount of skystone that you want to spend: ", "12")
 print("Press enter to start!", flush=True)
 assert input() == ""
 print("Progress:", flush=True)
@@ -129,11 +136,100 @@ prompt("press enter to exit...", "")
 
 
 class GuiTests(unittest.TestCase):
+    def test_spending_card_tracks_budget_without_rewriting_session_total(self):
+        self.app.budget.set('100')
+        self.assertEqual(self.app.spent_display.get(),'0 / 100')
+        self.app.run_settings=self.app._settings()
+        for refreshes in (0,1,2):
+            self.app._handle_line('E7GUI_STATS '+gui.json.dumps(dict(refreshes=refreshes,skystone_spent=refreshes*3,covenant=0,mystic=0,friendship=0)))
+            self.assertEqual(self.app.spent_display.get(),f'{refreshes*3} / 100')
+        self.app.budget.set('200')
+        self.assertEqual(self.app.spent_display.get(),'6 / 100')
+        self.app._handle_line('Skystone spent: 9')
+        self.assertEqual(self.app.spent_display.get(),'9 / 100')
+
+    def test_legacy_whole_float_budget_loads_as_integer(self):
+        self.config.write_text('[Settings]\nbudget = 100.0\n')
+        self.app._load_config()
+        self.assertEqual(self.app.budget.get(),'100')
+        self.assertIs(type(self.app._settings().budget),int)
+
+    def test_slider_persists_and_disables_with_toggle_debug_and_session(self):
+        self.app.tap_jitter.set(.1);self.app._update_tap_jitter()
+        self.assertIn('±0.10s',self.app.tap_jitter_text.get())
+        self.app.save_settings()
+        self.app.tap_jitter.set(0);self.app._load_config()
+        self.assertEqual(self.app._settings().tap_jitter,.1)
+        self.app.random_offset.set(False)
+        self.assertTrue(self.app.tap_jitter_slider.instate(['disabled']))
+        self.app.random_offset.set(True);self.app.debug_mode.set(True)
+        self.assertTrue(self.app.tap_jitter_slider.instate(['disabled']))
+        self.app.debug_mode.set(False);self.app._set_controls(True)
+        self.assertTrue(self.app.tap_jitter_slider.instate(['disabled']))
+        self.app._set_controls(False)
+        self.assertFalse(self.app.tap_jitter_slider.instate(['disabled']))
+        self.app.tap_sleep.set('.04')
+        self.assertIn('±0.02s',self.app.tap_jitter_text.get())
+        self.assertEqual(self.app.tap_jitter.get(),.1)
+
+    def test_slider_keyboard_steps_are_bounded(self):
+        self.app.tap_jitter.set(.09)
+        for _ in range(3):self.app._step_tap_jitter(.01)
+        self.assertEqual(self.app.tap_jitter.get(),.1)
+        for _ in range(15):self.app._step_tap_jitter(-.01)
+        self.assertEqual(self.app.tap_jitter.get(),0)
+
+    def test_clear_history_archives_exact_csv_and_new_sessions_reload(self):
+        original=b'Duration,Skystone spent,Gold spent,Covenant bookmark,Mystic medal\r\n60,3,0,0,0\r\n'
+        self.history.write_bytes(original);self.app.refresh_history()
+        with patch.object(gui.messagebox,'askyesno',return_value=True):self.app.clear_history_button.invoke()
+        archives=list((self.history.parent/'archive').glob('*.csv'))
+        self.assertEqual(len(archives),1)
+        self.assertEqual(archives[0].read_bytes(),original)
+        self.assertEqual(self.history.read_bytes(),original.splitlines(keepends=True)[0])
+        self.assertEqual(len(self.app.history.get_children()),0)
+        with self.history.open('a') as file:file.write('90,6,280000,0,1\n')
+        self.app._poll_history()
+        self.assertEqual(len(self.app.history.get_children()),1)
+
+    def test_clear_history_cancel_active_session_and_write_failure_preserve_csv(self):
+        original=b'Duration,Skystone spent,Gold spent,Covenant bookmark,Mystic medal\n60,3,0,0,0\n'
+        self.history.write_bytes(original);self.app.refresh_history()
+        with patch.object(gui.messagebox,'askyesno',return_value=False):self.app._clear_history()
+        self.app.process=Mock();self.app.process.poll.return_value=None
+        with patch.object(gui.messagebox,'askyesno') as ask:self.app._clear_history();ask.assert_not_called()
+        self.app.process=None
+        with patch.object(gui.messagebox,'askyesno',return_value=True),patch.object(Path,'replace',side_effect=OSError('fixture failure')),patch.object(gui.messagebox,'showerror'):
+            self.app._clear_history()
+        self.assertEqual(self.history.read_bytes(),original)
+
+    def test_activity_semantic_colors_survive_theme_switch(self):
+        for text,tag in (('Covenant purchases: 1.','covenant'),('Mystic purchases: 1.','mystic'),('Engine launch failed.','error'),('Stop requested.','warning'),('Refresh ended. Recording session results.','success')):
+            self.app._event(text)
+            self.assertEqual(self.app.activity.item(self.app.activity.get_children()[-1],'tags'),(tag,))
+        for dark in (True,False):
+            self.app.dark_mode.set(dark);self.app._apply_theme()
+            self.assertNotEqual(self.app.activity.tag_configure('mystic','foreground'),self.app.activity.tag_configure('covenant','foreground'))
+
+    def test_compact_settings_details_expand_without_covering_controls(self):
+        self.assertFalse(self.app.details_expanded)
+        self.app._toggle_settings_details()
+        self.assertTrue(self.app.details_expanded)
+        self.assertGreater(int(self.app.settings_details.grid_info()['row']),int(self.app.details_button.grid_info()['row']))
+        self.app._toggle_settings_details()
+        self.assertFalse(self.app.details_expanded)
+
+    def test_minimal_avatar_button_uses_supplied_art(self):
+        from e7_appearance import avatar_icon
+        image=avatar_icon(self.app,PACKAGED_ASSETS,28)
+        self.assertIsNotNone(image)
+        self.assertEqual((image.width(),image.height()),(28,28))
+
     def test_randomization_labels_explain_recommendation_and_timing(self):
         self.assertIn('(recommended)', self.app.random_check.cget('text'))
         self.assertIn('(only in ADB mode)', self.app.debug_check.cget('text'))
-        self.assertIn('10%', self.app.tap_timing_hint.cget('text'))
-        self.assertIn('0.05', self.app.tap_timing_hint.cget('text'))
+        self.assertIn('0.10', self.app.tap_timing_hint.cget('text'))
+        self.assertIn('half', self.app.tap_timing_hint.cget('text'))
 
     def test_mouse_disables_and_clears_debug_after_mode_change_and_session(self):
         for mode in ('Mouse', 'Mouse (preview)'):
@@ -471,7 +567,7 @@ class GuiTests(unittest.TestCase):
         self.app._apply_mouse_windows([target],'')
         self.fake.write_text('print("E7GUI_STARTED",flush=True)\nprint(\'E7GUI_STATS {"refreshes":4,"skystone_spent":12,"covenant":0,"mystic":0,"friendship":0}\',flush=True)\nprint("---Result---\\nCovenant bookmark:0\\nMystic medal:0\\nSkystone spent:12",flush=True)\n')
         self.fake.with_suffix('.sha256').write_text(hashlib.sha256(self.fake.read_bytes()).hexdigest())
-        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='native mouse v3')), \
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='native mouse v3; tap timing v2')), \
                 patch.object(gui,'activate_native_target',return_value=target) as activate, \
                 patch.object(gui,'check_connection') as adb,patch.object(gui,'launch_engine',wraps=gui.launch_engine) as launch:
             self.start_fake()
@@ -479,9 +575,10 @@ class GuiTests(unittest.TestCase):
         args = launch.call_args.args[0]
         self.assertIn('--mouse-session',args)
         self.assertEqual(json.loads(args[args.index('--mouse-session')+1])['handle'],target.handle)
-        self.assertEqual(args[args.index('--budget')+1],'12.0')
+        self.assertEqual(args[args.index('--budget')+1],'12')
         self.assertEqual(args[args.index('--stop-key')+1],'`')
         self.assertEqual(args[args.index('--random-offset')+1],'yes')
+        self.assertEqual(args[args.index('--tap-jitter')+1],str(self.app.run_settings.tap_jitter))
         activate.assert_called_once(); adb.assert_not_called()
         self.assertEqual(self.app.spent.get(),'12')
         self.assertEqual(self.app.start_button.cget('text'),'Start Refresh')
@@ -492,11 +589,11 @@ class GuiTests(unittest.TestCase):
                 patch.object(gui,'activate_native_target') as activate,patch.object(gui,'launch_engine') as launch:
             self.app.start_refresh()
         activate.assert_not_called(); launch.assert_not_called()
-        self.assertIn('matching rc31',self.app.connection_warning)
+        self.assertIn('matching rc36',self.app.connection_warning)
 
     def test_permission_mismatch_is_explained_before_engine_launch(self):
         self.choose_mouse_fixture();self.app.control_mode.set('Mouse');self.app._change_control_mode()
-        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='native mouse v3')),patch.object(gui,'activate_native_target',side_effect=ValueError('Epic Seven is running as administrator. Reopen with Run as administrator.')),patch.object(gui,'launch_engine') as launch:
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='native mouse v3; tap timing v2')),patch.object(gui,'activate_native_target',side_effect=ValueError('Epic Seven is running as administrator. Reopen with Run as administrator.')),patch.object(gui,'launch_engine') as launch:
             self.app.start_refresh()
         launch.assert_not_called()
         self.assertIn('Run as administrator',self.app.connection_warning)
@@ -508,7 +605,7 @@ class GuiTests(unittest.TestCase):
         reason='The selected game lost focus. No input sent.'
         self.fake.write_text('print("E7GUI_STARTED",flush=True)\nprint(\'E7GUI_MOUSE_STOPPED {"reason":"The selected game lost focus. No input sent."}\',flush=True)\nprint("---Result---\\nSkystone spent:0",flush=True)\n')
         self.fake.with_suffix('.sha256').write_text(hashlib.sha256(self.fake.read_bytes()).hexdigest())
-        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='native mouse v3')),patch.object(gui,'activate_native_target',return_value=target):
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='native mouse v3; tap timing v2')),patch.object(gui,'activate_native_target',return_value=target):
             self.start_fake()
             self.pump_until(lambda:self.app.status.get()=='Needs attention' and self.app.process.poll() is not None)
             self.pump_until(lambda:self.app._finalized_run_id==self.app.run_id)

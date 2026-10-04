@@ -1,5 +1,6 @@
 """Offline engine checks. Never contact ADB or install keyboard hooks."""
 import contextlib
+import ast
 import io
 import json
 from pathlib import Path
@@ -14,6 +15,19 @@ import E7ADBShopRefresh as engine
 
 
 class StartupSelectionTests(unittest.TestCase):
+    def test_adb_cli_passes_selected_timing_and_whole_budget(self):
+        source=Path(engine.__file__).read_text(encoding='utf-8')
+        main=ast.parse(source).body[-1]
+        namespace=dict(vars(engine))
+        namespace.update(getDevices=lambda *_:['emulator-5554'],run_refresh_engine=Mock(return_value=True),saveConfigFile=Mock())
+        answers={'when you finish reading, press enter to continue!':'','Launch in debug mode? leave bank for no (yes/no): ':'no','Key: ':'esc','Enable randomize click (yes/no): ':'yes','Tap sleep(in seconds) Recommend - leave blank for 0.3 sec : ':'.3','Amount of skystone that you want to spend: ':'100','Press enter to start!':'','press enter to exit...':''}
+        with patch.object(sys,'argv',['E7ADBShopRefresh.py','--tap-jitter','.1']),patch.object(engine.os.path,'isdir',return_value=True),patch.object(engine.os.path,'exists',return_value=False),patch('builtins.input',side_effect=lambda text:answers[text]),contextlib.redirect_stdout(io.StringIO()):
+            exec(compile(ast.Module(body=main.body,type_ignores=[]),str(engine.__file__),'exec'),namespace)
+        settings=namespace['run_refresh_engine'].call_args.kwargs
+        self.assertEqual((settings['budget'],settings['tap_jitter'],settings['tap_sleep']),(100,.1,.3))
+        self.assertIs(type(settings['budget']),int)
+        self.assertEqual(namespace['saveConfigFile'].call_args.kwargs['tap_jitter'],.1)
+
     def test_existing_device_selection_advances_to_settings(self):
         # Execute the real entry point, with every ADB operation replaced.
         # Stop at the first settings question, before construction/game actions.
@@ -89,6 +103,23 @@ class EngineTests(unittest.TestCase):
             with patch.object(engine.random, 'uniform') as rng:
                 self.assertEqual(app.generateTapDelay(), .3)
                 rng.assert_not_called()
+
+    def test_adjustable_timing_supports_point_one_and_limits_short_delays(self):
+        app=self.make_engine();app.random_offset=True;app.tap_jitter=.1
+        for baseline,variation in ((.3,.1),(.04,.02),(.01,.005)):
+            app.tap_sleep=baseline
+            with patch.object(engine.random,'uniform',side_effect=[-variation,variation]) as rng:
+                self.assertAlmostEqual(app.generateTapDelay(),baseline-variation)
+                self.assertAlmostEqual(app.generateTapDelay(),baseline+variation)
+                self.assertEqual(rng.call_args_list,[unittest.mock.call(-variation,variation)]*2)
+        app.tap_jitter=0
+        self.assertEqual(app.generateTapDelay(),app.tap_sleep)
+
+    def test_invalid_budget_or_jitter_fails_before_any_adb_operation(self):
+        for budget,jitter in ((3.5,.1),(0,.1),(12,float('nan')),(12,.11)):
+            with patch.object(engine.subprocess,'run') as adb,self.assertRaises(ValueError):
+                engine.E7ADBShopRefresh(budget=budget,tap_jitter=jitter)
+            adb.assert_not_called()
 
     def test_key_poll_yields_and_detects_stop(self):
         app = self.make_engine()

@@ -31,3 +31,8 @@ NitrogenSulfide (Blue Natto) credits avatar: owner-supplied persona artwork, gen
 Selected blue-natto-anime-cozy.png from the October 3, 2026 PFP set.
 Original PNG retained; circular sizing occurs in the UI renderer.
 Source prompt and hashes are recorded in provenance.json.
+
+rc36 About & Credits button: NitrogenSulfide (Blue Natto)'s supplied minimalist
+blue-bean mark from the October 3, 2026 PFP set. Original imagegen PNG preserved
+as blue-natto-minimal-mark.png; sizing occurs in memory. The existing credits
+portrait, shopkeeper app icon, and their provenance remain unchanged.
