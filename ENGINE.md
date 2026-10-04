@@ -14,14 +14,14 @@ Counts describe engine-completed actions, not an independent reading of game
 balances. Purchase labels count buys, not individual bookmarks/medals awarded.
 ADB tap failures abort rather than incrementing the affected counter.
 
-rc30 adds a native STOVE Mouse transport around this same loop. The selected
+rc31 adds a native STOVE Mouse transport around this same loop. The selected
 EpicSeven.exe process, window identity, client geometry and foreground visibility
 are checked before input. Capture keeps the full native client (or clearly bounded
 black-bar crop); normalized recognition points map back to desktop coordinates.
 Mouse mode brings the game forward once after Start, does not resize it, uses
-single click batches and wheel scrolling. Native capture samples the client
+verified cursor movement, an 80 ms button hold and wheel scrolling. Native capture samples the client
 interior; each action checks its exact destination. Focus/coverage changes pause
-input for up to 10 seconds. Changed geometry or a stale prepared click stops it.
+input for up to 10 seconds; resumed capture discards stale frames and renews recognition timeouts. Changed geometry or a stale prepared click stops it.
 Item detection is restricted to the shop icon column; Buy and confirmation clicks
 use observed button bounds. Refresh uses the recognized label. Confirmation text
 is read locally using Windows' built-in English OCR and must match the intended
@@ -33,7 +33,7 @@ Native home entry supplements menu templates with observed OCR word bounds and
 home labels. A private known hidden-home reference permits one reveal click; no
 home image is shipped in the public package. Native pause/stop events carry a
 reason rather than claiming a Stop key was pressed. The GUI saves private native
-session diagnostics under `runtime/mouse-session-logs`.
+session diagnostics under `runtime/mouse-session-logs`. Missing confirmations save only central before/after crops under `runtime/mouse-failures`. STOP on stdin cancels the native loop before forced job termination; button release runs on interrupted clicks and parent cleanup.
 
 `--check-mouse-confirmation FILE --operation refresh` reads a saved full-client
 image offline and reports a text match without input, hooks or ADB. A buy check
@@ -177,6 +177,6 @@ The rc24 engine also supports `--preview-mouse-frame PATH --output REPORT.json`.
 This early CLI branch analyzes an existing game-client screenshot with the same shop
 references and writes normalized targets/item detections. It exits before ADB
 initialization, keyboard hooks or the refresh loop. The GUI's Mouse preview uses
-this branch only; screenshots/reports are private runtime data. Actual mouse
-input is not implemented. The engine builder includes `e7_mouse_analysis.py` in
+this branch only; screenshots/reports are private runtime data. This preview branch sends no mouse
+input. The engine builder includes `e7_mouse_analysis.py` in
 both the binary and corresponding source distribution.

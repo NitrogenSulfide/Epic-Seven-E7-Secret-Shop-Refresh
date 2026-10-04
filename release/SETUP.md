@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc30.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc31.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,7 +14,7 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc30.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc31.zip'
 ```
 
 ## Emulator setup
@@ -154,7 +154,7 @@ Fresh settings use ADB mode; saved settings retain your mode. Switching back
 preserves your ADB address.
 
 Native stops show their actual reason on the main screen. Detailed text logs stay
-private under `runtime/mouse-session-logs`; do not include these in shared ZIPs.
+private under `runtime/mouse-session-logs`. The app checks that the pointer reaches the game before clicking. A missing confirmation also saves central game crops under `runtime/mouse-failures`; keep both folders out of shared ZIPs. Focus pauses discard stale captures and restart the recognition timeout.
 
 ## Updates and troubleshooting
 

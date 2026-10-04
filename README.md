@@ -20,7 +20,7 @@ Epic Seven and a **1920 × 1080** Android display. Other emulators are unverifie
 The original upstream source and Git history are preserved, alongside the GUI,
 launchers, tests, sounds and icon. The first public preview is **0.1.0-rc20**.
 
-The local **rc30** candidate adds **Control mode → Mouse** for native STOVE
+The local **rc31** candidate adds **Control mode → Mouse** for native STOVE
 Epic Seven. **Start Refresh** brings the selected game forward, opens its recognized
 Secret Shop menu, buys detected Covenant/Mystic items, scrolls and refreshes using
 your actual pointer and the existing budget, delay, counters and Stop key.
