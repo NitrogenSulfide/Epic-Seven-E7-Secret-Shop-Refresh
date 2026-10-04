@@ -1,4 +1,15 @@
-0.1.0 · First release preview (rc51)
+0.1.0 · First official release
+
+• Mouse automation for official STOVE and Google Play Games Developer Emulator.
+• ADB automation for the Google developer emulator.
+• Home-to-shop entry, idle UI reveal, Covenant/Mystic purchases and refreshes.
+• Smooth Mouse movement/dragging, bounded offsets and adjustable timing variation.
+• Whole Skystone budgets, used/total counters, Stop controls and session history.
+• Quickstart, release notes, day/night themes and Blue Natto credits.
+• First-release testing is limited to the two clients above; other methods are untested.
+• Preserves the rc51 automation code and the owner’s reported ordinary-case live passes.
+
+Development candidate history
 
 rc51
 • Normal Mouse and ADB sessions share home entry, currency detection, scrolling
