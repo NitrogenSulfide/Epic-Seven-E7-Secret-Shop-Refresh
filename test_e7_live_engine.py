@@ -157,6 +157,16 @@ class EngineTests(unittest.TestCase):
                 app.clickShop()
         adb.assert_not_called()
 
+    def test_recognition_failure_reports_setup_without_refresh_or_traceback(self):
+        failure = engine.NavigationSetupRequired('No navigation tap sent. Use setup.')
+        with patch.object(engine, 'E7ADBShopRefresh', side_effect=failure), contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertFalse(engine.run_refresh_engine(budget=12))
+        self.assertIn('E7GUI_SETUP_REQUIRED ',output.getvalue())
+        self.assertNotIn('Traceback',output.getvalue())
+        with patch.object(engine, 'E7ADBShopRefresh', side_effect=RuntimeError('other failure')):
+            with self.assertRaisesRegex(RuntimeError,'other failure'):
+                engine.run_refresh_engine(budget=12)
+
     def test_hidden_ui_waits_then_follows_recognized_menu(self):
         app = self.make_engine()
         app.navigation.shop_visible.side_effect = [False, False, True]

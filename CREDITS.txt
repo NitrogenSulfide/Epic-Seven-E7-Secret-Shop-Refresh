@@ -18,3 +18,7 @@ The software GPL does not relicense third-party artwork.
 Background restoration and sharpening: image_gen.
 Asset sources, edits and hashes: e7_gui_assets/CREDITS.txt and
 e7_gui_assets/provenance.json.
+
+Built-in shop recognition labels: Epic Seven, Smilegate and respective rights holders.
+UI-only crops, dimensions and hashes: adb-assets/builtin-navigation/provenance.json
+(runtime/adb-assets/builtin-navigation in the player package).

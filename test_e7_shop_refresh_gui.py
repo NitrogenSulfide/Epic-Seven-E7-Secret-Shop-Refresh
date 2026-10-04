@@ -15,9 +15,13 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import e7_shop_refresh_gui as gui
+from e7_setup import REFERENCE_NAMES
 PACKAGED_ASSETS = gui.ASSET_DIR
 DEVICE_SCAN = gui.RefreshGui.refresh_devices
 CREDITS_AUTO = gui.RefreshGui._maybe_show_credits
+BUILTIN_ASSETS = gui.PROJECT_DIR/'adb-assets/builtin-navigation'
+if not BUILTIN_ASSETS.is_dir():
+    BUILTIN_ASSETS = gui.PROJECT_DIR/'runtime/adb-assets/builtin-navigation'
 
 
 class ProtocolTests(unittest.TestCase):
@@ -177,6 +181,56 @@ class GuiTests(unittest.TestCase):
         self.assertIsNotNone(self.app.setup_window)
         self.assertIn('Screenshots stay private', self.app.setup_window.notice.get())
         self.app.setup_window.close()
+
+    def use_fresh_builtin_references(self):
+        for name in REFERENCE_NAMES:
+            (self.root/'adb-assets/gui-navigation'/name).unlink()
+        shutil.copytree(BUILTIN_ASSETS,self.root/'adb-assets/builtin-navigation')
+
+    def test_fresh_install_uses_builtin_recognition_without_setup(self):
+        self.use_fresh_builtin_references()
+        self.start_fake()
+        self.pump_until(lambda:self.app.status.get() == 'Finished')
+        self.assertIsNone(self.app.setup_window)
+        self.assertFalse((self.root/'setup-captures').exists())
+
+    def test_recognition_failure_offers_setup_only_after_engine_exits(self):
+        self.use_fresh_builtin_references()
+        self.fake.write_text('print("E7GUI_SETUP_REQUIRED Cannot recognize shop",flush=True)\nraise SystemExit(3)\n')
+        self.fake.with_suffix('.sha256').write_text(hashlib.sha256(self.fake.read_bytes()).hexdigest())
+        self.start_fake()
+        self.pump_until(lambda:self.app.setup_window is not None)
+        self.assertEqual(self.app.process.poll(),3)
+        self.assertEqual(self.app.status.get(),'Setup required')
+        self.assertEqual(self.app.spent.get(),'—')
+        with patch.object(gui,'launch_engine') as launch:
+            self.app.start_button.invoke()
+        launch.assert_not_called()
+        self.app.setup_window.close()
+
+    def test_stop_suppresses_pending_recognition_setup(self):
+        self.use_fresh_builtin_references()
+        self.fake.write_text('import time\nprint("E7GUI_SETUP_REQUIRED Cannot recognize shop",flush=True)\ntime.sleep(30)\n')
+        self.start_fake()
+        self.pump_until(lambda:self.app._recognition_setup_needed)
+        self.assertIsNone(self.app.setup_window)
+        self.app.stop_refresh()
+        self.pump_until(lambda:self.app.status.get() == 'Stopped')
+        self.assertIsNone(self.app.setup_window)
+
+    def test_late_recognition_output_still_offers_setup_once(self):
+        self.use_fresh_builtin_references()
+        self.fake.write_text('raise SystemExit(3)\n')
+        self.fake.with_suffix('.sha256').write_text(hashlib.sha256(self.fake.read_bytes()).hexdigest())
+        self.start_fake()
+        self.pump_until(lambda:self.app.status.get() == 'Needs attention')
+        self.app._handle_line('E7GUI_SETUP_REQUIRED Late fixture output')
+        self.pump_until(lambda:self.app.setup_window is not None)
+        window = self.app.setup_window
+        self.app._handle_line('E7GUI_SETUP_REQUIRED Late fixture output')
+        self.app.update()
+        self.assertIs(self.app.setup_window,window)
+        window.close()
 
     def test_supplied_backgrounds_render_in_both_themes(self):
         import e7_appearance

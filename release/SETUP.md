@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc20.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc21.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -10,10 +10,11 @@ The separate Source ZIP is optional for developers.
 
 The relative engine path is already configured. The package includes the matching
 engine, ADB tools, item templates and licences. It contains no personal settings,
-game screenshots or recognition images. Check the optional release checksum:
+game screenshots or personal recognition images. Generic English shop-label
+templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc20.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc21.zip'
 ```
 
 ## Emulator setup
@@ -38,10 +39,21 @@ If it is missing from Scan, run PowerShell inside the included `runtime` folder:
 Continue only when its actual identifier is listed as `device`, rather than
 `offline` or `unauthorized`. Choose that identifier in the app.
 
-## Prepare recognition once
+## Start refreshing
 
-On a fresh runtime, **Start refresh** opens recognition setup instead of starting
-the engine. Follow the two capture buttons:
+Check your budget and stop key, then press **Start refresh**. The app tries its
+built-in English shop recognition automatically; fresh users normally do not
+need to capture reference screens. Saved personal references remain supported.
+The menu must be recognized before a navigation tap, and both shop markers must
+be verified before purchases or refreshes.
+
+If controls are hidden, click the game once to reveal them. The app waits up to
+60 seconds without guessing a tap. If startup recognition still fails, the
+engine stops before purchases or refreshes and opens the helper below.
+
+## Recognition helper — only if needed
+
+Follow the two capture buttons if automatic recognition could not verify your UI:
 
 1. Open the game's home screen and close popups. Click once inside the game if
    its home controls have faded. Choose **Capture home menu**.
@@ -54,7 +66,8 @@ Setup reads two ADB screenshots and runs the matching engine's offline image
 utility. It sends no taps, refreshes or purchases. Screenshots stay private under
 `runtime/setup-captures`; recognition images stay in `runtime/adb-assets/gui-navigation`.
 Any replaced calibration folder is preserved as a backup. Keep these files private.
-Recognition checks must pass before the engine is started.
+Completing this helper never starts refreshing automatically. Close it and press
+Start again when ready. Built-in templates are kept separate from these private files.
 
 ## First supervised run
 
@@ -78,8 +91,8 @@ preserve your old runtime settings, CSV history and locally prepared recognition
 images. No updater or automatic migration exists. Back up anything you want to
 keep before deleting an extracted app folder.
 
-- **Missing recognition:** press Start to open the guided setup; the engine is
-  not launched until all three reference files are present.
+- **Recognition needs help:** reveal the game controls or manually open Secret
+  Shop. If startup recognition fails, use the offered helper and press Start again.
 - **Setup cannot verify the screen:** check English UI, 1920 × 1080 Android
   resolution, visible home controls and a normal unobstructed shop list.
 - **No backgrounds:** use the included **EXE** with the complete extracted folder.

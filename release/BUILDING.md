@@ -21,8 +21,9 @@ complete player folder, preserving artwork and its runtime. Check it offline:
 ```
 
 The check creates no GUI window or ADB connection. It verifies bundled image/Tcl
-support and required artwork/runtime paths; missing recognition is reported as
-setup needed, not cleared for live use. A rebuilt EXE has a different hash and
+support and required artwork/runtime paths, plus the presence of built-in recognition.
+Personal references can be absent on a fresh install; presence checks do not
+establish live recognition accuracy. A rebuilt EXE has a different hash and
 needs its own review. Engine build instructions are in [ENGINE.md](ENGINE.md).
 
 The full source checkout has `build_release_assets.ps1`, `build_release.ps1`,

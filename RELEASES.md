@@ -36,6 +36,14 @@ caches. Keep GPL, upstream authorship, asset provenance, ADB notices and bundled
 Python/Pillow/PyInstaller/Tcl/Tk dependency licences. Inspect all source-archive
 members for private data. Never change reviewed ZIP bytes in place.
 
+Generic English label crops under adb-assets/builtin-navigation are public assets;
+their provenance/dimensions/hashes must be inspected. Full screenshots and saved
+gui-navigation calibration remain private. Verify a fresh folder with no personal
+references can use the built-in set, without writing calibration. Unknown or
+ambiguous screens must not cause guessed navigation or spending. Recognition
+failure must stop the engine and offer setup; Stop/stale output must not start
+another engine or bypass an explicit Start after setup.
+
 ## Extracted and GUI checks
 
 Verify ZIP integrity, member hashes/allowlists, required files/document links and

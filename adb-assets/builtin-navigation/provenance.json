@@ -1,0 +1,23 @@
+{
+  "description": "Generic English Epic Seven Secret Shop text labels for 1920x1080 recognition.",
+  "source": "UI-only crops derived from owner-supplied game screenshots and visually inspected; original screenshots and personal calibration remain private.",
+  "credit": "Epic Seven, Smilegate and respective game/artwork rights holders. Software GPL does not relicense third-party game artwork.",
+  "processing": "Existing tightly cropped grayscale labels retained byte-for-byte; no full screens, account details, device data or metadata supplied.",
+  "files": {
+    "menu-secret-shop.png": {
+      "sha256": "1e9dd7ebde1a6fd2c1a86e87ccea65f038f5b37ea02f3505b0eaf0cddef631fa",
+      "width": 149,
+      "height": 33
+    },
+    "shop-title.png": {
+      "sha256": "0939c07003dad06f4e9ffacbce8d0e596162f2b78bd9abf8ee0a905a77332a26",
+      "width": 206,
+      "height": 51
+    },
+    "refresh-label.png": {
+      "sha256": "8ea1fb391e81eac36726269e9f3c17ec6fb1aa097cc73c2e72db2a03cb88207b",
+      "width": 118,
+      "height": 47
+    }
+  }
+}

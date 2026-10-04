@@ -197,3 +197,9 @@ required after successful setup. Private captures remain in the selected runtime
 rc20 adds an amber first-use reminder to use an emulator with ADB enabled.
 Dismissing it remembers that acknowledgement in local GUI preferences. The
 hidden-UI click reminder still appears while waiting for visible controls.
+
+rc21 is a local candidate adding built-in English Secret Shop recognition. Fresh
+users can press Start without first capturing screens. Saved private references
+remain supported, and startup recognition failure stops the engine before buys
+or refreshes, then offers the screenshot helper. Completing it requires another
+explicit Start. The published rc20 preview and its downloads above remain unchanged.

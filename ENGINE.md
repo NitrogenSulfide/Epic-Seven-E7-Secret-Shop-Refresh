@@ -131,3 +131,16 @@ For rc19 players, missing references open a guided home/shop screenshot dialog.
 It checks the bundled engine checksum before invoking its offline preparation
 utility. It performs no game taps and never starts refreshing automatically after
 setup. The manual utility remains available for developers and older candidates.
+
+rc21 adds generic English label crops under `adb-assets/builtin-navigation`.
+The navigator checks saved references and built-in templates, requiring a complete
+shop-marker pair from one set and agreement between recognized menu targets.
+Missing/unreadable saved references can fall back to built-in templates without
+overwriting personal calibration. Startup recognition failure exits with code 3
+and an `E7GUI_SETUP_REQUIRED` message; the GUI offers the screenshot helper after
+the engine exits. No purchase/refresh has started on this path, and another
+explicit Start is required after setup. Existing mid-session shop guards remain.
+
+`--check-navigation-frame PATH` checks a saved screenshot entirely offline from
+the runtime directory. It prints JSON with `home`, `shop` or `unrecognized` and
+sends no ADB commands, starts no keyboard hooks and makes no game actions.

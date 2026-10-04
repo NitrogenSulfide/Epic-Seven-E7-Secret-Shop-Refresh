@@ -1,4 +1,4 @@
-"""Recognize English Secret Shop UI from private, locally calibrated references."""
+"""Recognize English Secret Shop UI using built-in or private reference labels."""
 from pathlib import Path
 
 import cv2
@@ -16,6 +16,49 @@ SEARCH_BOXES = {
     'shop-title.png': (75, 0, 410, 110),
     'refresh-label.png': (250, 910, 555, 1060),
 }
+
+
+class NavigationSetupRequired(RuntimeError):
+    """Startup recognition failed before any purchases or refreshes."""
+
+
+def create_navigator(asset_directory):
+    """Read saved references and shipped UI labels; never write private state."""
+    assets = Path(asset_directory)
+    navigators = []
+    for label, folder in (('saved', 'gui-navigation'), ('built-in', 'builtin-navigation')):
+        try:
+            navigators.append((label, ShopNavigator(assets/folder)))
+        except (OSError, RuntimeError, cv2.error):
+            continue
+    if not navigators:
+        raise NavigationSetupRequired('Shop recognition images are unavailable. Use the recognition setup helper before starting.')
+    return ReferenceNavigator(navigators)
+
+
+class ReferenceNavigator:
+    """Require a complete matching shop pair from one reference set."""
+    def __init__(self, navigators):
+        self.navigators = navigators
+
+    def shop_visible(self, screenshot):
+        return any(nav.shop_visible(screenshot) for _, nav in self.navigators)
+
+    def menu_target(self, screenshot):
+        points = [point for _, nav in self.navigators if (point := nav.menu_target(screenshot)) is not None]
+        if not points:
+            return None
+        # Different reference sets must agree; never resolve uncertainty with a tap.
+        if any(abs(x-points[0][0]) > 8 or abs(y-points[0][1]) > 8 for x,y in points[1:]):
+            return None
+        return points[0]
+
+    def verification_details(self, screenshot):
+        return '; '.join(f'{label}: {nav.verification_details(screenshot)}' for label,nav in self.navigators)
+
+    def require_shop(self, screenshot):
+        if not self.shop_visible(screenshot):
+            raise RuntimeError('Secret Shop screen could not be verified (' + self.verification_details(screenshot) + '). Stopped before further shop actions.')
 
 
 def prepare_references(home, shop, destination):

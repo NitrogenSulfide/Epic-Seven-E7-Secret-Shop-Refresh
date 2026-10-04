@@ -19,7 +19,7 @@ from tkinter import font as tkfont, messagebox, ttk
 from e7_process import launch_engine
 from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon
 from e7_about import AboutDialog
-from e7_setup import missing_references, RecognitionSetup
+from e7_setup import missing_references, has_builtin_references, RecognitionSetup
 
 PROJECT_DIR = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
 DEFAULT_ENGINE_DIR = Path.home() / "Downloads" / "E7 Secret Shop Refresh"
@@ -222,6 +222,7 @@ class RefreshGui(tk.Tk):
         self.log_queue = queue.Queue()
         self.run_settings = None
         self.setup_window = None
+        self._recognition_setup_needed = False
         self.started_at = None
         self.stopping = False
         self.finished = False
@@ -930,25 +931,41 @@ class RefreshGui(tk.Tk):
                 self.log_queue.put((None, "devices", ([], "ADB unavailable. Check Diagnostics.", str(exc))))
         threading.Thread(target=scan, daemon=True).start()
 
+    def _show_recognition_setup(self):
+        if self.process and self.process.poll() is None:
+            return
+        if self.setup_window is not None and self.setup_window.winfo_exists():
+            self.setup_window.lift()
+            return
+        try:
+            settings = self._settings()
+            self.setup_window = RecognitionSetup(self, ENGINE_EXE.parent, ADB_EXE, ENGINE_EXE, settings.device)
+        except (ValueError, OSError) as error:
+            messagebox.showerror('Recognition setup unavailable', str(error), parent=self)
+            return
+        self.status.set('Setup required')
+        self.detail.set('Use the recognition helper, then press Start again. The refresh engine is stopped.')
+        self._event('Recognition setup offered. No purchases or refreshes started.')
+
+    def _offer_recognition_setup(self, run_id):
+        if run_id != self.run_id or not self._recognition_setup_needed or self.stopping or self.stop_key_pressed:
+            return
+        if self.process and self.process.poll() is None:
+            return
+        self._recognition_setup_needed = False
+        self._show_recognition_setup()
+
     def start_refresh(self):
         if self.process and self.process.poll() is None:
             return
         if not ENGINE_EXE.is_file():
             messagebox.showerror("Missing engine", f"Could not find {ENGINE_EXE}", parent=self)
             return
-        if missing_references(ENGINE_EXE.parent):
-            if self.setup_window is not None and self.setup_window.winfo_exists():
-                self.setup_window.lift()
-                return
-            try:
-                settings = self._settings()
-                self.setup_window = RecognitionSetup(self, ENGINE_EXE.parent, ADB_EXE, ENGINE_EXE, settings.device)
-            except (ValueError, OSError) as error:
-                messagebox.showerror('Recognition setup unavailable', str(error), parent=self)
-                return
-            self.status.set('Setup required')
-            self.detail.set('Prepare home/shop recognition once. No refreshing or spending has started.')
-            self._event('Recognition setup required. Engine not started.')
+        if self.setup_window is not None and self.setup_window.winfo_exists():
+            self.setup_window.lift()
+            return
+        if missing_references(ENGINE_EXE.parent) and not has_builtin_references(ENGINE_EXE.parent):
+            self._show_recognition_setup()
             return
         if self.debug_mode.get():
             message = "Debug uses a fixed 100-skystone test budget, the Esc stop key, and randomized offsets. It includes Friendship Points when detected, and pauses BEFORE each click. Check each image, then press a key other than Esc in that image to continue. Buy and confirmation each have a pause. Continue?"
@@ -967,6 +984,7 @@ class RefreshGui(tk.Tk):
         self._session_started = False
         self.stop_key_pressed = False
         self._finalized_run_id = None
+        self._recognition_setup_needed = False
         self.started_at = None
         self.launch_started_at = time.monotonic()
         self.elapsed.set("0m 00s")
@@ -1038,7 +1056,7 @@ class RefreshGui(tk.Tk):
         self.status.set("Calibrating" if self.run_settings.debug else "Running")
         self.detail.set("Debug pauses before every click, including Buy and confirmation. Check the red rectangle, then press a key other than Esc in the image window. Esc stops the test." if self.run_settings.debug else "Refreshing the Secret Shop. Use Stop Session or your stop key to end.")
         self.progress_text.set("Calibration in progress · engine uses 100 skystone" if self.run_settings.debug else "Waiting for the engine’s first progress update…")
-        self._event("Calibration started. Check the image window." if self.run_settings.debug else "Engine ready. Refreshing started.")
+        self._event("Calibration started. Check the image window." if self.run_settings.debug else "Engine ready. Checking Secret Shop.")
         self._play_session_sound("started")
 
     def _freeze_elapsed(self):
@@ -1056,6 +1074,13 @@ class RefreshGui(tk.Tk):
 
     def _handle_line(self, line):
         if not line:
+            return
+        if line.startswith('E7GUI_SETUP_REQUIRED '):
+            if not self.stopping and not self.stop_key_pressed:
+                self._recognition_setup_needed = True
+                if self._finalized_run_id == self.run_id:
+                    self.after_idle(lambda run_id=self.run_id: self._offer_recognition_setup(run_id))
+            self._event('Automatic shop recognition needs help. Stopped before purchases or refreshes.')
             return
         if line.startswith('Navigation: '):
             message = line[len('Navigation: '):]
@@ -1210,6 +1235,7 @@ class RefreshGui(tk.Tk):
         self._event(self.detail.get())
         self._set_controls(False)
         self.refresh_history()
+        self._offer_recognition_setup(self.run_id)
 
     def _set_controls(self, running):
         for widget in self.settings_widgets:
@@ -1369,6 +1395,8 @@ def main(argv=None):
                     frozen=bool(getattr(sys, 'frozen', False)), artwork='verified', pillow=Image.__version__,
                     tcl=tk.Tcl().eval('info patchlevel'),
                     engine_directory=str(APP_DIR), missing_references=missing_references(APP_DIR),
+                    builtin_recognition=has_builtin_references(APP_DIR),
+                    recognition_ready=not missing_references(APP_DIR) or has_builtin_references(APP_DIR),
                     gui_or_adb_started=False), indent=2), encoding='utf-8')
             return 0
     except (ValueError, OSError, tk.TclError, ImportError) as error:

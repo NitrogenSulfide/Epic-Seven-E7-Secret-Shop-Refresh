@@ -3,11 +3,13 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+import shutil
+from unittest.mock import Mock
 
 import cv2
 import numpy as np
 
-from e7_shop_navigation import FRAME_SIZE, REFERENCE_BOXES, ShopNavigator
+from e7_shop_navigation import FRAME_SIZE, REFERENCE_BOXES, ShopNavigator, ReferenceNavigator, create_navigator, NavigationSetupRequired
 
 
 class NavigationTests(unittest.TestCase):
@@ -83,6 +85,70 @@ class NavigationTests(unittest.TestCase):
         (self.directory/'shop-title.png').unlink()
         with self.assertRaises(RuntimeError):
             ShopNavigator(self.directory)
+
+
+class BuiltinRecognitionTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.assets = Path(self.temp.name)/'adb-assets'
+        shipped = Path(__file__).parent/'adb-assets/builtin-navigation'
+        shutil.copytree(shipped,self.assets/'builtin-navigation')
+        self.nav = create_navigator(self.assets)
+        self.images = {name:cv2.imdecode(np.frombuffer((shipped/name).read_bytes(),dtype=np.uint8),cv2.IMREAD_GRAYSCALE) for name in REFERENCE_BOXES}
+
+    def frame(self, names, background=0):
+        frame = np.full((1080,1920),background,dtype=np.uint8)
+        for name in names:
+            x1,y1,x2,y2 = REFERENCE_BOXES[name]
+            frame[y1:y2,x1:x2] = self.images[name]
+        return frame
+
+    def test_fresh_builtin_labels_recognize_home_and_complete_shop(self):
+        self.assertFalse((self.assets/'gui-navigation').exists())
+        home = self.frame(['menu-secret-shop.png'])
+        shop = self.frame(['shop-title.png','refresh-label.png'])
+        self.assertEqual(self.nav.menu_target(home),(86,548))
+        self.assertFalse(self.nav.shop_visible(home))
+        self.assertTrue(self.nav.shop_visible(shop))
+        self.assertIsNone(self.nav.menu_target(shop))
+
+    def test_changed_wallpaper_brightness_and_hidden_markers(self):
+        rng = np.random.default_rng(23)
+        for _ in range(3):
+            wallpaper = cv2.resize(rng.integers(0,130,(54,96),dtype=np.uint8),FRAME_SIZE)
+            self.assertIsNone(self.nav.menu_target(wallpaper))
+            self.assertFalse(self.nav.shop_visible(wallpaper))
+            home = wallpaper.copy()
+            name = 'menu-secret-shop.png'
+            x1,y1,x2,y2 = REFERENCE_BOXES[name]
+            home[y1:y2,x1:x2] = self.images[name]
+            self.assertEqual(self.nav.menu_target(home),(86,548))
+        shop = self.frame(['shop-title.png','refresh-label.png'])
+        for factor in (.65,.85,1.15):
+            self.assertTrue(self.nav.shop_visible(np.clip(shop.astype(np.float32)*factor,0,255).astype(np.uint8)))
+        for name in ('shop-title.png','refresh-label.png'):
+            partial = self.frame([name])
+            self.assertFalse(self.nav.shop_visible(partial))
+
+    def test_invalid_saved_references_fall_back_without_overwriting(self):
+        saved = self.assets/'gui-navigation'; saved.mkdir()
+        for name in REFERENCE_BOXES: (saved/name).write_bytes(b'invalid saved marker')
+        nav = create_navigator(self.assets)
+        self.assertTrue(nav.shop_visible(self.frame(['shop-title.png','refresh-label.png'])))
+        self.assertEqual((saved/'shop-title.png').read_bytes(),b'invalid saved marker')
+        for name in REFERENCE_BOXES: (self.assets/'builtin-navigation'/name).unlink()
+        with self.assertRaises(NavigationSetupRequired): create_navigator(self.assets)
+
+    def test_reference_sets_cannot_mix_partial_shop_markers_or_conflicting_targets(self):
+        first,second = Mock(),Mock()
+        first.shop_visible.return_value = second.shop_visible.return_value = False
+        first.menu_target.return_value,second.menu_target.return_value = (86,548),(86,408)
+        nav = ReferenceNavigator([('saved',first),('built-in',second)])
+        self.assertFalse(nav.shop_visible('fixture'))
+        self.assertIsNone(nav.menu_target('fixture'))
+        second.menu_target.return_value = (88,549)
+        self.assertEqual(nav.menu_target('fixture'),(86,548))
 
 
 @unittest.skipUnless(os.environ.get('E7_NAV_FIXTURES'),'Private image fixtures not supplied')
