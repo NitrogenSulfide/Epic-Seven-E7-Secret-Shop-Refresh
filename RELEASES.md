@@ -52,6 +52,11 @@ Failures must show an actionable red banner, keep Start retryable, and launch no
 engine or recognition helper. Stop/close must invalidate pending start results;
 stale scans must not overwrite newer results. Idle rescans must not replace an
 edited address when the device list is unchanged. Never kill the ADB server.
+Also test a connected Google Play background VM with its window closed, a visible
+window on the Android launcher, activity history mentioning Epic Seven, and an
+open window with the game resumed. Only the last is ready. Google window checks
+must not impose a Google-specific title requirement on other emulator models.
+Never persist the full Android activity dump, which can contain unrelated apps.
 
 Verify ZIP integrity, member hashes/allowlists, required files/document links and
 extraction/portable configuration in paths with spaces/non-English characters.
