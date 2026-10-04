@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 import tempfile
+import sys
 import unittest
 from unittest.mock import Mock
 from PIL import Image, ImageDraw
@@ -25,6 +26,13 @@ class CaptureTests(unittest.TestCase):
         self.destination=self.root/'capture.png'
 
     def tearDown(self): self.temp.cleanup()
+
+    def test_source_adb_import_still_supports_missing_optional_pillow(self):
+        result = subprocess.run([sys.executable,'-c',
+            "import sys; sys.modules['PIL']=None; import e7_shop_refresh_gui; from e7_window_preview import Image; assert Image is None"],
+            cwd=Path(__file__).resolve().parent,capture_output=True,text=True,timeout=15,
+            creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        self.assertEqual(result.returncode,0,result.stderr)
 
     def test_capture_only_selected_client_with_negative_monitor_coordinates(self):
         capture_selected(self.target,self.destination,backend=self.backend,grabber=self.grabber)

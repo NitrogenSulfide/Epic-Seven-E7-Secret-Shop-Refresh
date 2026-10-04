@@ -9,7 +9,10 @@ import re
 import subprocess
 import tkinter as tk
 from tkinter import ttk
-from PIL import Image, ImageGrab, ImageTk, ImageDraw
+try:
+    from PIL import Image, ImageGrab, ImageTk, ImageDraw
+except ImportError:
+    Image = None
 from e7_setup import verify_setup_engine
 
 
@@ -91,6 +94,8 @@ class WindowsCapture:
 
 
 def capture_selected(target, destination, *, backend=None, grabber=None):
+    if Image is None:
+        raise ValueError('Mouse preview needs Pillow. Use the bundled player EXE.')
     backend = backend or WindowsCapture()
     before = backend.inspect(target.handle)
     if before.pid != target.pid or before.title != target.title:
