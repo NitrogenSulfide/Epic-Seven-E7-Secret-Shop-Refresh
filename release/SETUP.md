@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.0-rc36.zip**, then extract the whole ZIP into a new
+Download **E7ShopRefresh-0.1.0-rc37.zip**, then extract the whole ZIP into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,17 +14,17 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc36.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.0-rc37.zip'
 ```
 
 ## Emulator setup
 
 **ADB** remains the default mode for refreshing. **Mouse (preview)** is a separate
-experimental, read-only option described below; **Mouse** is the separate native
-STOVE automation mode.
+experimental, read-only option described below; **Mouse** automates the visible
+game in STOVE or an emulator, including Google Play Games Developer Emulator.
 
 Use [Google Play Games on PC Developer Emulator](https://developer.android.com/games/playgames/emulator),
-English Epic Seven and a **1920 × 1080 Android display**. Native STOVE uses the separate experimental Mouse mode;
+English Epic Seven and a **1920 × 1080 Android display**. STOVE and visible emulator windows can also use Mouse mode;
 other emulators are unverified. Different home-screen artwork is fine.
 Enable/authorize ADB debugging in the emulator. ADB is the connection that lets
 the tool interact with the game while leaving your PC mouse free.
@@ -97,9 +97,10 @@ If home controls fade, click the game once or open the shop. The app waits up to
 Theme backgrounds and currency artwork are included in the EXE's image support;
 the sun/moon button switches between the supplied day/night artwork.
 
-## Mouse automation — experimental native STOVE
+## Mouse automation — visible game windows
 
-Open English Epic Seven in STOVE. Choose **Control mode → Mouse**, select its
+Open English Epic Seven in STOVE or your emulator (including Google Play Games
+Developer Emulator), with the home controls or Secret Shop visible. Choose **Control mode → Mouse**, select its
 window and check your budget, delay and Stop key. Press **Start Refresh**. The app
 brings the game forward, opens the recognized Secret Shop menu, buys detected
 Covenant/Mystic items, scrolls and refreshes using your actual mouse pointer.
@@ -124,15 +125,19 @@ Shop scrolling uses a short upward mouse drag. The same checkbox adds small
 position and timing variations while keeping the vertical travel consistent.
 Stop or lost focus releases the drag button immediately. Begin with a small
 supervised run to verify the new drag reaches the bottom shop items.
-If STOVE runs the game as administrator, right-click **E7 Secret Shop Refresh.exe**
+If the game or emulator runs as administrator, right-click **E7 Secret Shop Refresh.exe**
 and choose **Run as administrator**, accepting the Windows prompt yourself.
 The app checks this permission mismatch before bringing the game forward.
 Normal game launches do not require an elevated refresh app.
 Start from the English home screen or an already open Secret Shop. Mouse mode
-locates the home Secret Shop label using templates and local Windows OCR. It first
-tries a hover to reveal idle controls. A locally saved known hidden-home image at
-`runtime/adb-assets/native-home/hidden.png` permits one verified reveal click.
-Unknown screens receive no guessed clicks.
+locates the home Secret Shop label using templates and local Windows OCR. A locally saved known hidden-home image at
+`runtime/adb-assets/native-home/hidden.png` permits a hover and one verified reveal click.
+Unknown screens receive no pointer input. Emulator launchers, hidden controls
+without a matching reference, and unsupported layouts must be opened manually.
+The game area must fill the client or have clearly identifiable symmetric black
+bars. Google's observed dark custom title bar is also excluded; colored emulator
+toolbars and arbitrary crops are not inferred.
+Google developer-emulator live actions in rc37 remain unverified.
 
 The app checks each confirmation before clicking it and stops on unexpected text
 or an insufficient-currency message. Keep English confirmation text readable.

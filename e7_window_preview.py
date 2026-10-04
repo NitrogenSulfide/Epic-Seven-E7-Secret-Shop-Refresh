@@ -62,7 +62,7 @@ def capture_selected(target, destination, *, backend=None, grabber=None, cancel=
     if max(high-low for low, high in image.getextrema()) < 12:
         raise ValueError('The game capture was blank. This client has not passed capture testing.')
     image.save(Path(destination).with_name('client-capture.png'))
-    image, bounds = game_view(image)
+    image, bounds = game_view(image,google_emulator='google play games' in before.title.lower())
     image.save(destination)
     left, top = before.rectangle[:2]
     return GameWindow(before.handle,before.pid,before.title,

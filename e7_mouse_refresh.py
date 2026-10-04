@@ -1,4 +1,4 @@
-"""Native STOVE implementation of the shared shop refresh loop."""
+"""Visible Windows game implementation of the shared shop refresh loop."""
 import argparse
 import json
 import math
@@ -224,13 +224,14 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
                 print('Navigation: Opening the recognized Secret Shop menu.',flush=True)
                 self.tap(*target)
                 return self._wait_for_shop()
-            if not moved:
-                # Hover can restore a native client's idle UI without a click.
+            known_home = hidden_home_matches(frame)
+            if not moved and known_home:
+                # Reveal idle controls only after recognizing a known home.
                 self.mouse.move(960,540)
                 moved = True
                 time.sleep(.5)
                 continue
-            if not revealed and hidden_home_matches(frame):
+            if not revealed and known_home:
                 fresh = self.takeScreenshot()
                 if hidden_home_matches(fresh):
                     print('Navigation: Revealing the recognized home screen controls.',flush=True)

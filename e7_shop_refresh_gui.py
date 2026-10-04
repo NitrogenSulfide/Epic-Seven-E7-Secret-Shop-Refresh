@@ -1083,7 +1083,7 @@ class RefreshGui(tk.Tk):
         self.home_ui_hint_dismissed = False
         self.home_ui_banner.grid()
         self.status.set('Mouse preview' if self.control_mode.get() == 'Mouse (preview)' else 'Ready')
-        self.detail.set('Press Start Refresh to bring the selected STOVE game forward and automate the shop.' if self.control_mode.get() == 'Mouse' else
+        self.detail.set('Press Start Refresh to bring the selected game window forward and automate the shop.' if self.control_mode.get() == 'Mouse' else
                         'Open Secret Shop, press Preview targets, then switch to the selected game.' if mouse else
                         'Open Epic Seven’s Secret Shop, then start a session.')
         if mouse:
@@ -1315,12 +1315,12 @@ class RefreshGui(tk.Tk):
             if settings.debug:
                 raise ValueError('Turn off Debug / calibration for Mouse mode. ADB calibration remains available.')
             if target is None:
-                raise ValueError('Select the native STOVE Epic Seven window first.')
+                raise ValueError('Select the window showing Epic Seven first.')
             verify_setup_engine(ENGINE_EXE)
             check = subprocess.run([str(ENGINE_EXE),'--verify'],cwd=APP_DIR,capture_output=True,text=True,
                                    timeout=15,creationflags=NO_WINDOW)
-            if check.returncode or 'native mouse v3' not in check.stdout or 'tap timing v2' not in check.stdout:
-                raise ValueError('Mouse mode needs the matching rc36 or newer engine for adjustable timing. Use the complete new player folder.')
+            if check.returncode or 'window mouse v4' not in check.stdout or 'tap timing v2' not in check.stdout:
+                raise ValueError('Mouse mode needs the matching rc37 or newer engine for emulator support. Use the complete new player folder.')
             target = activate_native_target(target)
         except (ValueError,OSError,RuntimeError,subprocess.SubprocessError) as error:
             self._set_connection_warning(str(error),reveal=True)

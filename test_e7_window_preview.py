@@ -95,6 +95,19 @@ class CaptureTests(unittest.TestCase):
             self.assertEqual(view.size,image.size)
             self.assertEqual(bounds,(0,0,*image.size))
 
+    def test_google_custom_bar_crop_is_opt_in_and_requires_matching_game_shape(self):
+        game=Image.new('RGB',(1280,720),(40,60,80))
+        image=Image.new('RGB',(1280,756));image.paste(game,(0,36))
+        ImageDraw.Draw(image).rectangle((20,10,200,18),fill='white')
+        self.assertEqual(game_view(image)[1],(0,0,1280,756))
+        self.assertEqual(game_view(image,google_emulator=True)[1],(0,36,1280,756))
+        colored=image.copy();ImageDraw.Draw(colored).rectangle((0,0,1279,35),fill='gray')
+        self.assertEqual(game_view(colored,google_emulator=True)[1],(0,0,1280,756))
+        wrong=Image.new('RGB',(1280,900));wrong.paste(game,(0,36))
+        self.assertEqual(game_view(wrong,google_emulator=True)[1],(0,0,1280,900))
+        full=Image.new('RGB',(1280,720));full.paste(game.crop((0,0,1280,700)),(0,20))
+        self.assertEqual(game_view(full,google_emulator=True)[1],(0,0,1280,720))
+
     def test_native_wide_client_is_saved_and_annotations_preserve_aspect(self):
         image=Image.new('RGB',(3840,2019),(40,60,80))
         ImageDraw.Draw(image).rectangle((50,50,250,250),fill='white')
