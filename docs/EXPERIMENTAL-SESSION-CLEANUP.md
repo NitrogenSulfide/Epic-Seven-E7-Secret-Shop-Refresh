@@ -74,6 +74,14 @@ under ignored `dist/candidates/`.
 
 ## Still needs a supervised trial
 
+Rendering follow-up is paused at the owner's request on 2026-10-05. Their video
+showed black/unpainted regions and stale layout during resizing, plus delayed
+theme repaint. An offline 3840 × 2020 redraw benchmark measured a median
+394.66 ms, compared with 78.69 ms at 1500 × 940. The current renderer prepares
+artwork and uploads per-widget crops on the UI thread. Investigate cached theme
+images, background image preparation and fewer redraws during resizing when
+work resumes. No further rendering implementation changes were made.
+
 Live Mouse/ADB behavior with the new matching engine, Stop during a real session,
 perceived resize/theme smoothness on the visible desktop, and a real Excel UI
 opening the export are not verified by the offline checks. Existing recognition
