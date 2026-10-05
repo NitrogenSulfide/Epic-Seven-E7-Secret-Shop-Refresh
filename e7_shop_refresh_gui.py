@@ -15,11 +15,14 @@ import time
 import uuid
 import webbrowser
 import tkinter as tk
-from dataclasses import dataclass
+from dataclasses import asdict
 from pathlib import Path
-from tkinter import font as tkfont, messagebox, ttk
+from tkinter import font as tkfont, messagebox, ttk, filedialog
 from e7_process import launch_engine
-from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon, avatar_icon, coffee_icon
+from e7_engine_protocol import RunSettings, validate_settings, EngineProtocol
+from e7_history import history_mode, read_sessions, export_sessions
+from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon, avatar_icon, coffee_icon, github_icon, bug_icon
+from e7_links import PROFILE, release_url, bug_report_url
 from e7_about import AboutDialog
 from e7_setup import missing_references, has_builtin_references, RecognitionSetup, verify_setup_engine
 from e7_native_mouse import activate_native_target, release_native_button, MouseElevationRequired
@@ -38,6 +41,10 @@ GUI_CONFIG_FILE = APP_DIR / "ShopRefreshGUI.ini"
 HISTORY_FILE = APP_DIR / "ShopRefreshHistory" / "ADB_History.csv"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 ASSET_DIR = PROJECT_DIR / "e7_gui_assets"
+try:
+    APP_VERSION = (PROJECT_DIR / 'VERSION').read_text(encoding='utf-8-sig').strip()
+except OSError:
+    APP_VERSION = 'unknown'
 STOP_KEY_CHARACTERS = "0123456789abcdefghijklmnopqrstuvwxyz/.,';[]`"
 
 
@@ -99,39 +106,6 @@ def configure_engine_directory(directory):
     HISTORY_FILE = directory / "ShopRefreshHistory" / "ADB_History.csv"
 
 
-@dataclass(frozen=True)
-class RunSettings:
-    device: str
-    budget: int
-    tap_sleep: float
-    stop_key: str
-    random_offset: bool
-    debug: bool
-    tap_jitter: float = 0.03
-
-
-def validate_settings(device, budget, delay, stop_key, random_offset, debug, tap_jitter=0.03):
-    if not re.fullmatch(r'[0-9]+', str(budget).strip()):
-        raise ValueError("The skystone budget must be a whole number of at least 3.")
-    try:
-        amount, sleep, jitter = int(budget), float(delay), float(tap_jitter)
-    except (ValueError, TypeError):
-        raise ValueError("Enter numbers for the skystone budget and tap delay.") from None
-    if amount < 3:
-        raise ValueError("The skystone budget must be a whole number of at least 3.")
-    if not math.isfinite(sleep) or sleep <= 0:
-        raise ValueError("The tap delay must be a finite number greater than zero.")
-    if not math.isfinite(jitter) or not 0 <= jitter <= 0.1:
-        raise ValueError("Timing variation must be between 0 and 0.10 seconds.")
-    device = device.strip() or "localhost:5555"
-    key = stop_key.strip().lower() or "esc"
-    if any(c in device for c in "\r\n"):
-        raise ValueError("The device must be a single ADB address.")
-    if key != "esc" and (len(key) != 1 or key not in STOP_KEY_CHARACTERS):
-        raise ValueError("Use Esc or a single letter, number, or / . , ' ; [ ] ` as the stop key.")
-    return RunSettings(device, amount, sleep, key, bool(random_offset), bool(debug), jitter)
-
-
 def duration_text(value):
     try:
         seconds = max(0, int(float(value)))
@@ -148,62 +122,6 @@ def number_text(value):
         return f"{n:,.0f}" if math.isfinite(n) else "—"
     except (ValueError, TypeError):
         return "—"
-
-
-def history_mode(row, fieldnames):
-    # Older engines recorded calibration with a Friendship column.
-    # Existing files retain their first header, so mixed runs may place that
-    # count in DictReader's extra-field list instead of a named column.
-    if 'Friendship bookmark' in fieldnames:
-        return 'Debug' if row.get('Friendship bookmark') is not None else 'Normal'
-    standard = ['Duration', 'Skystone spent', 'Gold spent', 'Covenant bookmark', 'Mystic medal']
-    if fieldnames == standard:
-        extra = row.get(None, [])
-        if len(extra) == 1 and str(extra[0]).isdigit():
-            return 'Debug'
-        if not extra:
-            return 'Normal'
-    return 'Unknown'
-
-
-class EngineProtocol:
-    """Answer observed prompts: the engine skips device selection with one device.
-
-    Never send a timed, positional answer list. A skipped prompt otherwise shifts
-    every subsequent setting and can start a run with the wrong budget.
-    """
-    def __init__(self, settings):
-        self.settings = settings
-        self.pending = ""
-        self.started = False
-
-    def feed(self, text):
-        self.pending = (self.pending + text)[-12000:]
-        s = self.settings
-        prompts = (
-            ("when you finish reading, press enter to continue!", ""),
-            ("Device: ", s.device),
-            ("leave blank for yes, or type (yes/no): ", "no"),
-            ("Launch in debug mode? leave bank for no (yes/no): ", "yes" if s.debug else "no"),
-            ("Key: ", s.stop_key),
-            ("Enable randomize click (yes/no): ", "yes" if s.random_offset else "no"),
-            ("Tap sleep(in seconds) Recommend - leave blank for 0.3 sec : ", str(s.tap_sleep)),
-            ("Amount of skystone that you want to spend: ", str(s.budget)),
-            ("Press enter to start!", ""),
-            ("press enter to exit...", ""),
-            ("Press enter to exit ...", ""),
-        )
-        answers = []
-        while True:
-            matches = [(self.pending.find(prompt), prompt, answer) for prompt, answer in prompts if prompt in self.pending]
-            if not matches:
-                break
-            at, prompt, answer = min(matches)
-            self.pending = self.pending[at + len(prompt):]
-            if prompt == "Press enter to start!":
-                self.started = True
-            answers.append(answer)
-        return answers
 
 
 class RefreshGui(tk.Tk):
@@ -248,6 +166,8 @@ class RefreshGui(tk.Tk):
         self.finished = False
         self._mouse_failure = None
         self._native_mouse_run = False
+        self._structured_adb = False
+        self._graceful_stop = False
         self._session_log_path = None
         self.partial_line = ""
         self.raw_output = ""
@@ -452,7 +372,7 @@ class RefreshGui(tk.Tk):
         style.configure('Horizontal.TProgressbar', troughcolor=active, bordercolor=border)
         style.configure('Horizontal.TScale', background='#60a5fa' if dark else '#2563eb',
                         troughcolor=active, bordercolor=border, lightcolor=border, darkcolor=border,
-                        sliderlength=self._dp(18), sliderthickness=self._dp(12))
+                        sliderlength=self._dp(26), sliderthickness=self._dp(24))
         style.map('Horizontal.TScale', background=[('disabled', muted), ('active', '#3b82f6')])
         self.log.configure(bg=field, fg=fg, insertbackground=fg, selectbackground='#2563eb', selectforeground='#ffffff')
         for option, color in (('background', field), ('foreground', fg), ('selectBackground', '#2563eb'), ('selectForeground', '#ffffff')):
@@ -462,6 +382,8 @@ class RefreshGui(tk.Tk):
         target = 'Switch to light mode' if dark else 'Switch to dark mode'
         self.theme_image = theme_icon(self, self._dp(25), dark)
         self.theme_button.configure(text=target if self.theme_image else ('☀' if dark else '☾'), image=self.theme_image or '', compound='none')
+        self.github_image = github_icon(self, ASSET_DIR, self._dp(24), dark, color='#60a5fa' if dark else '#2563eb')
+        self.github_button.configure(image=self.github_image or '', text='' if self.github_image else 'GitHub')
         if hasattr(self, 'scenery'):
             self.scenery.schedule()
         if self.about_window is not None and self.about_window.winfo_exists():
@@ -505,6 +427,8 @@ class RefreshGui(tk.Tk):
         self._style_home_ui_banner()
         dark = self.dark_mode.get()
         ttk.Style(self).configure('Status.TLabel', foreground=('#fbbf24' if dark else '#92400e') if waiting else ('#60a5fa' if dark else '#2563eb'))
+        if hasattr(self, 'right_panel'):
+            self._schedule_layout()
 
     def _style_home_ui_banner(self):
         dark = self.dark_mode.get()
@@ -584,8 +508,9 @@ class RefreshGui(tk.Tk):
                 self.right_panel.rowconfigure(6, weight=2, minsize=self.table_rowheight*3+self._dp(55))
         top_height = sum(widget.winfo_reqheight() for widget in (self.session_title, self.metrics, self.progress_frame)) + messages_height + self._dp(40)
         condensed = compact and self.right_panel.winfo_height() < top_height + self.table_rowheight*2 + self._dp(90)
-        for widget in (self.session_title, self.detail_label):
-            widget.grid_remove() if condensed else widget.grid()
+        self.session_title.grid_remove() if condensed else self.session_title.grid()
+        critical_detail = self.status.get() in ('Needs attention', 'Paused', 'Waiting for game', 'Not ready', 'Not connected', 'Failed')
+        self.detail_label.grid_remove() if condensed and not critical_detail else self.detail_label.grid()
         content_selected = compact and self.notebook.select() != self.notebook.tabs()[0]
         for widget in (self.metrics, self.progress_frame):
             widget.grid_remove() if content_selected else widget.grid()
@@ -648,14 +573,30 @@ class RefreshGui(tk.Tk):
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(0, weight=1)
         ttk.Label(header, text="Secret Shop", style="Title.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(header, text="Refresh sessions · Epic Seven · NitrogenSulfide (Blue Natto)", style="Muted.TLabel").grid(row=1, column=0, sticky="w")
+        byline = ttk.Frame(header)
+        byline.grid(row=1, column=0, sticky='w')
+        ttk.Label(byline, text='By Blue Natto', style='Muted.TLabel').pack(side='left')
+        self.version_button = ttk.Button(byline, text=f'v{APP_VERSION}', padding=(dp(6), 0),
+                                         command=lambda: webbrowser.open(release_url(APP_VERSION)), cursor='hand2')
+        self.version_button.pack(side='left', padx=(dp(10), 0))
+        self.version_hint = ThemeHint(self.version_button, lambda: 'Release history' if '-rc' in APP_VERSION else 'Release notes for this version')
         ttk.Label(header, textvariable=self.status, font=("Segoe UI", 12, "bold"), style='Status.TLabel').grid(row=0, column=1, sticky="e")
         header_actions = ttk.Frame(header)
         header_actions.grid(row=1,column=1,sticky='e')
         self.coffee_image = coffee_icon(self, dp(20))
         self.coffee_button = ttk.Button(header_actions, text='Buy me a coffee', image=self.coffee_image or '', compound='left',
             command=lambda: webbrowser.open('https://ko-fi.com/bluenatto'), cursor='hand2', takefocus=True)
-        self.coffee_button.pack(side='left', padx=(0, dp(12)))
+        self.coffee_button.pack(side='left', padx=(0, dp(8)))
+        self.github_button = ttk.Button(header_actions, text='GitHub', padding=dp(6), cursor='hand2',
+                                         command=lambda: webbrowser.open(PROFILE))
+        self.github_button.pack(side='left', padx=(0, dp(6)))
+        self.github_hint = ThemeHint(self.github_button, lambda: 'Blue Natto on GitHub')
+        self.bug_image = bug_icon(self, dp(24))
+        self.bug_button = ttk.Button(header_actions, image=self.bug_image or '', text='' if self.bug_image else 'Bug',
+                                     padding=dp(6), cursor='hand2',
+                                     command=lambda: webbrowser.open(bug_report_url(APP_VERSION, self.control_mode.get())))
+        self.bug_button.pack(side='left', padx=(0, dp(6)))
+        self.bug_hint = ThemeHint(self.bug_button, lambda: 'Report a bug · app version included')
         self.about_image = avatar_icon(self, ASSET_DIR, dp(28))
         self.about_button = ttk.Button(header_actions, image=self.about_image, text='' if self.about_image else 'Credits', command=self._show_about, padding=dp(6), cursor='hand2', takefocus=True)
         self.about_button.pack(side='left',padx=(0,dp(6)))
@@ -710,6 +651,8 @@ class RefreshGui(tk.Tk):
                 self.budget_entry = entry
             entry.grid(row=1, column=column, sticky='ew', pady=(dp(3), 0), padx=(0 if column==0 else dp(8), 0))
             self.settings_widgets.append(entry)
+            if var is self.tap_sleep:
+                self.delay_hint = ThemeHint(entry, lambda: 'Greater than 0, up to 2.00 seconds · randomized delay also stays within this cap')
         ttk.Label(controls, text='Stop key · click the box, then press a key').grid(row=5, column=0, sticky='w')
         self.stop_key_entry = ttk.Entry(controls, textvariable=self.stop_key, font=self.ui_font)
         self.stop_key_entry.state(['readonly'])
@@ -882,18 +825,26 @@ class RefreshGui(tk.Tk):
         history_header.columnconfigure(0, weight=1)
         ttk.Label(history_header, text="Recent sessions", font=("Segoe UI", 13, "bold")).grid(row=0, column=0, sticky="w")
         self.clear_history_button = ttk.Button(history_header, text="Clear", command=self._clear_history)
-        self.clear_history_button.grid(row=0, column=1)
+        self.clear_history_button.grid(row=0, column=2)
+        self.export_history_button = ttk.Button(history_header, text='Export Excel', command=self._export_history)
+        self.export_history_button.grid(row=0, column=1, padx=(dp(8), dp(8)))
+        self.export_history_hint = ThemeHint(self.export_history_button, lambda: 'Export every recorded session, including older rows beyond the last 25')
         self.clear_history_hint = ThemeHint(self.clear_history_button, lambda: 'Archive recorded sessions, then clear the list')
         self.history_frame = history_frame = ttk.Frame(right)
         history_frame.grid(row=6, column=0, sticky="nsew")
         history_frame.columnconfigure(0, weight=1)
         history_frame.rowconfigure(0, weight=1)
-        self.history = ttk.Treeview(history_frame, columns=("mode", "duration", "skystone", "gold", "cov", "mys"), show="headings", height=6)
+        self.history = ttk.Treeview(history_frame, columns=("mode", "duration", "skystone", "gold", "cov", "mys", "started", "control", "outcome"), show="headings", height=6)
         for key, label, width in (("mode", "Mode", 80), ("duration", "Duration", 125), ("skystone", "Skystone", 95), ("gold", "Gold", 120), ("cov", "Covenant buys", 115), ("mys", "Mystic buys", 105)):
             self.history.heading(key, text=label, anchor=tk.W if key in ("mode", "duration") else tk.E)
             samples = {"mode": "Unknown", "duration": "12h 59m 59s", "skystone": "99,999", "gold": "999,999,999", "cov": "9,999", "mys": "9,999"}
             column_width = max(self.heading_font.measure(label), self.ui_font.measure(samples[key])) + dp(24)
             self.history.column(key, width=column_width, minwidth=column_width, anchor=tk.W if key in ("mode", "duration") else tk.E, stretch=key != 'mode')
+        for key, label, sample in (('started', 'Started (UTC)', '2026-10-05 14:30:00'), ('control', 'Control', 'Unknown'), ('outcome', 'Outcome', 'Unknown (legacy)')):
+            width = max(self.heading_font.measure(label), self.ui_font.measure(sample)) + dp(24)
+            self.history.heading(key, text=label, anchor=tk.W)
+            self.history.column(key, width=width, minwidth=width, anchor=tk.W, stretch=False)
+        self.history.bind('<<TreeviewSelect>>', self._history_selected)
         self.history.tag_configure("even", background="#f1f5f9")
         self.history.tag_configure('debug', background='#fff4d6', foreground='#92400e')
         self.history.grid(row=0, column=0, sticky="nsew")
@@ -1155,13 +1106,22 @@ class RefreshGui(tk.Tk):
         self.detail.set('Checking the selected emulator before starting. No game actions are sent.')
         def check():
             result = check_connection(ADB_EXE, APP_DIR, settings.device)
-            self.log_queue.put((None, 'connection', (token, settings, result)))
+            structured = False
+            if result.ready:
+                try:
+                    verify = subprocess.run([str(ENGINE_EXE), '--verify'], cwd=APP_DIR, capture_output=True,
+                                            text=True, timeout=15, creationflags=NO_WINDOW)
+                    structured = verify.returncode == 0 and 'gui session v1' in verify.stdout
+                except (OSError, subprocess.SubprocessError):
+                    pass  # Older engines retain the existing prompt adapter.
+            self.log_queue.put((None, 'connection', (token, settings, result, structured)))
         threading.Thread(target=check, daemon=True).start()
 
-    def _complete_connection_check(self, token, settings, result):
+    def _complete_connection_check(self, token, settings, result, structured=False):
         if token != self._connection_check_id or not self._checking_connection:
             return
         self._checking_connection = False
+        self._structured_adb = structured
         self._set_controls(False)
         self._apply_devices(result.devices, result.warning, result.diagnostics)
         self._set_connection_warning(result.warning, reveal=True)
@@ -1290,6 +1250,7 @@ class RefreshGui(tk.Tk):
         self.stopping = self.finished = False
         self._mouse_failure = None
         self._native_mouse_run = mouse_target is not None
+        self._graceful_stop = mouse_target is not None or self._structured_adb
         self._session_log_path = None
         if mouse_target:
             try:
@@ -1332,7 +1293,7 @@ class RefreshGui(tk.Tk):
                           '--stop-key',settings.stop_key,'--random-offset','yes' if settings.random_offset else 'no',
                           '--tap-jitter',str(settings.tap_jitter)]
         else:
-            arguments += ['--tap-jitter',str(settings.tap_jitter)]
+            arguments += ['--gui-session', json.dumps(asdict(settings))] if self._structured_adb else ['--tap-jitter',str(settings.tap_jitter)]
         try:
             process, self.process_tree = launch_engine(arguments, cwd=APP_DIR, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1, creationflags=NO_WINDOW)
         except OSError as exc:
@@ -1408,12 +1369,12 @@ class RefreshGui(tk.Tk):
         if line == 'E7GUI_STARTED':
             self._engine_started()
             return
-        if line.startswith(('E7GUI_MOUSE_PAUSED ','E7GUI_MOUSE_STOPPED ')):
+        if line.startswith(('E7GUI_MOUSE_PAUSED ','E7GUI_MOUSE_STOPPED ', 'E7GUI_STOPPED ')):
             try:
                 reason = str(json.loads(line.split(' ',1)[1])['reason'])
             except (ValueError,KeyError,TypeError):
                 return
-            if line.startswith('E7GUI_MOUSE_STOPPED '):
+            if line.startswith(('E7GUI_MOUSE_STOPPED ', 'E7GUI_STOPPED ')):
                 self._mouse_failure = reason
                 self.status.set('Needs attention')
                 self._freeze_elapsed()
@@ -1528,11 +1489,13 @@ class RefreshGui(tk.Tk):
         self.progress_text.set("Stopping this session’s engine and calibration windows…")
         self.stop_button.configure(state=tk.DISABLED)
         self._event("Stop requested.")
-        if self._native_mouse_run:
+        if self._graceful_stop or self._native_mouse_run:
             try:
                 process.stdin.write('STOP\n')
                 process.stdin.flush()
-                self.after(2500,lambda:self._kill_if_needed(process))
+                # Capture/OCR calls have bounded 10-second timeouts. Do not kill
+                # their result-writing cleanup after only 2.5 seconds.
+                self.after(12000,lambda:self._kill_if_needed(process))
                 return
             except (OSError,ValueError):
                 pass
@@ -1594,7 +1557,7 @@ class RefreshGui(tk.Tk):
         if self._mouse_failure and not self.stopping and not self.stop_key_pressed:
             self.status.set('Needs attention')
             self.detail.set(self._mouse_failure)
-            self.progress_text.set('Mouse session stopped · see the reason above')
+            self.progress_text.set('Session stopped · see the reason above')
         elif self.stopping or self.stop_key_pressed or (process.returncode == 0 and self.run_settings and self.run_settings.debug and self._session_started and not self.finished):
             self.status.set("Stopped")
             self.detail.set("Session stopped. History contains only runs recorded by the engine.")
@@ -1626,6 +1589,7 @@ class RefreshGui(tk.Tk):
         self._update_debug_availability(running)
         self._update_tap_jitter(running=running)
         self.clear_history_button.state(['disabled'] if running else ['!disabled'])
+        self.export_history_button.state(['disabled'] if running else ['!disabled'])
         self.start_button.configure(state=tk.DISABLED if running else tk.NORMAL)
         self.stop_button.configure(state=tk.NORMAL if running else tk.DISABLED)
         if not running and self.control_mode.get() != 'ADB':
@@ -1716,7 +1680,7 @@ class RefreshGui(tk.Tk):
 
     def _copy_diagnostics(self):
         self.clipboard_clear()
-        self.clipboard_append(f"Engine: {ENGINE_EXE}\nState: {self.status.get()}\n\n{self.raw_output}")
+        self.clipboard_append(f"App: v{APP_VERSION}\nControl: {self.control_mode.get()}\nEngine: {ENGINE_EXE}\nState: {self.status.get()}\n\n{self.raw_output}")
 
     def _update_history_xscroll(self, first, last):
         self.history_xscroll.set(first, last)
@@ -1727,25 +1691,46 @@ class RefreshGui(tk.Tk):
 
     def refresh_history(self):
         try:
-            if not HISTORY_FILE.exists():
-                rows = []
-                fieldnames = []
-            else:
-                with HISTORY_FILE.open(newline="", encoding="utf-8-sig") as fh:
-                    reader = csv.DictReader(fh)
-                    rows = list(reader)[-25:]
-                    fieldnames = reader.fieldnames or []
+            rows = read_sessions(HISTORY_FILE, limit=25)
         except (OSError, csv.Error, UnicodeError) as exc:
             self.history_notice.set("History could not be read. Check Diagnostics.")
             self._append_log(f"History read failed: {exc}\n")
             return
+        self._history_reasons = {}
         self.history.delete(*self.history.get_children())
         for i, row in enumerate(reversed(rows)):
-            mode = history_mode(row, fieldnames)
+            mode = row['Mode']
             tags = ('debug',) if mode == 'Debug' else ('even',) if i % 2 == 0 else ()
-            self.history.insert("", tk.END, tags=tags, values=(mode, duration_text(row.get("Duration")), *(number_text(row.get(key)) for key in ("Skystone spent", "Gold spent", "Covenant bookmark", "Mystic medal"))))
-        self.history_notice.set(f"{len(rows)} recent sessions · newest first · bookmark/medal columns count purchases" if rows else "No recorded sessions yet.")
+            item = self.history.insert("", tk.END, tags=tags, values=(mode, duration_text(row.get("Duration")), *(number_text(row.get(key)) for key in ("Skystone spent", "Gold spent", "Covenant bookmark", "Mystic medal")),
+                                row.get('Started at', '').replace('T', ' ').replace('+00:00', ''), row.get('Control mode', 'Unknown'), row.get('Outcome', 'Unknown (legacy)')))
+            if not hasattr(self, '_history_reasons'):
+                self._history_reasons = {}
+            self._history_reasons[item] = row.get('Reason', '')
+        self.history_notice.set(f"Showing latest {len(rows)} sessions · Excel exports all recorded sessions · select a row for its end reason" if rows else "No recorded sessions yet.")
         self._history_signature = self._get_history_signature()
+
+    def _history_selected(self, _event=None):
+        selected = self.history.selection()
+        if selected:
+            reason = self._history_reasons.get(selected[0], '')
+            self.history_notice.set(reason or 'No end reason was recorded for this older session.')
+
+    def _export_history(self):
+        if self._checking_connection or (self.process and self.process.poll() is None):
+            return
+        try:
+            rows = read_sessions(HISTORY_FILE)
+            if not rows:
+                self.history_notice.set('No recorded sessions to export.')
+                return
+            destination = filedialog.asksaveasfilename(parent=self, title='Export all sessions',
+                defaultextension='.xlsx', filetypes=[('Excel workbook', '*.xlsx')],
+                initialfile=f'E7-sessions-{time.strftime("%Y-%m-%d")}.xlsx')
+            if destination:
+                export_sessions(destination, rows)
+                self.history_notice.set(f'Exported all {len(rows)} recorded sessions.')
+        except (OSError, csv.Error, UnicodeError, ValueError) as error:
+            messagebox.showerror('Export failed', str(error), parent=self)
 
     def _get_history_signature(self):
         try:

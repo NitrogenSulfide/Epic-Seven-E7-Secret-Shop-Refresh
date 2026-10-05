@@ -3,7 +3,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
 import webbrowser
-from e7_appearance import profile_avatar, github_icon, ThemeHint
+from e7_appearance import profile_avatar
 
 TESTED_CLIENTS = (
     'First release testing: Google Play Games on PC Developer Emulator and the '
@@ -107,10 +107,6 @@ class AboutDialog(tk.Toplevel):
         self.startup_check.grid(row=0,column=0,columnspan=3,sticky='w',pady=(0,dp(8)))
         links = ttk.Frame(footer)
         links.grid(row=1,column=0,sticky='w')
-        self.github_button = ttk.Button(links, text='', padding=dp(8), cursor='hand2', takefocus=True,
-            command=lambda: webbrowser.open('https://github.com/NitrogenSulfide'))
-        self.github_button.pack(side='left',padx=(0,dp(8)))
-        self.github_hint = ThemeHint(self.github_button, lambda: 'GitHub profile · NitrogenSulfide')
         ttk.Button(links,text='Upstream project',command=lambda: webbrowser.open('https://github.com/Solunium/Epic-Seven-E7-Secret-Shop-Refresh')).pack(side='left')
         self.continue_button = ttk.Button(footer,text='Continue' if first_time else 'Close',command=self.close,style='Accent.TButton')
         self.continue_button.grid(row=1,column=2,sticky='e',padx=(dp(8),0))
@@ -123,8 +119,6 @@ class AboutDialog(tk.Toplevel):
         self.geometry(f'{w}x{h}+{x}+{y}')
 
     def apply_theme(self,dark):
-        self.github_image = github_icon(self, self.app_asset_dir, self.app._dp(24), dark)
-        self.github_button.configure(image=self.github_image or '', text='' if self.github_image else 'GitHub')
         bg,field,fg = ('#111827','#1e293b','#e2e8f0') if dark else ('#f3f5f8','#ffffff','#1e293b')
         self.configure(bg=bg)
         for widget in self.colored:
@@ -135,7 +129,6 @@ class AboutDialog(tk.Toplevel):
             reader.configure(bg=field,fg=fg,insertbackground=fg,selectbackground='#2563eb',selectforeground='white')
 
     def close(self):
-        self.github_hint.hide()
         self.app.credits_seen.set(True)
         self.app._save_credits_preference()
         self.app.about_window = None

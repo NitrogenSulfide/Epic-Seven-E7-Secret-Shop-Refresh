@@ -19,7 +19,7 @@ def avatar_icon(master, asset_dir, size):
         return None
 
 
-def github_icon(master, asset_dir, size, dark):
+def github_icon(master, asset_dir, size, dark, color=None):
     if Image is None:
         return None
     filename = 'github-white.png' if dark else 'github-black.png'
@@ -27,9 +27,30 @@ def github_icon(master, asset_dir, size, dark):
         with Image.open(asset_dir / filename) as source:
             icon = source.convert('RGBA')
             icon.thumbnail((size, size), Image.Resampling.LANCZOS)
+            if color:
+                tinted = Image.new('RGBA', icon.size, color)
+                tinted.putalpha(icon.getchannel('A'))
+                icon = tinted
         return ImageTk.PhotoImage(icon, master=master)
     except OSError:
         return None
+
+
+def bug_icon(master, size):
+    if Image is None:
+        return None
+    s = size * 3
+    image = Image.new('RGBA', (s, s))
+    draw = ImageDraw.Draw(image)
+    blue, ink = '#60a5fa', '#2563eb'
+    width = max(2, s // 14)
+    for y in (.37, .55, .73):
+        draw.line((s*.12, s*y, s*.88, s*y), fill=blue, width=width)
+    draw.line((s*.35,s*.08,s*.43,s*.25), fill=blue, width=width)
+    draw.line((s*.65,s*.08,s*.57,s*.25), fill=blue, width=width)
+    draw.ellipse((s*.29,s*.21,s*.71,s*.89), fill=blue)
+    draw.line((s*.5,s*.42,s*.5,s*.79), fill=ink, width=max(2,s//20))
+    return ImageTk.PhotoImage(image.resize((size,size), Image.Resampling.LANCZOS), master=master)
 
 
 def coffee_icon(master, size):
@@ -115,6 +136,7 @@ class Scenery:
         self.cache_key = None
         self.canvas_image = None
         self.canvas_photo = None
+        self.canvas_rectangle = None
         self.renders = 0
         self.render_calls = 0
         self.checkbox_theme = None
@@ -128,7 +150,9 @@ class Scenery:
             path = assets/filename
             if path.is_file():
                 with Image.open(path) as source:
-                    self.sources[dark] = source.convert('RGB')
+                    scene = source.convert('RGB')
+                    self.sources[dark] = Image.blend(Image.new('RGB', scene.size, '#111827' if dark else '#f3f5f8'),
+                                                    scene, .23 if dark else .20)
         style = ttk.Style(root)
         def visit(parent):
             for widget in parent.winfo_children():
@@ -164,11 +188,17 @@ class Scenery:
     def schedule(self, event=None):
         if Image is None or not getattr(self,'sources',{}):
             return
-        if self.job is not None:
-            self.root.after_cancel(self.job)
-        self.job = self.root.after(140,self.render)
+        # Root moves do not change the relative artwork coordinates.
+        if event is not None and event.widget is self.root and self.cache_key == (
+                self.root.winfo_width(), self.root.winfo_height(), self.root.dark_mode.get()):
+            return
+        if self.job is None:
+            # Throttle instead of indefinitely postponing repaint during resizing.
+            self.job = self.root.after(35 if event is not None else 0, self.render)
 
     def render(self):
+        if self.job is not None:
+            self.root.after_cancel(self.job)
         self.job = None
         self.render_calls += 1
         dark = self.root.dark_mode.get()
@@ -179,9 +209,9 @@ class Scenery:
             return
         key = (width,height,dark)
         if key != self.cache_key:
-            scene = ImageOps.fit(self.sources[dark],(width,height),Image.Resampling.LANCZOS)
-            tint = Image.new('RGB',(width,height),'#111827' if dark else '#f3f5f8')
-            self.backdrop = Image.blend(tint,scene,.23 if dark else .20)
+            # Tint is already composed; soft background artwork needs no sharp
+            # Lanczos resampling on every intermediate window size.
+            self.backdrop = ImageOps.fit(self.sources[dark],(width,height),Image.Resampling.BILINEAR)
             self.layer_image = ImageTk.PhotoImage(self.backdrop,master=self.root)
             self.layer.configure(image=self.layer_image)
             self.cache_key = key
@@ -197,11 +227,14 @@ class Scenery:
         canvas = self.root.settings_canvas
         if canvas.winfo_ismapped():
             x, y = canvas.winfo_rootx()-rx, canvas.winfo_rooty()-ry
-            crop = self.backdrop.crop((x, y, x+canvas.winfo_width(), y+canvas.winfo_height()))
-            self.canvas_photo = ImageTk.PhotoImage(crop, master=self.root)
-            if self.canvas_image is None:
-                self.canvas_image = canvas.create_image(0, 0, anchor='nw', tags='scenery')
-            canvas.itemconfigure(self.canvas_image, image=self.canvas_photo)
+            rectangle = (x, y, canvas.winfo_width(), canvas.winfo_height(), key)
+            if rectangle != self.canvas_rectangle:
+                crop = self.backdrop.crop((x, y, x+rectangle[2], y+rectangle[3]))
+                self.canvas_photo = ImageTk.PhotoImage(crop, master=self.root)
+                if self.canvas_image is None:
+                    self.canvas_image = canvas.create_image(0, 0, anchor='nw', tags='scenery')
+                canvas.itemconfigure(self.canvas_image, image=self.canvas_photo)
+                self.canvas_rectangle = rectangle
             canvas.coords(self.canvas_image, canvas.canvasx(0), canvas.canvasy(0))
             canvas.tag_lower(self.canvas_image)
         for item in self.widgets:

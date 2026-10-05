@@ -2,7 +2,7 @@
 
 ## Download and open
 
-Download **E7ShopRefresh-0.1.1.zip**, then extract the whole ZIP into a new
+Download the **E7ShopRefresh ZIP** for your chosen version, then extract it into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
@@ -14,7 +14,7 @@ game screenshots or personal recognition images. Generic English shop-label
 templates are included for automatic recognition. Check the optional release checksum:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.1.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-<version>.zip'
 ```
 
 ## Emulator setup
@@ -118,7 +118,11 @@ It adjusts extra delay or speed-up from ±0.00 to ±0.10 seconds; for very short
 delays the variation is capped at half the baseline. Turning randomization off
 restores fixed timing. ADB calibration always keeps a fixed delay.
 Budget is a whole number, and the spending card shows used/total. Recent sessions
-reload automatically; **Clear** archives all recorded sessions before clearing
+show the latest 25 saved runs; **Export Excel** includes every saved session,
+including older entries. The workbook contains numeric counters, totals and
+available timestamps, outcomes and reasons. Tap delay must be above zero and no
+more than two seconds, including randomized timing. Sessions reload automatically;
+**Clear** archives all recorded sessions before clearing
 them and is disabled during a run. Archives remain in `ShopRefreshHistory/archive`.
 Use **Estimate & calibration help** to expand those details in the compact sidebar.
 The blue-bean header button opens the existing About & Credits dialog.

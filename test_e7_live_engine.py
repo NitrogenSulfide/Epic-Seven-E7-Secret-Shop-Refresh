@@ -99,6 +99,7 @@ class EngineTests(unittest.TestCase):
         app._capture_resumed=False
         app._save_home_failure=Mock(return_value=False)
         app.storage = engine.E7Inventory()
+        app.storage.writeToCSV = Mock()
         app.storage.inventory = {'Covenant bookmark': engine.E7Item(count=0), 'Mystic medal': engine.E7Item(count=0)}
         app.generateOffset = lambda: (0, 0)
         app.navigation = Mock()
@@ -113,7 +114,7 @@ class EngineTests(unittest.TestCase):
             app.tap_sleep = baseline
             with patch.object(engine.random, 'uniform', side_effect=[-variation, variation]) as rng:
                 self.assertAlmostEqual(app.generateTapDelay(), baseline - variation)
-                self.assertAlmostEqual(app.generateTapDelay(), baseline + variation)
+                self.assertAlmostEqual(app.generateTapDelay(), min(2., baseline + variation))
                 self.assertEqual(rng.call_args_list, [unittest.mock.call(-variation, variation)] * 2)
             self.assertEqual(app.tap_sleep, baseline)
 
