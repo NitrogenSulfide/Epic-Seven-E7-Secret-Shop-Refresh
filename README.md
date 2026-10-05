@@ -43,7 +43,8 @@ This real-time clip ends just after the purchase; account details are covered.
 
 Testing is limited to these two clients. Other emulators and methods have not been
 tested. Use English game text and a readable landscape 16:9 game view of at least
-640 × 360. ADB calibration requires a 1920 × 1080 Android display.
+640 × 360. Native STOVE Mouse mode also supports its wider maximized client area.
+ADB calibration requires a 1920 × 1080 Android display.
 
 ## ADB mode · optional
 

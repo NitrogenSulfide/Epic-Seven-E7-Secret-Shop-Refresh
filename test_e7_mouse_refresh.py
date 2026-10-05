@@ -114,6 +114,22 @@ class TransportTests(unittest.TestCase):
         self.sender.assert_called_once_with((-1920,1030),'click',0)
         self.assertEqual(self.mouse.view,self.target.rectangle)
 
+    def test_maximized_native_client_passes_full_mouse_recognition_capture(self):
+        app=E7MouseShopRefresh.__new__(E7MouseShopRefresh)
+        app.mouse=self.mouse
+        self.assertEqual(app.takeScreenshot().shape,(1080,1920))
+        self.assertEqual(self.mouse.view,self.target.rectangle)
+        app.tap(960,540)
+        self.sender.assert_called_once_with((-1920,1030),'click',0)
+
+    def test_wide_client_opt_in_uses_process_identity_not_title(self):
+        mouse=WindowsMouse(self.target,lambda:True,backend=self.backend,
+                           lookup=lambda _:'crosvm.exe',sender=self.sender,
+                           grabber=Mock(return_value=self.image))
+        app=E7MouseShopRefresh.__new__(E7MouseShopRefresh);app.mouse=mouse
+        with self.assertRaises(MouseStopped):app.takeScreenshot()
+        self.sender.assert_not_called()
+
     def test_clear_black_bars_map_back_to_cropped_client(self):
         image = Image.new('RGB',(3840,2019),'black')
         image.paste(Image.new('RGB',(3590,2019),'#808080'),(125,0))

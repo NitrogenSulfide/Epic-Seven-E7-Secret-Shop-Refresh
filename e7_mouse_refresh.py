@@ -57,7 +57,8 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
         revision = getattr(self.mouse,'pause_revision',None)
         image = self.mouse.screenshot()
         self._capture_resumed = isinstance(revision,int) and revision != self.mouse.pause_revision
-        self._rgb,_ = normalize_game_frame(image,bounds=(0,0,image.width,image.height))
+        self._rgb,_ = normalize_game_frame(image,bounds=(0,0,image.width,image.height),
+                                          native_stove=getattr(self.mouse,'native_stove',False) is True)
         return cv2.cvtColor(self._rgb,cv2.COLOR_RGB2GRAY)
 
 

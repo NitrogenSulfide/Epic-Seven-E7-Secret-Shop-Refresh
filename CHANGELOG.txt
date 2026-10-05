@@ -1,3 +1,10 @@
+0.1.2 · Maximized STOVE Mouse fix
+
+• Accepts STOVE's wider maximized client area instead of rejecting it as non-16:9.
+• Keeps the full game view and maps Mouse targets to that same client area.
+• Adds full-capture and hidden-home/purchase/repeated-refresh regressions at wide sizes.
+• ADB/emulator layout requirements and Mouse focus/coverage guards are preserved.
+
 0.1.1 · Administrator restart
 
 • Mouse is the default for new settings; existing saved control modes are preserved.

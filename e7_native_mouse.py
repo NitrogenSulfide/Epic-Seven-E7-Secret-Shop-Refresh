@@ -153,6 +153,7 @@ class WindowsMouse:
             physical_pixel_coordinates()
         self.backend = backend or WindowsCapture()
         self.target = verify_native_target(target,backend=self.backend,lookup=lookup)
+        self.native_stove = lookup(self.target.pid).casefold() == 'epicseven.exe'
         self.active = active
         self.grabber = grabber or ImageGrab.grab
         self.sender = sender or self._send

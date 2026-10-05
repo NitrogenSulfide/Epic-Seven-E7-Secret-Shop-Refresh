@@ -32,7 +32,11 @@ items are available. Repeat at more than one actual game size and wallpaper.
 Confirm Stop and persistent coverage prevent another input, and counters reflect
 completed actions. Do not label screenshot resizing as live resolution testing.
 
-Normal capture supports a landscape 16:9 game view of at least 640 × 360. Resize
+Normal capture supports a landscape 16:9 game view of at least 640 × 360. Mouse
+also accepts wider native STOVE clients up to a 2:1 aspect ratio, identified by
+the verified `EpicSeven.exe` process. Full-capture coordinate tests and shared
+hidden-home, currency and repeated-refresh tests cover 1920 × 1010, 3840 × 2019
+and 1920 × 1035. This exception does not change ADB/emulator validation. Resize
 before starting; changing capture geometry during a session stops input. Google
 desktop window size and its Android framebuffer size are different quantities.
 
