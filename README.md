@@ -6,7 +6,7 @@ Medals, and refresh within your Skystone budget. Windows app by
 
 ## EZ Mode · download, extract, start
 
-**[Download the Windows app — v0.1.1](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.1/E7ShopRefresh-0.1.1.zip)**
+**[Download the Windows app — v0.1.2](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.2/E7ShopRefresh-0.1.2.zip)**
 
 > **Ban risk:** This is unofficial automation. [Smilegate's terms](https://common.game.onstove.com/terms/index?gameType=MOBILE&langCode=en&termsType=1) prohibit unauthorized scripts and macros. Account penalties, including bans, are possible; use at your own risk.
 
@@ -25,7 +25,7 @@ backtick key, usually below Esc) or click **Stop Session**. Start with a small b
 for your first run.
 
 **[Detailed setup / troubleshooting](release/SETUP.md)** ·
-**[What's new in v0.1.1](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.1.1)**
+**[What's new in v0.1.2](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.1.2)**
 
 ## See it work · Mouse on STOVE
 
@@ -77,7 +77,7 @@ runtime data is excluded from release ZIPs.
 
 ## Source and credits
 
-The optional **E7Source-0.1.1.zip** contains the maintained source and rebuild
+The optional **E7Source-0.1.2.zip** contains the maintained source and rebuild
 instructions. Matching GUI/engine source is also supplied with the player package.
 See [build instructions](release/BUILDING.md) and [engine notes](ENGINE.md).
 
