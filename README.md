@@ -4,6 +4,10 @@ Automatically open Epic Seven's Secret Shop, buy Covenant Bookmarks and Mystic
 Medals, and refresh within your Skystone budget. Windows app by
 **NitrogenSulfide (Blue Natto)**, based on Solunium's GPL-3.0 engine.
 
+Hi, I'm Blue Natto. This is a small, unofficial hobby project for fellow Epic Seven
+players. I've mainly tested it on my own PC and laptop, so some setups may still
+need fixes. Feedback and bug reports are welcome—I'll do my best to help when I can.
+
 ## EZ Mode · download, extract, start
 
 **[Download the Windows app — v0.1.2](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.2/E7ShopRefresh-0.1.2.zip)**
