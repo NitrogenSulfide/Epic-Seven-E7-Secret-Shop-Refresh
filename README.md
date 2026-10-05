@@ -10,6 +10,8 @@ Medals, and refresh within your Skystone budget. Windows app by
 
 > **Ban risk:** This is unofficial automation. [Smilegate's terms](https://common.game.onstove.com/terms/index?gameType=MOBILE&langCode=en&termsType=1) prohibit unauthorized scripts and macros. Account penalties, including bans, are possible; use at your own risk.
 
+> **Ban risk:** This is unofficial automation. [Smilegate's terms](https://common.game.onstove.com/terms/index?gameType=MOBILE&langCode=en&termsType=1) prohibit unauthorized scripts and macros. Account penalties, including bans, are possible; use at your own risk.
+
 1. Extract the **whole ZIP**, then open **E7 Secret Shop Refresh.exe**. Python is included.
 2. Open **English Epic Seven** at home or in Secret Shop. Close any popups; hidden idle home controls are handled automatically.
 3. Leave **Mouse** selected and choose your **game window**. Use **Scan** if needed.
