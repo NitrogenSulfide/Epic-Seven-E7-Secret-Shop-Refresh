@@ -19,6 +19,9 @@ from e7_shop_flow import ObservedShopFlow
 from e7_mouse_confirmation import read_confirmation_text,read_ui_text
 from e7_native_mouse import MouseStopped
 from e7_frame import normalize_game_frame
+from e7_timing import validate_timing, sample_tap_delay
+from e7_history import append_session, new_session_metadata
+from e7_session_control import listen_for_stop
 
 class E7Item:
     def __init__(self, image=None, price=0, count=0):
@@ -66,27 +69,12 @@ class E7Inventory:
             sum += value.price * value.count
         return sum
 
-    def writeToCSV(self, duration, skystone_spent):
-        duration = round(duration, 2)
-
-        res_folder = 'ShopRefreshHistory'
-        if not os.path.exists(res_folder):
-            os.makedirs(res_folder)
-
-        history_file = 'ADB_History.csv'
-
-        path = os.path.join(res_folder, history_file)
-        if not os.path.isfile(path):
-            with open(path, 'w', newline='') as file:
-                writer = csv.writer(file)
-                column_name = ['Duration', 'Skystone spent', 'Gold spent']
-                column_name.extend(self.getName())
-                writer.writerow(column_name)
-        with open(path, 'a', newline='') as file:
-            writer = csv.writer(file)
-            data = [duration, skystone_spent, self.getTotalCost()]
-            data.extend(self.getCount())
-            writer.writerow(data)
+    def writeToCSV(self, duration, skystone_spent, session=None):
+        record = dict(session or {})
+        record.update({'Duration': round(duration, 2), 'Skystone spent': skystone_spent,
+                       'Gold spent': self.getTotalCost()})
+        record.update({name: item.count for name, item in self.inventory.items()})
+        append_session(os.path.join('ShopRefreshHistory', 'ADB_History.csv'), record)
 
 class E7ADBShopRefresh(ObservedShopFlow):
     def __init__(self, tap_sleep:float = 0.3, budget=None, ip_port=None, stop_refresh_key='esc', random_offset = False, debug=False, tap_jitter=None, adb_runner=None):
@@ -94,8 +82,12 @@ class E7ADBShopRefresh(ObservedShopFlow):
             if isinstance(budget, bool) or not math.isfinite(float(budget)) or int(budget) != float(budget) or int(budget) < 3:
                 raise ValueError('Skystone budget must be a whole number of at least 3.')
             budget = int(budget)
-        if tap_jitter is not None and (not math.isfinite(tap_jitter) or not 0 <= tap_jitter <= .1):
-            raise ValueError('Timing variation must be between 0 and 0.10 seconds.')
+        tap_sleep, tap_jitter = validate_timing(tap_sleep, tap_jitter)
+        self._stop_requested = threading.Event()
+        self._stop_reason = ''
+        self._session_recorded = False
+        self._session_metadata = new_session_metadata('ADB', debug)
+        self._session_clock = time.monotonic()
         self.loop_active = False
         self.end_of_refresh = True
         self.tap_sleep = tap_sleep
@@ -130,21 +122,62 @@ class E7ADBShopRefresh(ObservedShopFlow):
         self.storage.addItem('mys.png', 'Mystic medal', 280000)
 
     def start(self):
+        if not hasattr(self, '_stop_requested'):
+            self._stop_requested = threading.Event()
+        if not hasattr(self, '_stop_reason'):
+            self._stop_reason = ''
+        if self._stop_requested.is_set():
+            self.record_session('stopped', self._stop_reason)
+            return
         self.loop_active = True
         self.end_of_refresh = False
+        self._session_clock = time.monotonic()
         self.keyboard_thread.start()
         try:
             self.refreshShop()
+        except Exception as error:
+            self.record_session('stopped' if self._stop_requested.is_set() else 'failed',
+                                self._stop_reason or str(error))
+            raise
         finally:
             self.end_of_refresh = True
             self.loop_active = False
             self.keyboard_thread.join(timeout=1)
+            self.record_session('stopped', self._stop_reason or 'Stopped before refreshing.')
+
+    def request_stop(self, reason='Stopped by user.'):
+        self._stop_reason = reason
+        self._stop_requested.set()
+        self.loop_active = False
+
+    def wait(self, seconds):
+        """Interrupt pacing immediately; fake legacy transports retain their sleep stub."""
+        event = getattr(self, '_stop_requested', None)
+        if event is None:
+            time.sleep(seconds)
+        else:
+            event.wait(seconds)
+
+    def record_session(self, outcome, reason='', duration=None):
+        if getattr(self, '_session_recorded', False):
+            return
+        metadata = dict(getattr(self, '_session_metadata', {}))
+        if not metadata:
+            metadata = new_session_metadata('Mouse' if hasattr(self, 'mouse') else 'ADB', self.debug)
+        metadata.update({'Outcome': outcome, 'Reason': reason})
+        if duration is None:
+            duration = max(0, time.monotonic() - getattr(self, '_session_clock', time.monotonic()))
+        self.storage.writeToCSV(duration=duration, skystone_spent=self.refresh_count * 3, session=metadata)
+        self._session_recorded = True
 
     #threads
     def checkKeyPress(self):
         while(self.loop_active and not self.end_of_refresh):
             if keyboard.is_pressed(self.stop_refresh_key):
-                self.loop_active = False
+                if hasattr(self, '_stop_requested'):
+                    self.request_stop('Stop key pressed.')
+                else:
+                    self.loop_active = False
                 print('Shop refresh terminated!', flush=True)
                 return
             # Yield the GIL/CPU so keyboard hooks and foreground typing can run.
@@ -176,7 +209,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
         #refresh loop
         while self.loop_active:
 
-            time.sleep(sliding_time)
+            self.wait(sliding_time)
             brought = set()
 
             if not self.loop_active: break
@@ -203,7 +236,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
             xoff, yoff = self.generateSwipeOffset()
             self.swipe(x1+xoff,y1+yoff,x1+xoff,y2+yoff)
             #wait for action to complete
-            time.sleep(1)
+            self.wait(1)
 
             if not self.loop_active: break
             #look at shop (page 2)
@@ -238,9 +271,11 @@ class E7ADBShopRefresh(ObservedShopFlow):
         self.end_of_refresh = True
         self.loop_active = False
         self.reportLiveStats()
-        if self.refresh_count*3 != self.budget: print('100%') 
+        completed = self.budget is not None and self.refresh_count >= self.budget // 3
+        if completed: print('100%')
         duration = time.time()-start_time
-        self.storage.writeToCSV(duration=duration, skystone_spent=self.refresh_count*3)
+        self.record_session('completed' if completed else 'stopped',
+                            'Skystone budget reached.' if completed else getattr(self, '_stop_reason', '') or 'Session stopped.', duration)
         self.printResult()
     
     #helper function
@@ -329,11 +364,8 @@ class E7ADBShopRefresh(ObservedShopFlow):
 
     def generateTapDelay(self):
         """Vary only tap pacing; retain the configured baseline and fixed calibration."""
-        if not self.random_offset or self.debug:
-            return self.tap_sleep
-        selected = getattr(self, 'tap_jitter', None)
-        variation = min(self.tap_sleep * 0.10, 0.05) if selected is None else min(selected, self.tap_sleep * .5)
-        return self.tap_sleep + random.uniform(-variation, variation)
+        return sample_tap_delay(self.tap_sleep, getattr(self, 'tap_jitter', None),
+                                self.random_offset, self.debug, random.uniform)
 
     def generateOffset(self):
         if self.random_offset:
@@ -386,7 +418,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
         if not self.loop_active:
             return False
         self.tap(x+xoff,y+yoff)
-        time.sleep(self.generateTapDelay())
+        self.wait(self.generateTapDelay())
 
         #confirm
         x = self.screenwidth * 0.5677
@@ -399,9 +431,9 @@ class E7ADBShopRefresh(ObservedShopFlow):
         if not self.loop_active:
             return False
         self.tap(x+xoff,y+yoff)
-        time.sleep(self.generateTapDelay())
+        self.wait(self.generateTapDelay())
         #loading sleep
-        time.sleep(1)
+        self.wait(1)
         return True
     
     def _calibration_clickRefresh(self):
@@ -418,7 +450,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
         if not self.loop_active:
             return False
         self.tap(x+xoff,y+yoff)
-        time.sleep(self.generateTapDelay())
+        self.wait(self.generateTapDelay())
 
         if not self.loop_active: return False
         #confirm
@@ -432,7 +464,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
         if not self.loop_active:
             return False
         self.tap(x+xoff,y+yoff)
-        time.sleep(self.generateTapDelay())
+        self.wait(self.generateTapDelay())
         return True
 
 def getDevices(print_output):
@@ -473,13 +505,44 @@ def run_refresh_engine(**settings):
         print('E7GUI_MOUSE_STOPPED '+json.dumps({'reason':str(error)}),flush=True)
         if app is not None:
             app.reportLiveStats()
-            app.storage.writeToCSV(time.time()-started,app.refresh_count*3)
+            app.record_session('failed', str(error))
             app.printResult()
         return False
     return True
 
 
+def run_gui_session(arguments):
+    """Structured startup leaves stdin available for graceful Stop in ADB mode."""
+    import argparse
+    from e7_engine_protocol import validate_settings
+    parser = argparse.ArgumentParser(description='GUI-controlled ADB session')
+    parser.add_argument('--gui-session', required=True)
+    args = parser.parse_args(arguments)
+    app = None
+    try:
+        data = json.loads(args.gui_session)
+        if not isinstance(data, dict) or any(type(data.get(key)) is not bool for key in ('random_offset', 'debug')):
+            raise ValueError('Invalid GUI session settings.')
+        settings = validate_settings(data['device'], data['budget'], data['tap_sleep'], data['stop_key'],
+                                     data['random_offset'], data['debug'], data['tap_jitter'])
+        app = E7ADBShopRefresh(tap_sleep=settings.tap_sleep, budget=settings.budget,
+                              ip_port=settings.device, stop_refresh_key=settings.stop_key,
+                              random_offset=settings.random_offset, debug=settings.debug, tap_jitter=settings.tap_jitter)
+        threading.Thread(target=listen_for_stop, args=(sys.stdin, app), daemon=True).start()
+        print('E7GUI_STARTED', flush=True)
+        app.start()
+        return 0
+    except NavigationSetupRequired as error:
+        print('E7GUI_SETUP_REQUIRED ' + str(error), flush=True)
+        return 3
+    except (KeyError, TypeError, ValueError, RuntimeError, OSError, subprocess.SubprocessError) as error:
+        print('E7GUI_STOPPED ' + json.dumps({'reason': str(error)}), flush=True)
+        return 0 if app is not None and app._stop_requested.is_set() else 3
+
+
 if __name__ == '__main__':
+    if '--gui-session' in sys.argv:
+        raise SystemExit(run_gui_session(sys.argv[1:]))
     if sys.argv[1:2] == ['--check-mouse-home']:
         import argparse
         from pathlib import Path
@@ -545,7 +608,7 @@ if __name__ == '__main__':
         print('Private Secret Shop references prepared and checked offline.')
         sys.exit(0)
     if sys.argv[1:] == ['--verify']:
-        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; window mouse v6; tap timing v2; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
+        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; window mouse v6; tap timing v2; gui session v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
         sys.exit(0)
     if sys.argv[1:2] == ['--check-navigation-frame']:
         import argparse

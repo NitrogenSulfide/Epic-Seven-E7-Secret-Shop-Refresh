@@ -332,7 +332,7 @@ class ObservedShopFlow:
                     print('Navigation: Revealing the recognized home screen controls.',flush=True)
                     revealed = True
                     self.tap(960,540)
-                    time.sleep(.5)
+                    self.wait(.5)
                     continue
             elif not revealed:
                 # Use one default reveal attempt, independent of wallpaper
@@ -353,10 +353,10 @@ class ObservedShopFlow:
                         print('Navigation: No home controls recognized; clicking once to reveal them.',flush=True)
                         revealed = True
                         self.tap(960,540)
-                        time.sleep(.5)
+                        self.wait(.5)
                         continue
             print('Navigation: Looking for the home Secret Shop menu. No shop action sent.',flush=True)
-            time.sleep(.5)
+            self.wait(.5)
         if not self.loop_active:
             return False
         saved=self._save_home_failure(revealed)
@@ -395,7 +395,7 @@ class ObservedShopFlow:
     def _wait_for_shop(self):
         deadline = time.monotonic()+8
         while self.loop_active and time.monotonic()<deadline:
-            time.sleep(.25)
+            self.wait(.25)
             if not self.loop_active:
                 return False
             frame = self.takeScreenshot()
@@ -475,7 +475,7 @@ class ObservedShopFlow:
         text_rejected = False
         visibility_rechecks = 0
         while self.loop_active and time.monotonic()<deadline:
-            time.sleep(self.generateTapDelay())
+            self.wait(self.generateTapDelay())
             if not self.loop_active:
                 return False
             self.takeScreenshot()
@@ -530,7 +530,7 @@ class ObservedShopFlow:
             raise MouseStopped(f'The {operation} confirmation was not recognized. No confirmation click sent.'+detail)
         deadline = time.monotonic()+5
         while self.loop_active and time.monotonic()<deadline:
-            time.sleep(self.generateTapDelay())
+            self.wait(self.generateTapDelay())
             if not self.loop_active:
                 return False
             frame = self.takeScreenshot()

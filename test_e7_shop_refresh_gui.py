@@ -137,6 +137,30 @@ prompt("press enter to exit...", "")
 
 
 class GuiTests(unittest.TestCase):
+    def test_export_includes_all_rows_beyond_recent_view(self):
+        self.history.write_text('Duration,Skystone spent,Gold spent,Covenant bookmark,Mystic medal\n' + '10,3,0,0,0\n'*30)
+        self.app.refresh_history()
+        self.assertEqual(len(self.app.history.get_children()), 25)
+        destination = self.root / 'all-sessions.xlsx'
+        with patch.object(gui.filedialog, 'asksaveasfilename', return_value=str(destination)), patch.object(gui, 'export_sessions') as export:
+            self.app._export_history()
+        self.assertEqual(len(export.call_args.args[1]), 30)
+        self.assertIn('all 30', self.app.history_notice.get())
+
+    def test_structured_adb_stop_sends_stop_without_immediate_termination(self):
+        self.start_fake(stall=True)
+        self.pump_until(lambda: self.app._session_started)
+        self.app._graceful_stop = True
+        with patch.object(self.app.process_tree, 'stop') as terminate, patch.object(self.app.process.stdin, 'write') as write:
+            self.app.stop_refresh()
+        write.assert_called_once_with('STOP\n')
+        terminate.assert_not_called()
+
+    def test_main_header_has_version_github_and_bug_buttons(self):
+        self.assertIn(gui.APP_VERSION, self.app.version_button.cget('text'))
+        self.assertIsNotNone(self.app.github_button)
+        self.assertIsNotNone(self.app.bug_button)
+
     def test_spending_card_tracks_budget_without_rewriting_session_total(self):
         self.app.budget.set('100')
         self.assertEqual(self.app.spent_display.get(),'0 / 100')
@@ -472,10 +496,10 @@ class GuiTests(unittest.TestCase):
         self.assertIn(e7_about.TESTED_CLIENTS, quickstart)
         self.assertNotIn('Friendship', quickstart)
         self.assertNotIn('unavailable', dialog.readers[titles.index('Release notes')].get('1.0', 'end'))
-        self.assertTrue(dialog.github_image)
-        self.assertEqual(dialog.github_button.cget('text'), '')
-        with patch.object(e7_about.webbrowser, 'open') as link:
-            dialog.github_button.invoke()
+        self.assertFalse(hasattr(dialog, 'github_button'))
+        self.assertEqual(self.app.github_button.cget('text'), 'GitHub')  # Empty fixture asset folder.
+        with patch.object(gui.webbrowser, 'open') as link:
+            self.app.github_button.invoke()
             link.assert_called_once_with('https://github.com/NitrogenSulfide')
         dialog.close()
 

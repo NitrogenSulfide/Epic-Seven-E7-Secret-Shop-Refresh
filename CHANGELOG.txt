@@ -1,3 +1,19 @@
+0.1.3-rc1 · Experimental session and interface cleanup
+
+• Adds a By Blue Natto subtitle and clickable version number under Secret Shop.
+• Moves the blue GitHub profile button to the header and adds a blue bug-report
+  button with version/control mode prefilled. No private logs are attached.
+• Enlarges the timing slider. Tap delays must be above zero and at most two
+  seconds; randomized samples also respect the two-second cap.
+• Records session timestamps, control mode, outcome and stop/failure reason.
+  Legacy history survives migration, with the original CSV preserved as a backup.
+• Exports every saved session to Excel with numeric counters and totals.
+• Matching Mouse and ADB engines accept cooperative Stop, interrupt pacing
+  waits and record partial sessions. Older ADB engines keep the compatibility path.
+• Reduces scenery resize/theme work and skips redraws for window moves.
+• Splits settings/protocol, timing, session persistence and links into modules.
+• Friendship purchases and red-equipment detection are not added in this branch.
+
 0.1.2 · Maximized STOVE Mouse fix
 
 • Accepts STOVE's wider maximized client area instead of rejecting it as non-16:9.

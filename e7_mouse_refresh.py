@@ -17,6 +17,8 @@ from e7_windows_capture import GameWindow, game_view
 from e7_frame import normalize_game_frame
 from e7_mouse_confirmation import read_confirmation_text, read_ui_text, confirmation_matches
 from e7_shop_navigation import create_navigator
+from e7_timing import validate_timing
+from e7_session_control import listen_for_stop
 
 
 from e7_shop_flow import (home_menu_target,home_icon_target,native_home_control_target,hidden_home_matches,
@@ -36,16 +38,7 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
         self.read_confirmation_text = read_confirmation_text
         self.read_navigation_text = lambda rgb:read_ui_text(rgb,(0,180,420,920))
         super().__init__(**settings)
-
-
-    def request_stop(self):
-        self._stop_requested.set()
-        self.loop_active = False
-
-
-    def start(self):
-        if not self._stop_requested.is_set():
-            super().start()
+        self._session_metadata['Control mode'] = 'Mouse'
 
 
     def checkScreenDimension(self):
@@ -115,10 +108,12 @@ def run_mouse_session(arguments):
     parser.add_argument('--random-offset',choices=('yes','no'),required=True)
     parser.add_argument('--tap-jitter',type=float,default=None)
     args = parser.parse_args(arguments)
-    if not math.isfinite(args.budget) or args.budget < 3 or not math.isfinite(args.delay) or args.delay < 0:
+    if not math.isfinite(args.budget) or args.budget < 3:
         parser.error('Invalid budget or delay')
-    if args.tap_jitter is not None and (not math.isfinite(args.tap_jitter) or not 0 <= args.tap_jitter <= .1):
-        parser.error('Timing variation must be between 0 and 0.10 seconds.')
+    try:
+        validate_timing(args.delay, args.tap_jitter)
+    except (TypeError, ValueError) as error:
+        parser.error(str(error))
     if args.stop_key != 'esc' and (len(args.stop_key)!=1 or args.stop_key not in "0123456789abcdefghijklmnopqrstuvwxyz/.,';[]`"):
         parser.error('Invalid Stop key')
     app = None; started = time.time()
@@ -136,20 +131,9 @@ def run_mouse_session(arguments):
         print('E7GUI_MOUSE_STOPPED '+json.dumps({'reason':str(error)}),flush=True)
         if app is not None:
             app.reportLiveStats()
-            app.storage.writeToCSV(time.time()-started,app.refresh_count*3)
+            app.record_session('failed', str(error))
             app.printResult()
         return 0
     except (ValueError,RuntimeError,OSError,subprocess.SubprocessError) as error:
         print('E7GUI_MOUSE_STOPPED '+json.dumps({'reason':f'Mouse session stopped. {error}'}),flush=True)
         return 3
-
-
-def listen_for_stop(stream,app):
-    """The owning GUI sends STOP before falling back to job termination."""
-    try:
-        for line in stream:
-            if line.strip() == 'STOP':
-                break
-        app.request_stop()  # EOF also means the controlling GUI went away.
-    except (OSError,ValueError):
-        app.request_stop()
