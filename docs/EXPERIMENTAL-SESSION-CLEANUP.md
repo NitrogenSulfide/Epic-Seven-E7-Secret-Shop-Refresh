@@ -1,7 +1,26 @@
-# Experimental session cleanup: 0.1.3-rc1
+# Experimental session cleanup: 0.1.3-rc2
 
 Branch: `work/session-performance-cleanup`, based on `5c61883`.
 This is a local trial, not a published release or an installed-runtime update.
+
+## Corrections after the first trial
+
+The repository's GitHub Issues setting was disabled, causing the bug-report
+URL to return 404. Issues was enabled on 2026-10-05, and the anonymous report
+URL was verified to return HTTP 200 after redirecting to GitHub sign-in.
+No issue or release was submitted.
+
+Clam ignored the first trial's `sliderthickness` configuration. The timing
+control now uses an image element with a real 32-pixel thumb/trough height
+at 100% scale, multiplied by the app's DPI scale. Synthetic Tk pointer events
+on an unshown desktop verified dragging from 0.03 to 0.08 seconds.
+
+The coffee button now has five pixels of left padding, west alignment and
+ten pixels between image and text at 100% scale. The icon moved left within
+the button, while the label keeps its position. Its artwork is unchanged.
+
+The corrected source passed 120 GUI/window tests and all 22 layout cases.
+Final light/dark previews are under `scratch/session-cleanup/rc2-final-preview`.
 
 ## Changes to try
 
