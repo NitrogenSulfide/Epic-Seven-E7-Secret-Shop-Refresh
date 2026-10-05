@@ -23,7 +23,7 @@ Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-0.1.1.zip'
 game in STOVE or an emulator, including Google Play Games Developer Emulator.
 
 Use [Google Play Games on PC Developer Emulator](https://developer.android.com/games/playgames/emulator),
-English Epic Seven and a **landscape 16:9 game view of at least 640 × 360**. ADB calibration requires 1920 × 1080. STOVE and visible emulator windows can also use Mouse mode;
+English Epic Seven and a **landscape 16:9 game view of at least 640 × 360**. Native STOVE Mouse mode also accepts its wider maximized client area. ADB calibration requires 1920 × 1080. STOVE and visible emulator windows can also use Mouse mode;
 other emulators are unverified. Different home-screen artwork is fine.
 Enable/authorize ADB debugging in the emulator. ADB is the connection that lets
 the tool interact with the game while leaving your PC mouse free.

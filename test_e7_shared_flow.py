@@ -47,7 +47,7 @@ def dialog_image(operation):
     return rgb
 
 class SharedFlowTests(unittest.TestCase):
-    def make_app(self,mode,width=1920,wallpaper=None,items=False):
+    def make_app(self,mode,width=1920,wallpaper=None,items=False,height=None):
         app=(E7ADBShopRefresh if mode=='adb' else E7MouseShopRefresh).__new__(E7ADBShopRefresh if mode=='adb' else E7MouseShopRefresh)
         app.loop_active=True;app.end_of_refresh=False;app.debug=False;app.budget=6
         app.tap_sleep=.3;app.random_offset=True;app.tap_jitter=.1
@@ -68,7 +68,7 @@ class SharedFlowTests(unittest.TestCase):
             if screen=='shop' and items:
                 for name,y in (('Covenant bookmark',220),('Mystic medal',470)):
                     if name in state['bought']:rgb[y:y+115,780:1030]=30;rgb[y+25:y+105,1570:1850]=30
-            return Image.fromarray(rgb).resize((width,round(width*9/16)),Image.Resampling.LANCZOS)
+            return Image.fromarray(rgb).resize((width,height or round(width*9/16)),Image.Resampling.LANCZOS)
         def click(x,y):
             screen=state['screen'];state['events'].append((screen,x,y))
             if screen=='hidden':state['screen']='home'
@@ -97,8 +97,29 @@ class SharedFlowTests(unittest.TestCase):
             app._adb_runner=Mock(side_effect=runner)
         else:
             app.mouse=Mock();app.mouse.pause_revision=0;app.mouse.screenshot.side_effect=image
+            app.mouse.native_stove=mode=='mouse-stove'
             app.mouse.click.side_effect=click;app.mouse.drag.side_effect=lambda *_args,**_kwargs:state['events'].append(('drag',))
         return app,state
+
+    def test_native_maximized_hidden_home_purchases_and_repeated_refreshes(self):
+        for width,height in ((1920,1010),(3840,2019),(1920,1035)):
+            with self.subTest(size=(width,height)):
+                wallpaper=np.random.default_rng(width+height).integers(10,65,(1080,1920,3),dtype=np.uint8)
+                app,state=self.make_app('mouse-stove',width,wallpaper,items=True,height=height)
+                with patch('e7_shop_flow.hidden_home_matches',return_value=False),patch('e7_shop_flow.read_ui_text',return_value=dict(text='',words=[])),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
+                    app.refreshShop()
+                self.assertEqual(state['refreshes'],2)
+                self.assertEqual([item.count for item in app.storage.inventory.values()],[3,3])
+                self.assertEqual([event[0] for event in state['events'][:2]],['hidden','home'])
+                app._save_confirmation_failure.assert_not_called()
+
+    def test_native_layout_exception_still_rejects_unsupported_shapes(self):
+        for size in ((500,300),(1920,800),(1080,1920)):
+            with self.subTest(size=size),self.assertRaises(MouseStopped):
+                normalize_game_frame(Image.new('RGB',size),native_stove=True)
+        for enabled in (False,None):
+            with self.subTest(native_stove=enabled),self.assertRaises(MouseStopped):
+                normalize_game_frame(Image.new('RGB',(1920,1010)),native_stove=enabled)
 
     def test_hidden_ui_and_two_consecutive_refreshes_across_transports_and_seeded_sizes(self):
         widths=[800,1238,1920]+[random.Random(seed).randint(1000,2600) for seed in (7,41)]

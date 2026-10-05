@@ -1,7 +1,7 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.1.1** adds a guided administrator restart to the first release.
-Players need only **E7ShopRefresh-0.1.1.zip**.
+Version **0.1.2** fixes Mouse startup with maximized native STOVE clients.
+Players need only **E7ShopRefresh-0.1.2.zip**.
 New settings start in Mouse mode; your existing saved mode is preserved.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
