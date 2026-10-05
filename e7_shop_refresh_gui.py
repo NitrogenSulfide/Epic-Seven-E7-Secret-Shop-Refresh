@@ -299,6 +299,33 @@ class RefreshGui(tk.Tk):
         self.minsize(min(self._dp(1100), width), min(self._dp(700), height))
         self.geometry(f"{width}x{height}+{left + (screen_width-width)//2}+{top + margin}")
 
+    def _build_timing_slider_style(self, style, dark, trough, border):
+        # Clam's stock slider ignores sliderthickness. Image elements establish
+        # a real 32px minimum height for both the thumb and its trough.
+        if not hasattr(self, '_timing_slider_palettes'):
+            self._timing_slider_palettes = {}
+        prefix = 'DarkTapTiming' if dark else 'LightTapTiming'
+        if prefix not in self._timing_slider_palettes:
+            width, height, edge = self._dp(26), self._dp(32), self._dp(2)
+            images = []
+            for color, outline, grip in (('#60a5fa' if dark else '#2563eb', '#1d4ed8', '#ffffff'),
+                                          ('#3b82f6', '#1d4ed8', '#ffffff'),
+                                          ('#475569' if dark else '#cbd5e1', border, '#94a3b8')):
+                image = tk.PhotoImage(master=self, width=width, height=height)
+                image.put(outline, to=(0, 0, width, height))
+                image.put(color, to=(edge, edge, width-edge, height-edge))
+                for offset in (-3, 3):
+                    x = width//2 + round(offset*self.ui_scale)
+                    image.put(grip, to=(x, self._dp(8), x+self._dp(1), height-self._dp(8)))
+                images.append(image)
+            self._timing_slider_palettes[prefix] = images
+            style.element_create(prefix+'.slider', 'image', images[0], ('disabled', images[2]),
+                                 ('active', images[1]))
+        style.layout('TapTiming.Horizontal.TScale', [('Horizontal.Scale.trough', {'sticky': 'nswe',
+            'children': [(prefix+'.slider', {'side': 'left', 'sticky': 'ns'})]})])
+        style.configure('TapTiming.Horizontal.TScale', troughcolor=trough, bordercolor=border,
+                        lightcolor=border, darkcolor=border)
+
     def _build_checkbox_style(self, style):
         side = self._dp(20)
         border = self._dp(2)
@@ -350,6 +377,7 @@ class RefreshGui(tk.Tk):
         for name in ('TButton', 'Treeview.Heading'):
             style.configure(name, background=active, foreground=fg, bordercolor=border, lightcolor=border, darkcolor=border)
             style.map(name, background=[('active', border)], foreground=[('disabled', muted)])
+        style.configure('Coffee.TButton', space=self._dp(10), anchor='w')
         style.configure('Accent.TButton', background='#2563eb', foreground='#ffffff')
         style.map('Accent.TButton', background=[('disabled', active), ('active', '#1d4ed8')], foreground=[('disabled', muted), ('!disabled', '#ffffff')])
         style.map('Large.TCheckbutton', foreground=[('disabled', muted)], background=[('active', bg)])
@@ -370,10 +398,7 @@ class RefreshGui(tk.Tk):
             style.configure(name, background=active, troughcolor=bg, arrowcolor=fg, bordercolor=border, lightcolor=border, darkcolor=border)
             style.map(name, background=[('active', border), ('!disabled', active)], arrowcolor=[('disabled', muted), ('!disabled', fg)])
         style.configure('Horizontal.TProgressbar', troughcolor=active, bordercolor=border)
-        style.configure('Horizontal.TScale', background='#60a5fa' if dark else '#2563eb',
-                        troughcolor=active, bordercolor=border, lightcolor=border, darkcolor=border,
-                        sliderlength=self._dp(26), sliderthickness=self._dp(24))
-        style.map('Horizontal.TScale', background=[('disabled', muted), ('active', '#3b82f6')])
+        self._build_timing_slider_style(style, dark, active, border)
         self.log.configure(bg=field, fg=fg, insertbackground=fg, selectbackground='#2563eb', selectforeground='#ffffff')
         for option, color in (('background', field), ('foreground', fg), ('selectBackground', '#2563eb'), ('selectForeground', '#ffffff')):
             self.option_add('*TCombobox*Listbox.' + option, color)
@@ -585,6 +610,7 @@ class RefreshGui(tk.Tk):
         header_actions.grid(row=1,column=1,sticky='e')
         self.coffee_image = coffee_icon(self, dp(20))
         self.coffee_button = ttk.Button(header_actions, text='Buy me a coffee', image=self.coffee_image or '', compound='left',
+            style='Coffee.TButton', padding=(dp(5), dp(6), dp(12), dp(6)),
             command=lambda: webbrowser.open('https://ko-fi.com/bluenatto'), cursor='hand2', takefocus=True)
         self.coffee_button.pack(side='left', padx=(0, dp(8)))
         self.github_button = ttk.Button(header_actions, text='GitHub', padding=dp(6), cursor='hand2',
@@ -666,7 +692,8 @@ class RefreshGui(tk.Tk):
         timing.grid(row=8, column=0, sticky='ew', pady=(0, dp(5)))
         timing.columnconfigure(0, weight=1)
         ttk.Label(timing, textvariable=self.tap_jitter_text).grid(row=0, column=0, sticky='w')
-        self.tap_jitter_slider = ttk.Scale(timing, from_=0, to=0.1, variable=self.tap_jitter, command=self._update_tap_jitter)
+        self.tap_jitter_slider = ttk.Scale(timing, from_=0, to=0.1, variable=self.tap_jitter, command=self._update_tap_jitter,
+                                          style='TapTiming.Horizontal.TScale')
         self.tap_jitter_slider.grid(row=1, column=0, sticky='ew', pady=(dp(2), 0))
         self.tap_jitter_slider.bind('<Left>', lambda _event: self._step_tap_jitter(-0.01))
         self.tap_jitter_slider.bind('<Right>', lambda _event: self._step_tap_jitter(0.01))
