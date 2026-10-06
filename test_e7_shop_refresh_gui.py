@@ -137,6 +137,32 @@ prompt("press enter to exit...", "")
 
 
 class GuiTests(unittest.TestCase):
+    def test_trace_checkbox_is_separate_persisted_and_locked_during_session(self):
+        self.assertFalse(self.app.trace_input.get())
+        self.app.trace_check.invoke()
+        self.assertTrue(self.app._settings().trace_input)
+        self.assertFalse(self.app.debug_mode.get())
+        self.app.trace_input.set(False)
+        self.app._load_config()
+        self.assertTrue(self.app.trace_input.get())
+        for mode in ('Mouse', 'ADB'):
+            self.app.control_mode.set(mode)
+            self.app._set_controls(True)
+            self.assertTrue(self.app.trace_check.instate(['disabled']))
+            self.app._set_controls(False)
+            self.assertFalse(self.app.trace_check.instate(['disabled']))
+
+    def test_split_trace_event_is_formatted_once_and_copied(self):
+        from e7_input_trace import TRACE_PREFIX
+        message = TRACE_PREFIX+json.dumps(dict(kind='delay', action='refresh dialog', baseline_ms=300,
+                                               requested_ms=323, elapsed_ms=325, interrupted=False))+'\n'
+        self.app._handle_output(message[:21])
+        self.app._handle_output(message[21:])
+        self.assertEqual(self.app.raw_output.count('[Timing] refresh dialog'), 1)
+        with patch.object(self.app, 'clipboard_clear'), patch.object(self.app, 'clipboard_append') as copy:
+            self.app._copy_diagnostics()
+        self.assertIn('requested=323.0ms, measured=325.0ms', copy.call_args.args[0])
+
     def test_export_includes_all_rows_beyond_recent_view(self):
         self.history.write_text('Duration,Skystone spent,Gold spent,Covenant bookmark,Mystic medal\n' + '10,3,0,0,0\n'*30)
         self.app.refresh_history()

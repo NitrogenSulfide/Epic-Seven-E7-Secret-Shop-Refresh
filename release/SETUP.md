@@ -1,5 +1,18 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
+## Optional detailed diagnostics (0.1.3 trial)
+
+In **Diagnostics**, enable **Log click coordinates and timing** before starting
+to see applied click offsets, mapped screen/device coordinates, sampled tap
+pacing and measured waits. It works in Mouse and ADB, independently of calibration.
+Cycle totals include scanning, purchases, settling and pauses; initial/final
+scans and interrupted intervals are labelled separately. Coordinates labelled
+1920 × 1080 refer to the recognition frame, not your monitor resolution.
+
+Use the trial's matching bundled engine. Detailed events and saved logs have
+size limits; reaching one does not stop the session. Logs stay local. **Copy
+Diagnostics** copies the retained output for a report you choose to share.
+
 ## Download and open
 
 Download the **E7ShopRefresh ZIP** for your chosen version, then extract it into a new
