@@ -32,6 +32,7 @@ finally { Pop-Location }
 $sourceFiles = @('E7ADBShopRefresh.py', 'e7_shop_navigation.py', 'e7_mouse_analysis.py', 'e7_mouse_refresh.py', 'e7_native_mouse.py', 'e7_windows_capture.py', 'e7_mouse_confirmation.py', 'mouse_confirmation_ocr.ps1', 'prepare_navigation_references.py', 'test_e7_shop_navigation.py', 'test_e7_live_engine.py', 'test_e7_mouse_refresh.py', 'engine-build-requirements.txt', 'build_engine_release.ps1', 'ENGINE.md', 'VERSION', 'LICENSE')
 $sourceFiles += @('e7_shop_flow.py', 'e7_frame.py', 'test_e7_shared_flow.py')
 $sourceFiles += @('e7_engine_protocol.py', 'e7_timing.py', 'e7_history.py', 'e7_session_control.py', 'e7_links.py', 'test_e7_session_cleanup.py')
+$sourceFiles += @('e7_input_trace.py', 'test_e7_input_trace.py')
 foreach ($name in $sourceFiles) { Copy-Item -LiteralPath (Join-Path $repository $name) -Destination (Join-Path $staging $name) }
 Copy-Item -LiteralPath (Join-Path $repository 'ENGINE.md') -Destination (Join-Path $staging 'README.md')
 Copy-Item -LiteralPath (Join-Path $repository 'release/SETUP.md') -Destination (Join-Path $staging 'SETUP.md')

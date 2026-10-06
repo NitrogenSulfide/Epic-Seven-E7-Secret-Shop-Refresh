@@ -180,6 +180,9 @@ class WindowsMouse:
             if visible and target_visible:
                 if deadline is not None:
                     print('E7GUI_MOUSE_RESUMED',flush=True)
+                    trace = getattr(self, 'input_trace', None)
+                    if trace is not None:
+                        trace.resume()
                     if action:
                         raise MouseRecheckRequired('Focus or target visibility changed before input. Rechecking the current screen before another action.')
                 return current
@@ -194,6 +197,9 @@ class WindowsMouse:
             if deadline is None:
                 self.pause_revision += 1
                 print('E7GUI_MOUSE_PAUSED '+json.dumps({'reason':reason}),flush=True)
+                trace = getattr(self, 'input_trace', None)
+                if trace is not None:
+                    trace.pause()
                 details=getattr(self.backend,'visibility_details',None)
                 if isinstance(details,dict):
                     print('E7GUI_MOUSE_COVERAGE '+json.dumps(details),flush=True)
@@ -244,6 +250,7 @@ class WindowsMouse:
         point = self._point(x,y)
         self.guard(action=True,point=point)
         self.sender(point,'click',0)
+        return point
 
     def move(self,x,y):
         point = self._point(x,y)

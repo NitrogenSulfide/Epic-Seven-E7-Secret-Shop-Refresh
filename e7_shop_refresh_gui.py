@@ -21,6 +21,7 @@ from tkinter import font as tkfont, messagebox, ttk, filedialog
 from e7_process import launch_engine
 from e7_engine_protocol import RunSettings, validate_settings, EngineProtocol
 from e7_history import history_mode, read_sessions, export_sessions
+from e7_input_trace import BoundedSessionLog, format_trace_line
 from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon, avatar_icon, coffee_icon, github_icon, bug_icon
 from e7_links import PROFILE, release_url, bug_report_url
 from e7_about import AboutDialog
@@ -178,6 +179,7 @@ class RefreshGui(tk.Tk):
         self.device_labels = {}
         self.connected_devices = []
         self.debug_mode = tk.BooleanVar(value=False)
+        self.trace_input = tk.BooleanVar(value=False)
         self.random_offset = tk.BooleanVar(value=True)
         self.tap_jitter = tk.DoubleVar(value=0.03)
         self.tap_jitter_text = tk.StringVar()
@@ -846,7 +848,16 @@ class RefreshGui(tk.Tk):
         scroll = ttk.Scrollbar(diagnostics_tab, command=self.log.yview)
         scroll.grid(row=1, column=1, sticky="ns")
         self.log.configure(yscrollcommand=scroll.set)
-        ttk.Button(diagnostics_tab, text="Copy Diagnostics", command=self._copy_diagnostics).grid(row=2, column=0, sticky="e", pady=(6, 0))
+        diagnostics_actions = ttk.Frame(diagnostics_tab)
+        diagnostics_actions.grid(row=2, column=0, columnspan=2, sticky='ew', pady=(6, 0))
+        diagnostics_actions.columnconfigure(0, weight=1)
+        self.trace_check = ttk.Checkbutton(diagnostics_actions, text='Log click coordinates and timing',
+                                          variable=self.trace_input, command=self._save_trace_preference,
+                                          style='Large.TCheckbutton')
+        self.trace_check.grid(row=0, column=0, sticky='w')
+        self.settings_widgets.append(self.trace_check)
+        ThemeHint(self.trace_check, lambda: 'For the next session, in Mouse or ADB. Detailed local logs are size-limited. Calibration is separate.')
+        ttk.Button(diagnostics_actions, text="Copy Diagnostics", command=self._copy_diagnostics).grid(row=0, column=1, sticky="e")
         self.history_header = history_header = ttk.Frame(right)
         history_header.grid(row=5, column=0, sticky="ew", pady=(16, 6))
         history_header.columnconfigure(0, weight=1)
@@ -904,6 +915,7 @@ class RefreshGui(tk.Tk):
             parser = configparser.ConfigParser()
             parser.read(GUI_CONFIG_FILE)
             self.sound_enabled.set(parser.getboolean("GUI", "sound_enabled", fallback=True))
+            self.trace_input.set(parser.getboolean('GUI', 'trace_input', fallback=False))
             self.dark_mode.set(parser.getboolean("GUI", "dark_mode", fallback=False))
             self.credits_seen.set(parser.getboolean("GUI", "credits_seen", fallback=False))
             self.credits_on_startup.set(parser.getboolean("GUI", "show_credits_on_startup", fallback=False))
@@ -925,6 +937,7 @@ class RefreshGui(tk.Tk):
         if not parser.has_section("GUI"):
             parser.add_section("GUI")
         parser["GUI"]["sound_enabled"] = str(self.sound_enabled.get())
+        parser['GUI']['trace_input'] = str(self.trace_input.get())
         parser["GUI"]["dark_mode"] = str(self.dark_mode.get())
         parser["GUI"]["credits_seen"] = str(self.credits_seen.get())
         parser["GUI"]["show_credits_on_startup"] = str(self.credits_on_startup.get())
@@ -945,6 +958,13 @@ class RefreshGui(tk.Tk):
             self.setting_notice.set("Sound changed for this session; preference could not be saved.")
             self._append_log(f"Sound preference save failed: {exc}\n")
 
+    def _save_trace_preference(self):
+        try:
+            self._write_sound_preference()
+            self._append_log('Detailed input logging '+('enabled' if self.trace_input.get() else 'disabled')+' for the next session.\n')
+        except (OSError, configparser.Error) as exc:
+            self._append_log(f'Logging preference could not be saved: {exc}\n')
+
     def _capture_stop_key(self, event):
         if self.stop_key_entry.instate(["disabled"]):
             return "break"
@@ -964,7 +984,7 @@ class RefreshGui(tk.Tk):
         if self.control_mode.get() == 'ADB' and len(self.connected_devices) > 1 and not self.device.get().strip():
             raise ValueError("Choose the emulator you want to use from the device list.")
         device = self._device_address() or ('native-mouse' if self.control_mode.get() != 'ADB' else '')
-        return validate_settings(device, self.budget.get(), self.tap_sleep.get(), self.stop_key.get(), self.random_offset.get(), self.debug_mode.get(), round(self.tap_jitter.get(), 2))
+        return validate_settings(device, self.budget.get(), self.tap_sleep.get(), self.stop_key.get(), self.random_offset.get(), self.debug_mode.get(), round(self.tap_jitter.get(), 2), self.trace_input.get())
 
     def _device_address(self):
         value = self.device.get().strip()
@@ -1270,7 +1290,7 @@ class RefreshGui(tk.Tk):
         if settings is None:
             return
         if settings.debug:
-            settings = RunSettings(settings.device, 100, settings.tap_sleep, "esc", True, True, settings.tap_jitter)
+            settings = RunSettings(settings.device, 100, settings.tap_sleep, "esc", True, True, settings.tap_jitter, settings.trace_input)
         self.run_settings = settings
         self.run_id += 1
         run_id = self.run_id
@@ -1279,12 +1299,14 @@ class RefreshGui(tk.Tk):
         self._native_mouse_run = mouse_target is not None
         self._graceful_stop = mouse_target is not None or self._structured_adb
         self._session_log_path = None
-        if mouse_target:
+        self._session_log_writer = None
+        self._trace_ready = False
+        if mouse_target or settings.trace_input:
             try:
-                folder = APP_DIR/'mouse-session-logs'
+                folder = APP_DIR/('mouse-session-logs' if mouse_target else 'input-session-logs')
                 folder.mkdir(exist_ok=True)
                 self._session_log_path = folder/f'{time.time_ns()}-{uuid.uuid4().hex}.log'
-                self._session_log_path.write_text('Native Mouse session diagnostics\n',encoding='utf-8')
+                self._session_log_writer = BoundedSessionLog(self._session_log_path)
             except OSError:
                 self._session_log_path = None
         self._exit_seen = False
@@ -1315,7 +1337,7 @@ class RefreshGui(tk.Tk):
         arguments = [str(ENGINE_EXE)]
         if mouse_target is not None:
             arguments += ['--mouse-session',json.dumps(dict(handle=mouse_target.handle,pid=mouse_target.pid,
-                          title=mouse_target.title,rectangle=mouse_target.rectangle)),
+                          title=mouse_target.title,rectangle=mouse_target.rectangle,trace_input=settings.trace_input)),
                           '--budget',str(settings.budget),'--delay',str(settings.tap_sleep),
                           '--stop-key',settings.stop_key,'--random-offset','yes' if settings.random_offset else 'no',
                           '--tap-jitter',str(settings.tap_jitter)]
@@ -1369,6 +1391,8 @@ class RefreshGui(tk.Tk):
     def _engine_started(self):
         if self._session_started or self.stopping or self._finalized_run_id == self.run_id:
             return
+        if self.run_settings.trace_input and not getattr(self, '_trace_ready', False):
+            self._append_log('This engine did not enable detailed input logging. Use the matching bundled engine.\n')
         self._session_started = True
         self.started_at = time.monotonic()
         self.status.set("Calibrating" if self.run_settings.debug else "Running")
@@ -1383,15 +1407,20 @@ class RefreshGui(tk.Tk):
             self.started_at = None
 
     def _handle_output(self, text):
-        self._append_log(text)
         self.partial_line += text
         lines = re.split(r"[\r\n]", self.partial_line)
         self.partial_line = lines.pop()[-12000:]
+        if lines:
+            self._append_log(''.join(format_trace_line(line)+'\n' for line in lines))
         for line in lines:
             self._handle_line(line.strip())
 
     def _handle_line(self, line):
         if not line:
+            return
+        if line == 'E7GUI_TRACE_READY':
+            self._trace_ready = True
+            self._append_log('Detailed input logging enabled. Coordinates use the 1920×1080 recognition frame; mapped coordinates use screen/device pixels.\n')
             return
         if line == 'E7GUI_STARTED':
             self._engine_started()
@@ -1575,6 +1604,7 @@ class RefreshGui(tk.Tk):
         if process.poll() is None:
             return
         if self.partial_line:
+            self._append_log(format_trace_line(self.partial_line)+'\n')
             self._handle_line(self.partial_line.strip())
             self.partial_line = ""
         self._finalized_run_id = self.run_id
@@ -1675,8 +1705,9 @@ class RefreshGui(tk.Tk):
     def _append_log(self, text):
         if self._session_log_path:
             try:
-                with self._session_log_path.open('a',encoding='utf-8') as file:
-                    file.write(text)
+                writer = getattr(self, '_session_log_writer', None)
+                if writer is not None:
+                    writer.append(text)
             except OSError:
                 self._session_log_path = None
         self.raw_output = (self.raw_output + text)[-150000:]

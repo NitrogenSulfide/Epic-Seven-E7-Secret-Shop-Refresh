@@ -22,6 +22,7 @@ from e7_frame import normalize_game_frame
 from e7_timing import validate_timing, sample_tap_delay
 from e7_history import append_session, new_session_metadata
 from e7_session_control import listen_for_stop
+from e7_input_trace import InputTrace
 
 class E7Item:
     def __init__(self, image=None, price=0, count=0):
@@ -77,12 +78,17 @@ class E7Inventory:
         append_session(os.path.join('ShopRefreshHistory', 'ADB_History.csv'), record)
 
 class E7ADBShopRefresh(ObservedShopFlow):
-    def __init__(self, tap_sleep:float = 0.3, budget=None, ip_port=None, stop_refresh_key='esc', random_offset = False, debug=False, tap_jitter=None, adb_runner=None):
+    def __init__(self, tap_sleep:float = 0.3, budget=None, ip_port=None, stop_refresh_key='esc', random_offset = False, debug=False, tap_jitter=None, adb_runner=None, trace_input=False):
         if budget is not None:
             if isinstance(budget, bool) or not math.isfinite(float(budget)) or int(budget) != float(budget) or int(budget) < 3:
                 raise ValueError('Skystone budget must be a whole number of at least 3.')
             budget = int(budget)
         tap_sleep, tap_jitter = validate_timing(tap_sleep, tap_jitter)
+        if type(trace_input) is not bool:
+            raise ValueError('Input tracing must be on or off.')
+        self.input_trace = InputTrace(trace_input)
+        if hasattr(self, 'mouse'):
+            self.mouse.input_trace = self.input_trace
         self._stop_requested = threading.Event()
         self._stop_reason = ''
         self._session_recorded = False
@@ -161,6 +167,10 @@ class E7ADBShopRefresh(ObservedShopFlow):
     def record_session(self, outcome, reason='', duration=None):
         if getattr(self, '_session_recorded', False):
             return
+        trace = getattr(self, 'input_trace', None)
+        if trace is not None and trace.enabled:
+            trace.finish(sum(item.count for item in self.storage.inventory.values()),
+                         'final scan' if outcome == 'completed' else 'interrupted')
         metadata = dict(getattr(self, '_session_metadata', {}))
         if not metadata:
             metadata = new_session_metadata('Mouse' if hasattr(self, 'mouse') else 'ADB', self.debug)
@@ -197,6 +207,9 @@ class E7ADBShopRefresh(ObservedShopFlow):
         if not self.clickShop():
             return
         self.reportLiveStats()
+        trace = getattr(self, 'input_trace', None)
+        if trace is not None and trace.enabled:
+            trace.begin(sum(item.count for item in self.storage.inventory.values()))
         #time needed for item to drop in after refresh (0.5 second loading + drop 1 second)
         sliding_time = 1.5
         #stat track
@@ -209,7 +222,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
         #refresh loop
         while self.loop_active:
 
-            self.wait(sliding_time)
+            self._wait_observed(sliding_time, 'inventory settle')
             brought = set()
 
             if not self.loop_active: break
@@ -236,7 +249,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
             xoff, yoff = self.generateSwipeOffset()
             self.swipe(x1+xoff,y1+yoff,x1+xoff,y2+yoff)
             #wait for action to complete
-            self.wait(1)
+            self._wait_observed(1, 'scroll settle')
 
             if not self.loop_active: break
             #look at shop (page 2)
@@ -266,6 +279,8 @@ class E7ADBShopRefresh(ObservedShopFlow):
 
             if self.clickRefresh():
                 self.refresh_count += 1
+                if trace is not None and trace.enabled:
+                    trace.complete(sum(item.count for item in self.storage.inventory.values()))
                 self.reportLiveStats()
         
         self.end_of_refresh = True
@@ -397,6 +412,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
         if not self.loop_active:return
         x,y=self._device_point(x,y)
         getattr(self,'_adb_runner',subprocess.run)([self.adb_path]+self.device_args+['shell','input','tap',str(x),str(y)],check=True,timeout=10)
+        return (x, y)
 
     def swipe(self,x1,y1,x2,y2):
         if not self.loop_active:return
@@ -417,8 +433,8 @@ class E7ADBShopRefresh(ObservedShopFlow):
 
         if not self.loop_active:
             return False
-        self.tap(x+xoff,y+yoff)
-        self.wait(self.generateTapDelay())
+        self._tap_observed(x+xoff,y+yoff, anchor=(x,y), action='calibration buy')
+        self._wait_tap_delay('calibration buy')
 
         #confirm
         x = self.screenwidth * 0.5677
@@ -430,8 +446,8 @@ class E7ADBShopRefresh(ObservedShopFlow):
 
         if not self.loop_active:
             return False
-        self.tap(x+xoff,y+yoff)
-        self.wait(self.generateTapDelay())
+        self._tap_observed(x+xoff,y+yoff, anchor=(x,y), action='calibration buy confirm')
+        self._wait_tap_delay('calibration buy confirm')
         #loading sleep
         self.wait(1)
         return True
@@ -449,8 +465,8 @@ class E7ADBShopRefresh(ObservedShopFlow):
 
         if not self.loop_active:
             return False
-        self.tap(x+xoff,y+yoff)
-        self.wait(self.generateTapDelay())
+        self._tap_observed(x+xoff,y+yoff, anchor=(x,y), action='calibration refresh')
+        self._wait_tap_delay('calibration refresh')
 
         if not self.loop_active: return False
         #confirm
@@ -463,8 +479,8 @@ class E7ADBShopRefresh(ObservedShopFlow):
 
         if not self.loop_active:
             return False
-        self.tap(x+xoff,y+yoff)
-        self.wait(self.generateTapDelay())
+        self._tap_observed(x+xoff,y+yoff, anchor=(x,y), action='calibration refresh confirm')
+        self._wait_tap_delay('calibration refresh confirm')
         return True
 
 def getDevices(print_output):
@@ -524,11 +540,14 @@ def run_gui_session(arguments):
         if not isinstance(data, dict) or any(type(data.get(key)) is not bool for key in ('random_offset', 'debug')):
             raise ValueError('Invalid GUI session settings.')
         settings = validate_settings(data['device'], data['budget'], data['tap_sleep'], data['stop_key'],
-                                     data['random_offset'], data['debug'], data['tap_jitter'])
+                                     data['random_offset'], data['debug'], data['tap_jitter'], data.get('trace_input', False))
         app = E7ADBShopRefresh(tap_sleep=settings.tap_sleep, budget=settings.budget,
                               ip_port=settings.device, stop_refresh_key=settings.stop_key,
-                              random_offset=settings.random_offset, debug=settings.debug, tap_jitter=settings.tap_jitter)
+                              random_offset=settings.random_offset, debug=settings.debug, tap_jitter=settings.tap_jitter,
+                              trace_input=settings.trace_input)
         threading.Thread(target=listen_for_stop, args=(sys.stdin, app), daemon=True).start()
+        if settings.trace_input:
+            print('E7GUI_TRACE_READY', flush=True)
         print('E7GUI_STARTED', flush=True)
         app.start()
         return 0
@@ -608,7 +627,7 @@ if __name__ == '__main__':
         print('Private Secret Shop references prepared and checked offline.')
         sys.exit(0)
     if sys.argv[1:] == ['--verify']:
-        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; window mouse v6; tap timing v2; gui session v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
+        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; window mouse v6; tap timing v2; gui session v1; input trace v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
         sys.exit(0)
     if sys.argv[1:2] == ['--check-navigation-frame']:
         import argparse

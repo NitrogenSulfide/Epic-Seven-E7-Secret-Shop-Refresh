@@ -294,6 +294,7 @@ def recheck_mouse_action(action):
             try:
                 return action(self,*args,**kwargs)
             except MouseRecheckRequired:
+                self._trace_retry()
                 if not self.loop_active:
                     return False
                 if attempt==2:
@@ -305,6 +306,46 @@ def recheck_mouse_action(action):
 
 
 class ObservedShopFlow:
+    def _tap_observed(self, x, y, *, anchor=None, action='navigation'):
+        trace = getattr(self, 'input_trace', None)
+        if trace is None or not trace.enabled:
+            return self.tap(x, y)
+        anchor = anchor or (x, y)
+        values = dict(action=action, anchor=[round(float(v), 3) for v in anchor],
+                      offset=[round(float(x-anchor[0]), 3), round(float(y-anchor[1]), 3)],
+                      final=[round(float(x), 3), round(float(y), 3)],
+                      mapped_space='screen' if hasattr(self, 'mouse') else 'device', mapped=None)
+        try:
+            mapped = self.tap(x, y)
+        except Exception:
+            trace.emit('click', **values, outcome='blocked or failed')
+            raise
+        if isinstance(mapped, (tuple, list)) and len(mapped) == 2:
+            values['mapped'] = [int(v) for v in mapped]
+        trace.emit('click', **values, outcome='input sent' if values['mapped'] is not None else 'delivery unreported')
+        return mapped
+
+    def _wait_observed(self, seconds, action, *, baseline=None):
+        trace = getattr(self, 'input_trace', None)
+        if trace is None or not trace.enabled:
+            return self.wait(seconds)
+        started = trace.clock()
+        try:
+            return self.wait(seconds)
+        finally:
+            trace.emit('delay', action=action, baseline_ms=baseline*1000 if baseline is not None else None,
+                       requested_ms=seconds*1000, elapsed_ms=max(0, trace.clock()-started)*1000,
+                       interrupted=not self.loop_active)
+
+    def _wait_tap_delay(self, action):
+        # Exactly one draw, used for both the wait and its diagnostic event.
+        self._wait_observed(self.generateTapDelay(), action, baseline=self.tap_sleep)
+
+    def _trace_retry(self):
+        trace = getattr(self, 'input_trace', None)
+        if trace is not None:
+            trace.retry()
+
     @recheck_mouse_action
     def clickShop(self):
         deadline = time.monotonic()+30
@@ -324,14 +365,14 @@ class ObservedShopFlow:
                 if fresh_target is None or math.dist(target,fresh_target)>8:
                     continue
                 print('Navigation: Opening the recognized Secret Shop menu.',flush=True)
-                self.tap(*fresh_target)
+                self._tap_observed(*fresh_target, action='open shop')
                 return self._wait_for_shop()
             if not revealed and hidden_home_matches(frame):
                 fresh = self.takeScreenshot()
                 if hidden_home_matches(fresh):
                     print('Navigation: Revealing the recognized home screen controls.',flush=True)
                     revealed = True
-                    self.tap(960,540)
+                    self._tap_observed(960,540, action='reveal home controls')
                     self.wait(.5)
                     continue
             elif not revealed:
@@ -352,7 +393,7 @@ class ObservedShopFlow:
                     if self.loop_active and idle_home_candidate(self._rgb,fresh_candidate):
                         print('Navigation: No home controls recognized; clicking once to reveal them.',flush=True)
                         revealed = True
-                        self.tap(960,540)
+                        self._tap_observed(960,540, action='reveal home controls')
                         self.wait(.5)
                         continue
             print('Navigation: Looking for the home Secret Shop menu. No shop action sent.',flush=True)
@@ -461,13 +502,13 @@ class ObservedShopFlow:
         return point
 
 
-    def _click_button(self,box):
+    def _click_button(self,box, action='buy'):
         x,y = (box[0]+box[2])/2,(box[1]+box[3])/2
         dx,dy = self.generateOffset()
         # Preserve randomized offsets, bounded well inside the observed button.
         dx = max(-(box[2]-box[0])/4,min((box[2]-box[0])/4,dx))
         dy = max(-(box[3]-box[1])/4,min((box[3]-box[1])/4,dy))
-        self.tap(x+dx,y+dy)
+        self._tap_observed(x+dx,y+dy, anchor=(x,y), action=action)
 
 
     def _confirm(self,operation,before):
@@ -475,7 +516,7 @@ class ObservedShopFlow:
         text_rejected = False
         visibility_rechecks = 0
         while self.loop_active and time.monotonic()<deadline:
-            self.wait(self.generateTapDelay())
+            self._wait_tap_delay(operation+' dialog')
             if not self.loop_active:
                 return False
             self.takeScreenshot()
@@ -489,6 +530,7 @@ class ObservedShopFlow:
                     # appearing. Re-capture within the same bounded wait; never
                     # weaken item/cost validation or reuse a rejected OCR result.
                     text_rejected = True
+                    self._trace_retry()
                     continue
                 if not self.loop_active:
                     return False
@@ -509,17 +551,19 @@ class ObservedShopFlow:
                     detail = ' A private dialog crop was saved for diagnosis.' if saved else ''
                     raise MouseStopped('The confirmation changed while being read. No confirmation click sent.'+detail)
                 try:
-                    self._click_button(current)
+                    self._click_button(current, action=operation+' confirm')
                 except MouseRecheckRequired:
                     if not self.loop_active:
                         return False
                     visibility_rechecks += 1
+                    self._trace_retry()
                     if visibility_rechecks>=3:
                         raise MouseStopped('Game visibility repeatedly changed before confirmation. No confirmation click sent.')
                     print('Navigation: Visibility restored; reading the confirmation again before clicking.',flush=True)
                     deadline = time.monotonic()+5
                     continue
                 break
+            self._trace_retry()
         else:
             if not self.loop_active:
                 return False
@@ -530,7 +574,7 @@ class ObservedShopFlow:
             raise MouseStopped(f'The {operation} confirmation was not recognized. No confirmation click sent.'+detail)
         deadline = time.monotonic()+5
         while self.loop_active and time.monotonic()<deadline:
-            self.wait(self.generateTapDelay())
+            self._wait_tap_delay(operation+' shop return')
             if not self.loop_active:
                 return False
             frame = self.takeScreenshot()
@@ -538,6 +582,7 @@ class ObservedShopFlow:
                 deadline = time.monotonic()+5
             if confirmation_button(self._rgb,operation,before) is None and self.navigation.shop_visible(frame):
                 return True
+            self._trace_retry()
         if not self.loop_active:
             return False
         raise MouseStopped('The shop did not return after confirmation. Stopped before another action.')
@@ -591,6 +636,7 @@ class ObservedShopFlow:
             raise MouseStopped('The Refresh target was not recognized. No click sent.')
         before = self._rgb.copy()
         x,y = points[0]
+        anchor = (x,y)
         # Limit the vertical search to the recognized label: native background
         # artwork can join the green mask above the actual Refresh button.
         region = (120,max(890,round(y)-55),650,min(1080,round(y)+55))
@@ -605,7 +651,7 @@ class ObservedShopFlow:
             margin_y = min(7,(y-box[1])/2,(box[3]-y)/2)
             x += max(-margin_x,min(margin_x,dx*.2))
             y += max(-margin_y,min(margin_y,dy*.28))
-        self.tap(x,y)
+        self._tap_observed(x,y, anchor=anchor, action='refresh')
         return self._confirm('refresh',before)
 
 

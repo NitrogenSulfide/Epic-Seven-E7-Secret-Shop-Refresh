@@ -15,9 +15,10 @@ class RunSettings:
     random_offset: bool
     debug: bool
     tap_jitter: float = 0.03
+    trace_input: bool = False
 
 
-def validate_settings(device, budget, delay, stop_key, random_offset, debug, tap_jitter=0.03):
+def validate_settings(device, budget, delay, stop_key, random_offset, debug, tap_jitter=0.03, trace_input=False):
     if not re.fullmatch(r'[0-9]+', str(budget).strip()):
         raise ValueError("The skystone budget must be a whole number of at least 3.")
     try:
@@ -33,7 +34,9 @@ def validate_settings(device, budget, delay, stop_key, random_offset, debug, tap
         raise ValueError("The device must be a single ADB address.")
     if key != "esc" and (len(key) != 1 or key not in STOP_KEY_CHARACTERS):
         raise ValueError("Use Esc or a single letter, number, or / . , ' ; [ ] ` as the stop key.")
-    return RunSettings(device, amount, sleep, key, bool(random_offset), bool(debug), jitter)
+    if type(trace_input) is not bool:
+        raise ValueError('Input tracing must be on or off.')
+    return RunSettings(device, amount, sleep, key, bool(random_offset), bool(debug), jitter, trace_input)
 
 
 class EngineProtocol:

@@ -1,3 +1,19 @@
+0.1.3-rc3 · Optional click and timing diagnostics
+
+• Adds “Log click coordinates and timing” in Diagnostics, off by default,
+  independent of ADB calibration and available for Mouse and ADB sessions.
+• Reports game-relative anchor/final coordinates and applied offsets after
+  safety limits, mapped screen/device pixels, and sent or blocked/failed input.
+• Records baseline/sample pacing, measured waits, interrupted waits and fixed
+  animation settling separately. Logging does not draw additional random values.
+• Summarizes intervals between verified refresh completions, including purchases,
+  confirmation/visibility retries and focus pauses. Initial and final scans are
+  labelled separately; interrupted intervals are not completed cycles.
+• Detailed engine events stop at 512 KiB. Each saved session log is capped at
+  2 MiB; the session and its normal history continue after either limit.
+• Older engines keep compatible launch arguments and show a notice if they do
+  not enable tracing. Use this trial’s matching bundled GUI and engine.
+
 0.1.3-rc2 · Visible slider and header corrections
 
 • Uses an explicitly sized 32-pixel timing thumb and trough; the Tk theme had

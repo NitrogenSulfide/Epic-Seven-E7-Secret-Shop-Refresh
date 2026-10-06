@@ -56,7 +56,7 @@ class E7MouseShopRefresh(E7ADBShopRefresh):
 
 
     def tap(self,x,y):
-        self.mouse.click(x,y)
+        return self.mouse.click(x,y)
 
 
     @recheck_mouse_action
@@ -107,6 +107,7 @@ def run_mouse_session(arguments):
     parser.add_argument('--stop-key',required=True)
     parser.add_argument('--random-offset',choices=('yes','no'),required=True)
     parser.add_argument('--tap-jitter',type=float,default=None)
+    parser.add_argument('--trace-input', action='store_true')
     args = parser.parse_args(arguments)
     if not math.isfinite(args.budget) or args.budget < 3:
         parser.error('Invalid budget or delay')
@@ -121,9 +122,12 @@ def run_mouse_session(arguments):
         data = json.loads(args.mouse_session)
         target = GameWindow(int(data['handle']),int(data['pid']),str(data['title']),tuple(data['rectangle']))
         app = E7MouseShopRefresh(target,budget=args.budget,tap_sleep=args.delay,
-                                stop_refresh_key=args.stop_key,random_offset=args.random_offset=='yes',debug=False,tap_jitter=args.tap_jitter)
+                                stop_refresh_key=args.stop_key,random_offset=args.random_offset=='yes',debug=False,tap_jitter=args.tap_jitter,
+                                trace_input=data.get('trace_input', args.trace_input))
         if sys.stdin is not None:
             threading.Thread(target=listen_for_stop,args=(sys.stdin,app),daemon=True).start()
+        if app.input_trace.enabled:
+            print('E7GUI_TRACE_READY', flush=True)
         print('E7GUI_STARTED',flush=True)
         app.start()
         return 0
