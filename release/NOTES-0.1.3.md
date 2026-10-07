@@ -9,7 +9,8 @@ Detailed output and saved session logs have size limits; logs stay local.
 
 Session history now records UTC start time, control mode, outcome and stop/failure
 reason. **Export Excel** includes every saved session with numeric counters and
-totals. Loading older CSV history preserves the original before schema migration.
+totals. Recording a new session in older CSV history preserves the original
+before schema migration.
 The matching Mouse and ADB engines accept cooperative Stop and interrupt waits.
 
 The header adds a version link and bug-report shortcut. The timing slider is
