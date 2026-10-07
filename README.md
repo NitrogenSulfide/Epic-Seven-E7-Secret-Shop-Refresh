@@ -10,7 +10,7 @@ need fixes. Feedback and bug reports are welcome—I'll do my best to help when 
 
 ## EZ Mode · download, extract, start
 
-**[Download the Windows app — v0.1.2](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.2/E7ShopRefresh-0.1.2.zip)**
+**[Download the Windows app — v0.1.3](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.3/E7ShopRefresh-0.1.3.zip)**
 
 > **Ban risk:** This is unofficial automation. [Smilegate's terms](https://common.game.onstove.com/terms/index?gameType=MOBILE&langCode=en&termsType=1) prohibit unauthorized scripts and macros. Account penalties, including bans, are possible; use at your own risk.
 
@@ -29,7 +29,13 @@ backtick key, usually below Esc) or click **Stop Session**. Start with a small b
 for your first run.
 
 **[Detailed setup / troubleshooting](release/SETUP.md)** ·
-**[What's new in v0.1.2](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.1.2)**
+**[What's new in v0.1.3](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.1.3)**
+
+## Session history and diagnostics
+
+![Session history and optional click/timing diagnostics, captured during v0.1.3-rc3 testing](docs/media/v0.1.3-diagnostics.png)
+
+The screenshot shows the tested rc3 interface included in v0.1.3.
 
 ## See it work · Mouse on STOVE
 
@@ -68,7 +74,9 @@ See the [setup guide](release/SETUP.md) if the device isn't detected.
 Live counters, used/total Skystone budget, configurable Stop key, smooth Mouse
 movement and dragging, randomized tap offsets, adjustable timing variation up to
 ±0.10 seconds, session history, day/night themes, and in-app Quickstart/release notes.
-Calibration is ADB-only. Only Covenant Bookmarks and Mystic Medals are purchased.
+Excel export includes the full saved history with timestamps, outcomes and stop reasons.
+Optional click/timing diagnostics work in Mouse and ADB; enable them in Diagnostics
+before starting. Calibration is ADB-only. Only Covenant Bookmarks and Mystic Medals are purchased.
 
 The app verifies shop controls and confirmation text before continuing. Unknown or
 changed screens can stop a session. Passing tested cases does not establish support
@@ -81,7 +89,7 @@ runtime data is excluded from release ZIPs.
 
 ## Source and credits
 
-The optional **E7Source-0.1.2.zip** contains the maintained source and rebuild
+The optional **E7Source-0.1.3.zip** contains the maintained source and rebuild
 instructions. Matching GUI/engine source is also supplied with the player package.
 See [build instructions](release/BUILDING.md) and [engine notes](ENGINE.md).
 

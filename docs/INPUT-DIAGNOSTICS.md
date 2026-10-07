@@ -1,6 +1,6 @@
 # Optional click and timing diagnostics
 
-The `0.1.3-rc3` trial on `work/session-performance-cleanup` adds a
+Version `0.1.3` adds a
 **Log click coordinates and timing** checkbox in Diagnostics. It defaults off,
 persists in the local GUI preferences, and is locked during a session. It works
 in normal Mouse and ADB sessions independently of ADB calibration. Calibration
@@ -66,7 +66,7 @@ preference persistence and both size limits. Inspect light/dark Diagnostics
 screenshots on an unshown desktop. These checks do not replace a supervised
 live session with the matching packaged engine.
 
-### Source evidence for this trial (2026-10-06)
+### Development verification (2026-10-06)
 
 - 147 GUI/window/connection/elevation checks passed on an unshown desktop.
 - 154 action/timing/history/navigation checks completed: 152 passed and two
@@ -75,7 +75,10 @@ live session with the matching packaged engine.
   the checkbox uses the existing themed checkbutton style.
 - Seeded normal Mouse/ADB fake runs produced identical actions, counters and
   final random-generator states with detailed logging enabled and disabled.
-- No live game, real ADB session, calibration or currency-spending checks were run.
+- Automated checks used fake inputs. Separately, the owner reports passing live
+  Mouse and ADB regressions with the matching rc3 package. Saved evidence includes
+  a completed 399-Skystone Mouse run and an ADB run stopped at 81 Skystones.
+  Calibration and insufficient-currency stopping were not live-tested for this release.
 
 Evidence is in ignored `scratch/input-trace/`; packaged checks are recorded with
 the candidate artifacts separately.

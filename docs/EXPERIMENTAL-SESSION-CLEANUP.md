@@ -1,7 +1,9 @@
 # Experimental session cleanup: 0.1.3-rc2
 
 Branch: `work/session-performance-cleanup`, based on `5c61883`.
-This is a local trial, not a published release or an installed-runtime update.
+Historical development notes for the local rc2 trial. These changes are included
+in v0.1.3; current release behavior is described in release/NOTES-0.1.3.md.
+The offline evidence and outstanding rendering findings below describe that trial.
 
 ## Corrections after the first trial
 
