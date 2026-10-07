@@ -1,3 +1,19 @@
+0.1.3 · Session records, exports and optional diagnostics
+
+• Adds optional click-coordinate and timing logs for Mouse and ADB, off by
+  default and separate from calibration. Reports applied offsets, mapped input,
+  measured waits and refresh-cycle totals; detailed output and saved logs are bounded.
+• Records session start time, control mode, outcome and stop/failure reason.
+  Existing CSV history is migrated with an original-byte backup.
+• Export Excel includes every saved session, numeric counters and totals.
+• Matching Mouse/ADB engines accept cooperative Stop and interrupt pacing waits.
+• Adds header version and bug-report links, a larger DPI-aware timing slider,
+  and a two-second maximum tap delay including randomized samples.
+• Reduces background repaint work and skips redraws for position-only moves.
+  High-resolution resizing/theme repaint can still lag.
+
+Development history for 0.1.3
+
 0.1.3-rc3 · Optional click and timing diagnostics
 
 • Adds “Log click coordinates and timing” in Diagnostics, off by default,

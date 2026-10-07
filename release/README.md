@@ -1,7 +1,8 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.1.2** fixes Mouse startup with maximized native STOVE clients.
-Players need only **E7ShopRefresh-0.1.2.zip**.
+Version **0.1.3** adds optional click/timing diagnostics, full-history Excel export,
+richer session records and cooperative Stop for the matching Mouse/ADB engine.
+Players need only **E7ShopRefresh-0.1.3.zip**.
 New settings start in Mouse mode; your existing saved mode is preserved.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
@@ -40,8 +41,8 @@ open without sending Mouse input. ADB and non-elevated games need no restart.
 Leave the PC alone until it stops. Focus or coverage changes pause input for up to 10 seconds;
 a changed window or an unrecognized confirmation stops the session. The game keeps its current size. Use normal settings; Debug
 remains an ADB feature. Saving settings also saves your control mode without
-starting a session next time. The owner reports the ordinary live cases pass on both clients with rc51. This
-release preserves that recognition and input behavior; begin with a small supervised budget. Keep English game text readable.
+starting a session next time. The owner regression-tested Mouse and ADB with the rc3 candidate used for this
+release. Begin with a small supervised budget on your own setup. Keep English game text readable.
 
 Live counters report engine-completed buys/refreshes, not confirmed balances.
 Insufficient-currency stopping remains unverified. Keep initial runs supervised.
@@ -63,7 +64,7 @@ are under `runtime/third-party-licenses`, with ADB notices in its tool folder.
 About & Credits contains Quickstart and bundled Release notes tabs. The main
 screen’s Buy me a coffee button opens https://ko-fi.com/bluenatto only when clicked.
 
-For this first release, testing has been limited to Google Play
+Testing has been limited to Google Play
 Games on PC Developer Emulator and the official STOVE client of Epic Seven.
 Other emulators and methods have not been tested. Both modes buy only Covenant
 Bookmarks and Mystic Medals; Friendship purchases are removed from calibration too.

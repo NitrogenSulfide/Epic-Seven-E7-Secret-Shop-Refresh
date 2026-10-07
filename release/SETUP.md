@@ -1,6 +1,6 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-## Optional detailed diagnostics (0.1.3 trial)
+## Optional detailed diagnostics
 
 In **Diagnostics**, enable **Log click coordinates and timing** before starting
 to see applied click offsets, mapped screen/device coordinates, sampled tap
@@ -9,7 +9,7 @@ Cycle totals include scanning, purchases, settling and pauses; initial/final
 scans and interrupted intervals are labelled separately. Coordinates labelled
 1920 × 1080 refer to the recognition frame, not your monitor resolution.
 
-Use the trial's matching bundled engine. Detailed events and saved logs have
+Use the release's matching bundled engine. Detailed events and saved logs have
 size limits; reaching one does not stop the session. Logs stay local. **Copy
 Diagnostics** copies the retained output for a report you choose to share.
 
@@ -166,7 +166,10 @@ fixed during the session, including dimmed confirmation dialogs. Actual window
 moves and resizes still stop input. Restored Google windows with a thin light
 frame above the header are supported. Set the window size before pressing Start;
 you can begin directly in the open Secret Shop.
-The owner reports the ordinary live cases pass on both clients with rc51. This release preserves that automation code. Exact rebuilt binaries have offline verification; long runs remain unverified.
+The owner regression-tested Mouse and ADB with the rc3 candidate used for v0.1.3.
+The saved Mouse run completed 133 refreshes (399 Skystones), buying four Covenant
+items and one Mystic item. This does not establish reliability for every setup
+or arbitrarily long runs.
 
 The app checks each confirmation before clicking it and stops on unexpected text
 or an insufficient-currency message. Keep English confirmation text readable.
@@ -181,8 +184,8 @@ name, gold price and Buy label on the same row. A recognized currency with an
 uncertain price or button stops the run before Refresh. A partly hidden bottom
 row is checked again after scrolling. Keep the item names and prices readable.
 Live counters describe completed action sequences rather than balance readings.
-The owner reports the ordinary live cases pass on both clients with rc51.
-This release preserves that automation code. Long runs remain unverified;
+The owner reports passing Mouse and ADB regression runs with the rc3 candidate.
+Insufficient-currency stopping remains unverified;
 begin with a small supervised budget and check Stop and your Stop key.
 Save Settings retains your control mode and other preferences. Reopening the app
 scans that mode without starting a session. Mouse is the fresh-install default;
@@ -196,7 +199,9 @@ private under `runtime/mouse-session-logs`. The app checks that the pointer reac
 
 Stop/close the old app before updating. Extract the new ZIP into a new folder and
 preserve your old runtime settings, CSV history and locally prepared recognition
-images. No updater or automatic migration exists. Back up anything you want to
+images. No updater or automatic transfer between release folders exists. When an older
+CSV history is loaded, its schema is migrated with the original preserved in
+`ShopRefreshHistory/schema-backups`. Back up anything you want to
 keep before deleting an extracted app folder.
 
 - **Recognition needs help:** reveal the game controls or manually open Secret
@@ -224,7 +229,7 @@ preserved; the software GPL does not relicense third-party artwork.
 About & Credits contains Quickstart and bundled Release notes tabs. The main
 screen’s Buy me a coffee button opens https://ko-fi.com/bluenatto only when clicked.
 
-For this first release, testing has been limited to Google Play
+Testing has been limited to Google Play
 Games on PC Developer Emulator and the official STOVE client of Epic Seven.
 Other emulators and methods have not been tested. Both modes buy only Covenant
 Bookmarks and Mystic Medals; Friendship purchases are removed from calibration too.
