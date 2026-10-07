@@ -199,8 +199,8 @@ private under `runtime/mouse-session-logs`. The app checks that the pointer reac
 
 Stop/close the old app before updating. Extract the new ZIP into a new folder and
 preserve your old runtime settings, CSV history and locally prepared recognition
-images. No updater or automatic transfer between release folders exists. When an older
-CSV history is loaded, its schema is migrated with the original preserved in
+images. No updater or automatic transfer between release folders exists. When a new
+session is recorded in an older CSV history, its schema is migrated with the original preserved in
 `ShopRefreshHistory/schema-backups`. Back up anything you want to
 keep before deleting an extracted app folder.
 
