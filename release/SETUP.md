@@ -13,6 +13,26 @@ Use the release's matching bundled engine. Detailed events and saved logs have
 size limits; reaching one does not stop the session. Logs stay local. **Copy
 Diagnostics** copies the retained output for a report you choose to share.
 
+## Remaining time and session shortcuts (0.1.4 trial)
+
+**Time remaining** starts with “Estimating…” until three intervals between
+confirmed refreshes are available. It then uses the latest eight intervals to
+show an approximate countdown. Purchases and recognition speed can change the
+estimate. Startup is excluded, and focus pauses freeze the countdown. At the
+last budgeted refresh it shows “Finishing final scan…” while the engine checks
+the remaining items. Calibration and older engines without live refresh
+counters do not receive a time estimate. Detailed logging can remain off.
+
+**Open Logs Folder** in Diagnostics opens the current or last session's saved
+log folder, otherwise the selected mode's folder. For Mouse it becomes available
+after the session ends, so opening Explorer cannot cover the running game.
+ADB logs are saved when detailed diagnostics are enabled.
+
+Excel export suggests a name such as
+`E7-sessions-2026-10-07_09-15-04-a1b2c3d4.xlsx`. The date/time use the PC's local
+clock; the suffix distinguishes exports even within the same second. You can
+still choose your own filename in the save dialog.
+
 ## Download and open
 
 Download the **E7ShopRefresh ZIP** for your chosen version, then extract it into a new

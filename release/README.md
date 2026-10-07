@@ -1,5 +1,9 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
+Local trial **0.1.4-rc1** adds approximate remaining time, Open Logs Folder,
+and unique timestamped Excel export names. Extract this trial into a fresh
+folder and use its bundled runtime. The stable release information follows.
+
 Version **0.1.3** adds optional click/timing diagnostics, full-history Excel export,
 richer session records and cooperative Stop for the matching Mouse/ADB engine.
 Players need only **E7ShopRefresh-0.1.3.zip**.

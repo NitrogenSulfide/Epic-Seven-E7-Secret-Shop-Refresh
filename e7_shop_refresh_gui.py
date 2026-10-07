@@ -22,6 +22,7 @@ from e7_process import launch_engine
 from e7_engine_protocol import RunSettings, validate_settings, EngineProtocol
 from e7_history import history_mode, read_sessions, export_sessions
 from e7_input_trace import BoundedSessionLog, format_trace_line
+from e7_session_estimate import SessionEstimate
 from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon, avatar_icon, coffee_icon, github_icon, bug_icon
 from e7_links import PROFILE, release_url, bug_report_url
 from e7_about import AboutDialog
@@ -143,6 +144,7 @@ class RefreshGui(tk.Tk):
         self.adb_hint_dismissed = tk.BooleanVar(value=False)
         self.about_window = None
         self._live_stats_seen = False
+        self._legacy_progress_seen = False
         self.process = None
         self.process_tree = None
         self._exit_seen = False
@@ -169,6 +171,7 @@ class RefreshGui(tk.Tk):
         self._native_mouse_run = False
         self._structured_adb = False
         self._graceful_stop = False
+        self.session_estimate = SessionEstimate()
         self._session_log_path = None
         self.partial_line = ""
         self.raw_output = ""
@@ -193,6 +196,7 @@ class RefreshGui(tk.Tk):
         self.device_notice = tk.StringVar(value="Checking ADB devices…")
         self.history_notice = tk.StringVar(value="")
         self.elapsed = tk.StringVar(value="0m 00s")
+        self.remaining_time = tk.StringVar(value='Time remaining: —')
         self.spent = tk.StringVar(value="—")
         self.spent_display = tk.StringVar(value="0 / 12")
         self.spent.trace_add('write', lambda *_: self._update_spent_display())
@@ -503,6 +507,15 @@ class RefreshGui(tk.Tk):
         self.home_ui_notice.configure(wraplength=max(self._dp(200), width-self._dp(75)))
         self.detail_label.configure(wraplength=max(self._dp(250), width-self._dp(12)))
         self.diagnostics_label.configure(wraplength=max(self._dp(250), width-self._dp(60)))
+        self.remaining_label.configure(wraplength=max(self._dp(250), width-self._dp(12)))
+        inline_logs = width-self._dp(28) >= sum(widget.winfo_reqwidth() for widget in (
+            self.trace_check, self.open_logs_button, self.copy_diagnostics_button)) + self._dp(20)
+        self.trace_check.grid(columnspan=1 if inline_logs else 3)
+        self.open_logs_button.grid(row=0 if inline_logs else 1, column=1 if inline_logs else 0,
+                                   padx=(self._dp(6), self._dp(6)) if inline_logs else (0, 0),
+                                   pady=(0 if inline_logs else self._dp(6), 0))
+        self.copy_diagnostics_button.grid(row=0 if inline_logs else 1, column=2,
+                                          pady=(0 if inline_logs else self._dp(6), 0))
         self.history_label.configure(wraplength=max(self._dp(250), width-self._dp(12)))
         # Four cards on wide windows, two per row when the viewport is narrower.
         minimum_card = max(self.heading_font.measure("Skystone spent ≈") + self._dp(38), self.value_font.measure("12h 59m 59s")) + self._dp(32)
@@ -811,6 +824,9 @@ class RefreshGui(tk.Tk):
         self.progress = ttk.Progressbar(progress, maximum=100)
         self.progress.grid(row=0, column=0, sticky="ew")
         ttk.Label(progress, textvariable=self.progress_text, style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(4, 0))
+        self.remaining_label = ttk.Label(progress, textvariable=self.remaining_time, style='Muted.TLabel')
+        self.remaining_label.grid(row=2, column=0, sticky='w', pady=(dp(3), 0))
+        ThemeHint(self.remaining_label, lambda: 'Approximate time from the last eight refresh intervals; purchases and recognition speed can change it. Focus pauses are excluded.')
         self.notebook = notebook = ttk.Notebook(right)
         notebook.bind("<<NotebookTabChanged>>", self._schedule_layout)
         notebook.grid(row=4, column=0, sticky="nsew")
@@ -854,10 +870,14 @@ class RefreshGui(tk.Tk):
         self.trace_check = ttk.Checkbutton(diagnostics_actions, text='Log click coordinates and timing',
                                           variable=self.trace_input, command=self._save_trace_preference,
                                           style='Large.TCheckbutton')
-        self.trace_check.grid(row=0, column=0, sticky='w')
+        self.trace_check.grid(row=0, column=0, columnspan=2, sticky='w')
         self.settings_widgets.append(self.trace_check)
         ThemeHint(self.trace_check, lambda: 'For the next session, in Mouse or ADB. Detailed local logs are size-limited. Calibration is separate.')
-        ttk.Button(diagnostics_actions, text="Copy Diagnostics", command=self._copy_diagnostics).grid(row=0, column=1, sticky="e")
+        self.open_logs_button = ttk.Button(diagnostics_actions, text='Open Logs Folder', command=self._open_logs_folder)
+        self.open_logs_button.grid(row=1, column=0, sticky='w', pady=(dp(6), 0))
+        ThemeHint(self.open_logs_button, lambda: "Opens the current or last session's log folder, otherwise the selected mode's folder. Available after a Mouse session ends.")
+        self.copy_diagnostics_button = ttk.Button(diagnostics_actions, text="Copy Diagnostics", command=self._copy_diagnostics)
+        self.copy_diagnostics_button.grid(row=1, column=2, sticky="e", pady=(dp(6), 0))
         self.history_header = history_header = ttk.Frame(right)
         history_header.grid(row=5, column=0, sticky="ew", pady=(16, 6))
         history_header.columnconfigure(0, weight=1)
@@ -1292,6 +1312,8 @@ class RefreshGui(tk.Tk):
         if settings.debug:
             settings = RunSettings(settings.device, 100, settings.tap_sleep, "esc", True, True, settings.tap_jitter, settings.trace_input)
         self.run_settings = settings
+        self.session_estimate.reset(settings.budget, enabled=not settings.debug)
+        self.remaining_time.set('Time remaining: Starting…' if not settings.debug else 'Time remaining: Unavailable during calibration')
         self.run_id += 1
         run_id = self.run_id
         self.stopping = self.finished = False
@@ -1319,6 +1341,7 @@ class RefreshGui(tk.Tk):
         self.elapsed.set("0m 00s")
         self.raw_output = self.partial_line = ""
         self._live_stats_seen = False
+        self._legacy_progress_seen = False
         self.metric_captions[1].configure(text='Skystone spent ≈')
         self.log.configure(state=tk.NORMAL)
         self.log.delete("1.0", tk.END)
@@ -1347,6 +1370,8 @@ class RefreshGui(tk.Tk):
             process, self.process_tree = launch_engine(arguments, cwd=APP_DIR, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1, creationflags=NO_WINDOW)
         except OSError as exc:
             self.status.set("Failed")
+            self.remaining_time.set('Time remaining: —')
+            self.session_estimate.enabled = False
             self.detail.set("The engine could not start. Check Diagnostics.")
             self._append_log(str(exc))
             self._event("Engine launch failed.")
@@ -1370,16 +1395,16 @@ class RefreshGui(tk.Tk):
                     if protocol.started:
                         self.log_queue.put((run_id, "started", None))
                         protocol.started = False
-                    self.log_queue.put((run_id, "output", chunk))
+                    self.log_queue.put((run_id, "output", (chunk, time.monotonic())))
                     chunk = ""
                 if char in "\r\n" or len(chunk) >= 256:
-                    self.log_queue.put((run_id, "output", chunk))
+                    self.log_queue.put((run_id, "output", (chunk, time.monotonic())))
                     chunk = ""
         except (OSError, ValueError) as exc:
             self.log_queue.put((run_id, "io_error", str(exc)))
         finally:
             if chunk:
-                self.log_queue.put((run_id, "output", chunk))
+                self.log_queue.put((run_id, "output", (chunk, time.monotonic())))
             self.log_queue.put((run_id, "eof", None))
             for pipe in (process.stdin, process.stdout):
                 if pipe:
@@ -1394,6 +1419,7 @@ class RefreshGui(tk.Tk):
         if self.run_settings.trace_input and not getattr(self, '_trace_ready', False):
             self._append_log('This engine did not enable detailed input logging. Use the matching bundled engine.\n')
         self._session_started = True
+        self._update_remaining_time()
         self.started_at = time.monotonic()
         self.status.set("Calibrating" if self.run_settings.debug else "Running")
         self.detail.set("Debug pauses before every click, including Buy and confirmation. Check the red rectangle, then press a key other than Esc in the image window. Esc stops the test." if self.run_settings.debug else "Refreshing the Secret Shop. Use Stop Session or your stop key to end.")
@@ -1406,16 +1432,43 @@ class RefreshGui(tk.Tk):
             self.elapsed.set(duration_text(time.monotonic() - self.started_at))
             self.started_at = None
 
-    def _handle_output(self, text):
-        self.partial_line += text
-        lines = re.split(r"[\r\n]", self.partial_line)
-        self.partial_line = lines.pop()[-12000:]
-        if lines:
-            self._append_log(''.join(format_trace_line(line)+'\n' for line in lines))
-        for line in lines:
-            self._handle_line(line.strip())
+    def _update_remaining_time(self, observed_at=None):
+        if not self._session_started or self.finished or self.stopping or self.stop_key_pressed or self._mouse_failure:
+            return
+        estimate = self.session_estimate
+        if self.run_settings.debug:
+            text = 'Unavailable during calibration'
+        elif self.status.get() in ('Waiting for game', 'Waiting for game window'):
+            text = 'Waiting for game'
+        elif self._legacy_progress_seen and not self._live_stats_seen:
+            text = 'Unavailable with this engine'
+        elif estimate.finishing:
+            text = 'Finishing final scan…'
+        else:
+            seconds = estimate.remaining(observed_at)
+            text = 'Estimating…' if seconds is None else f'~{duration_text(math.ceil(seconds))}'
+        if estimate.paused_at is not None:
+            text = 'Paused · ' + text
+        display = 'Time remaining: ' + text
+        if self.remaining_time.get() != display:
+            self.remaining_time.set(display)
 
-    def _handle_line(self, line):
+    def _handle_output(self, text, observed_at=None):
+        self._handle_output_batch([(text, observed_at)])
+
+    def _handle_output_batch(self, chunks):
+        lines = []
+        for text, observed_at in chunks:
+            self.partial_line += text
+            complete = re.split(r"[\r\n]", self.partial_line)
+            self.partial_line = complete.pop()[-12000:]
+            lines.extend((line, observed_at) for line in complete)
+        if lines:
+            self._append_log(''.join(format_trace_line(line)+'\n' for line, _ in lines))
+        for line, observed_at in lines:
+            self._handle_line(line.strip(), observed_at=observed_at)
+
+    def _handle_line(self, line, observed_at=None):
         if not line:
             return
         if line == 'E7GUI_TRACE_READY':
@@ -1433,16 +1486,21 @@ class RefreshGui(tk.Tk):
             if line.startswith(('E7GUI_MOUSE_STOPPED ', 'E7GUI_STOPPED ')):
                 self._mouse_failure = reason
                 self.status.set('Needs attention')
+                self.remaining_time.set('Time remaining: Session stopped')
                 self._freeze_elapsed()
             else:
                 self.status.set('Paused')
+                self.session_estimate.pause(observed_at)
+                self._update_remaining_time(observed_at)
                 self.progress_text.set('Paused · no input while the game is covered or unfocused')
             self.detail.set(reason)
             self._event(reason)
             return
         if line == 'E7GUI_MOUSE_RESUMED':
             if not self.stopping and not self.stop_key_pressed:
+                self.session_estimate.resume(observed_at)
                 self.status.set('Running')
+                self._update_remaining_time(observed_at)
                 self.detail.set('Game visible again. Checking the current screen before continuing.')
                 self.progress_text.set('Checking the game again…')
             return
@@ -1463,6 +1521,8 @@ class RefreshGui(tk.Tk):
                 elif self.status.get() == 'Waiting for game':
                     self.status.set('Calibrating' if self.run_settings.debug else 'Running')
                     self.progress_text.set('Waiting for the engine’s first progress update…')
+                if hasattr(self, 'session_estimate'):
+                    self._update_remaining_time(observed_at)
             self._event(line)
             return
         if line.startswith('E7GUI_STATS '):
@@ -1476,6 +1536,8 @@ class RefreshGui(tk.Tk):
             except (ValueError, TypeError):
                 return
             self._live_stats_seen = True
+            self.session_estimate.observe(stats['refreshes'], observed_at)
+            self._update_remaining_time(observed_at)
             for key, var in (('skystone_spent', self.spent), ('covenant', self.covenant), ('mystic', self.mystic)):
                 value = number_text(stats[key])
                 if var.get() != value:
@@ -1490,6 +1552,7 @@ class RefreshGui(tk.Tk):
         if "Shop refresh terminated!" in line:
             self.stop_key_pressed = True
             self.status.set("Stopping")
+            self.remaining_time.set('Time remaining: Session stopped')
             self.detail.set("Stop key detected. Recording the session results.")
             self._event("Stop key pressed. Refresh stopped.")
             self._freeze_elapsed()
@@ -1497,6 +1560,8 @@ class RefreshGui(tk.Tk):
         if "Progress:" in line and not self.stopping and not self.stop_key_pressed:
             self._engine_started()
         if (match := re.match(r"^(\d{1,3})%", line)) and not self._live_stats_seen:
+            self._legacy_progress_seen = True
+            self._update_remaining_time(observed_at)
             percent = min(int(match[1]), 100)
             self.progress.configure(value=percent)
             self.progress_text.set(f"{percent}% of budget used · engine reported")
@@ -1511,6 +1576,7 @@ class RefreshGui(tk.Tk):
                         var.set(value)
         if "---Result---" in line:
             self.finished = True
+            self.remaining_time.set('Time remaining: Session stopped' if self.stopping or self.stop_key_pressed or self._mouse_failure else 'Time remaining: Complete')
             self._freeze_elapsed()
             self._event("Refresh ended. Recording session results.")
         for label, var in (("Covenant bookmark", self.covenant), ("Mystic medal", self.mystic), ("Skystone spent", self.spent)):
@@ -1539,6 +1605,7 @@ class RefreshGui(tk.Tk):
         if self.stopping:
             return
         self.stopping = True
+        self.remaining_time.set('Time remaining: Session stopped')
         self._freeze_elapsed()
         self.status.set("Stopping")
         self.detail.set("Stopping the engine. A forced stop may not save a history entry.")
@@ -1581,6 +1648,7 @@ class RefreshGui(tk.Tk):
             return
         if self.started_at:
             self.elapsed.set(duration_text(time.monotonic() - self.started_at))
+        self._update_remaining_time()
         if process.poll() is None:
             if self.status.get() == "Starting" and time.monotonic() - self.launch_started_at > 30:
                 self.detail.set("Startup is taking longer than expected. Check the emulator and Diagnostics.")
@@ -1630,6 +1698,8 @@ class RefreshGui(tk.Tk):
             self.detail.set(f"Engine exited (code {process.returncode}). Check Diagnostics before retrying.")
             self.progress_text.set("Engine exited")
         self._event(self.detail.get())
+        self.remaining_time.set('Time remaining: Complete' if self.status.get() == 'Finished' else 'Time remaining: Session stopped')
+        self.session_estimate.enabled = False
         self._set_controls(False)
         self.refresh_history()
         self._offer_recognition_setup(self.run_id)
@@ -1647,6 +1717,7 @@ class RefreshGui(tk.Tk):
         self._update_tap_jitter(running=running)
         self.clear_history_button.state(['disabled'] if running else ['!disabled'])
         self.export_history_button.state(['disabled'] if running else ['!disabled'])
+        self.open_logs_button.state(['disabled'] if running and self.control_mode.get() == 'Mouse' else ['!disabled'])
         self.start_button.configure(state=tk.DISABLED if running else tk.NORMAL)
         self.stop_button.configure(state=tk.NORMAL if running else tk.DISABLED)
         if not running and self.control_mode.get() != 'ADB':
@@ -1668,12 +1739,12 @@ class RefreshGui(tk.Tk):
             if run_id is not None and run_id != self.run_id:
                 continue
             if kind == "output":
-                output.append(value)
-                if sum(map(len, output)) >= 16384:
+                output.append(value if isinstance(value, tuple) else (value, None))
+                if sum(len(text) for text, _ in output) >= 16384:
                     break
                 continue
             if output:
-                self._handle_output(''.join(output))
+                self._handle_output_batch(output)
                 output.clear()
             if kind == "eof":
                 self._finish_process()
@@ -1699,7 +1770,7 @@ class RefreshGui(tk.Tk):
                 if token == self._connection_check_id and self.control_mode.get() != 'ADB':
                     self._apply_mouse_windows(windows, error)
         if output:
-            self._handle_output(''.join(output))
+            self._handle_output_batch(output)
         self.after(100, self._drain_log_queue)
 
     def _append_log(self, text):
@@ -1739,6 +1810,17 @@ class RefreshGui(tk.Tk):
     def _copy_diagnostics(self):
         self.clipboard_clear()
         self.clipboard_append(f"App: v{APP_VERSION}\nControl: {self.control_mode.get()}\nEngine: {ENGINE_EXE}\nState: {self.status.get()}\n\n{self.raw_output}")
+
+    def _open_logs_folder(self):
+        if self.control_mode.get() == 'Mouse' and (self._checking_connection or (self.process and self.process.poll() is None)):
+            return
+        folder = self._session_log_path.parent if self._session_log_path else APP_DIR / (
+            'mouse-session-logs' if self.control_mode.get() == 'Mouse' else 'input-session-logs')
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            os.startfile(str(folder.resolve()), 'open')
+        except OSError as error:
+            messagebox.showerror('Could not open logs folder', str(error), parent=self)
 
     def _update_history_xscroll(self, first, last):
         self.history_xscroll.set(first, last)
@@ -1783,7 +1865,7 @@ class RefreshGui(tk.Tk):
                 return
             destination = filedialog.asksaveasfilename(parent=self, title='Export all sessions',
                 defaultextension='.xlsx', filetypes=[('Excel workbook', '*.xlsx')],
-                initialfile=f'E7-sessions-{time.strftime("%Y-%m-%d")}.xlsx')
+                initialfile=f'E7-sessions-{time.strftime("%Y-%m-%d_%H-%M-%S")}-{uuid.uuid4().hex[:8]}.xlsx')
             if destination:
                 export_sessions(destination, rows)
                 self.history_notice.set(f'Exported all {len(rows)} recorded sessions.')
