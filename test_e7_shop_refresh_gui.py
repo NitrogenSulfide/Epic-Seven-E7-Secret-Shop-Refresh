@@ -137,6 +137,114 @@ prompt("press enter to exit...", "")
 
 
 class GuiTests(unittest.TestCase):
+    def _eta_stats(self, count):
+        return 'E7GUI_STATS '+json.dumps(dict(refreshes=count, skystone_spent=count*3,
+                                             covenant=0, mystic=0, friendship=0))+'\n'
+
+    def test_eta_uses_reader_times_preserves_batching_pause_and_final_scan(self):
+        for mode in ('Mouse', 'ADB'):
+            with self.subTest(mode=mode):
+                self.app.control_mode.set(mode)
+                self.app.run_settings = gui.validate_settings('fixture', '31', '.3', '`', True, False)
+                self.app.session_estimate.reset(31, enabled=True)
+                self.app._session_started = True
+                self.app.finished = False
+                self.app.status.set('Running')
+                for count in range(1, 5):
+                    self.app.log_queue.put((self.app.run_id, 'output', (self._eta_stats(count), count*10)))
+                with patch.object(self.app, '_append_log', wraps=self.app._append_log) as log:
+                    self.app._drain_log_queue()
+                self.assertEqual(log.call_count, 1)
+                self.assertIn('~1m 00s', self.app.remaining_time.get())
+                self.app._handle_line('E7GUI_MOUSE_PAUSED {"reason":"Covered"}', observed_at=45)
+                self.app._update_remaining_time(100)
+                self.assertIn('Paused · ~0m 55s', self.app.remaining_time.get())
+                self.app._handle_line('E7GUI_MOUSE_RESUMED', observed_at=145)
+                self.app._handle_output(self._eta_stats(5), observed_at=150)
+                self.assertIn('~0m 50s', self.app.remaining_time.get())
+                self.app._handle_output(self._eta_stats(10), observed_at=200)
+                self.assertIn('Finishing final scan', self.app.remaining_time.get())
+                self.app._handle_line('---Result---')
+                self.assertEqual(self.app.remaining_time.get(), 'Time remaining: Complete')
+
+    def test_eta_stays_stopped_and_new_run_starts_estimating(self):
+        self.app.run_settings = self.app._settings()
+        self.app.session_estimate.reset(12, enabled=True)
+        self.app._session_started = True
+        self.app._update_remaining_time()
+        self.assertIn('Estimating', self.app.remaining_time.get())
+        with patch.object(self.app, 'after'):
+            self.app._handle_line('Shop refresh terminated!')
+        self.app._handle_output(self._eta_stats(4))
+        self.app._handle_line('---Result---')
+        self.assertIn('Session stopped', self.app.remaining_time.get())
+        self.app.finished = self.app.stop_key_pressed = False
+        self.app.session_estimate.reset(12, enabled=True)
+        self.app._update_remaining_time()
+        self.assertIn('Estimating', self.app.remaining_time.get())
+
+    def test_eta_unavailable_for_legacy_percent_and_calibration(self):
+        self.app.run_settings = self.app._settings()
+        self.app.session_estimate.reset(12, enabled=True)
+        self.app._session_started = True
+        self.app._handle_line('50% Cove: 0 Myst: 0')
+        self.app._update_remaining_time()
+        self.assertIn('Unavailable with this engine', self.app.remaining_time.get())
+        self.app.run_settings = gui.validate_settings('fixture', '100', '.3', 'esc', True, True)
+        self.app._update_remaining_time()
+        self.assertIn('Unavailable during calibration', self.app.remaining_time.get())
+
+    def test_open_logs_uses_current_session_and_handles_missing_folder(self):
+        with patch.object(gui.os, 'startfile') as open_folder:
+            self.app.control_mode.set('Mouse')
+            self.app._open_logs_folder()
+            self.assertEqual(open_folder.call_args.args[0], str((self.root/'mouse-session-logs').resolve()))
+            self.assertTrue((self.root/'mouse-session-logs').is_dir())
+            self.app.control_mode.set('ADB')
+            self.app._open_logs_folder()
+            self.assertEqual(open_folder.call_args.args[0], str((self.root/'input-session-logs').resolve()))
+            self.app._session_log_path = self.root/'mouse-session-logs'/'latest.log'
+            self.app._open_logs_folder()
+            self.assertEqual(open_folder.call_args.args[0], str(self.app._session_log_path.parent.resolve()))
+
+    def test_open_logs_disabled_during_mouse_run_but_available_for_adb(self):
+        self.app.process = Mock()
+        self.app.process.poll.return_value = None
+        with patch.object(gui.os, 'startfile') as open_folder:
+            self.app.control_mode.set('Mouse')
+            self.app._set_controls(True)
+            self.assertTrue(self.app.open_logs_button.instate(['disabled']))
+            self.app._open_logs_folder()
+            open_folder.assert_not_called()
+            self.app.control_mode.set('ADB')
+            self.app._set_controls(True)
+            self.app._open_logs_folder()
+            self.assertFalse(self.app.open_logs_button.instate(['disabled']))
+            open_folder.assert_called_once()
+        self.app.process = None
+
+    def test_open_logs_failure_is_reported_without_starting_an_engine(self):
+        with patch.object(gui.os, 'startfile', side_effect=OSError('Fixture failure')), patch.object(gui.messagebox, 'showerror') as error:
+            self.app._open_logs_folder()
+        self.assertIn('Fixture failure', error.call_args.args[1])
+        self.assertIsNone(self.app.process)
+
+    def test_same_second_exports_suggest_distinct_names_and_preserve_first_workbook(self):
+        self.history.write_text('Duration,Skystone spent,Gold spent,Covenant bookmark,Mystic medal\n10,3,0,0,0\n')
+        names = []
+        def save(**options):
+            names.append(options['initialfile'])
+            return str(self.root/options['initialfile'])
+        with patch.object(gui.time, 'strftime', return_value='2026-10-07_09-15-04'), patch.object(gui.filedialog, 'asksaveasfilename', side_effect=save):
+            self.app._export_history()
+            first = (self.root/names[0]).read_bytes()
+            self.history.write_text('Duration,Skystone spent,Gold spent,Covenant bookmark,Mystic medal\n20,6,0,0,0\n')
+            self.app._export_history()
+        self.assertNotEqual(names[0], names[1])
+        self.assertEqual((self.root/names[0]).read_bytes(), first)
+        self.assertNotEqual((self.root/names[1]).read_bytes(), first)
+        self.assertTrue(all('2026-10-07_09-15-04' in name for name in names))
+
     def test_trace_checkbox_is_separate_persisted_and_locked_during_session(self):
         self.assertFalse(self.app.trace_input.get())
         self.app.trace_check.invoke()

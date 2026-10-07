@@ -35,6 +35,7 @@ $mapping = [ordered]@{
     'e7_engine_protocol.py' = 'e7_engine_protocol.py'
     'e7_timing.py' = 'e7_timing.py'
     'e7_input_trace.py' = 'e7_input_trace.py'
+    'e7_session_estimate.py' = 'e7_session_estimate.py'
     'e7_history.py' = 'e7_history.py'
     'e7_links.py' = 'e7_links.py'
     'e7_appearance.py' = 'e7_appearance.py'

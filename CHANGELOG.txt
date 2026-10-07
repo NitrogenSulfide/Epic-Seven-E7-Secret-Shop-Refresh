@@ -1,3 +1,13 @@
+0.1.4-rc1 · Remaining time and session shortcuts
+
+• Shows approximate remaining time after the first few confirmed refreshes in
+  Mouse/ADB. Uses the latest eight refresh intervals, excludes startup/focus
+  pauses, and labels the final inventory scan separately. Logging is optional.
+• Adds Open Logs Folder in Diagnostics. It opens the current/last saved session
+  folder or the selected mode's folder. Available after Mouse sessions end.
+• Excel export suggestions include date, time and a short unique suffix, so
+  multiple exports on the same day need no manual rename.
+
 0.1.3 · Session records, exports and optional diagnostics
 
 • Adds optional click-coordinate and timing logs for Mouse and ADB, off by
