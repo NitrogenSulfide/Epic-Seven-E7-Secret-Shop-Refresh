@@ -18,6 +18,17 @@ from e7_mouse_refresh import E7MouseShopRefresh, confirmation_button, green_butt
 from e7_mouse_confirmation import confirmation_matches
 
 
+class FriendshipSessionTests(unittest.TestCase):
+    def test_mouse_cli_passes_friendship_selection_to_shared_engine(self):
+        from e7_mouse_refresh import run_mouse_session
+        window=json.dumps(dict(handle=123,pid=456,title='fake',rectangle=[0,0,1920,1080]))
+        arguments=['--mouse-session',window,'--budget','3','--delay','.3','--stop-key','esc','--random-offset','no','--buy-friendship']
+        with patch('e7_mouse_refresh.E7MouseShopRefresh') as engine,patch('e7_mouse_refresh.threading.Thread'),contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(run_mouse_session(arguments),0)
+        self.assertTrue(engine.call_args.kwargs['buy_friendship'])
+        engine.return_value.start.assert_called_once()
+
+
 def shop():
     return np.full((1080,1920,3),30,dtype=np.uint8)
 
@@ -32,8 +43,11 @@ def dialog(operation='refresh',centered=False):
 
 
 def currency_words(name,offset=0,price=None):
-    prefix,noun,normal_price = ('covenant','bookmarks','184,000') if name=='Covenant bookmark' else ('mystic','medals','280,000')
-    fields = [('summon',[1035,155,1135,180]),(prefix,[1035,205,1160,237]),
+    prefix,noun,normal_price = {'Covenant bookmark':('covenant','bookmarks','184,000'),
+                              'Mystic medal':('mystic','medals','280,000'),
+                              'Friendship points':('friendship','points','18,000')}[name]
+    category='currency' if name=='Friendship points' else 'summon'
+    fields = [(category,[1035,155,1135,180]),(prefix,[1035,205,1160,237]),
               (noun,[1170,205,1335,237]),(price or normal_price,[1684,168,1786,199]),
               ('buy',[1711,244,1757,276]),('only',[1035,255,1085,285]),
               ('1',[1094,255,1103,285]),('available',[1114,255,1220,285])]
@@ -42,12 +56,18 @@ def currency_words(name,offset=0,price=None):
 
 class CurrencyRowTests(unittest.TestCase):
     def test_each_currency_requires_its_own_name_price_category_and_buy(self):
-        for name in ('Covenant bookmark','Mystic medal'):
+        for name in ('Covenant bookmark','Mystic medal','Friendship points'):
             words=currency_words(name)
             self.assertEqual(currency_button(dict(words=words),[(1550,220,1810,300)],name),(1711,244,1757,276))
-            for omitted in ('summon','buy'):
+            for omitted in ('currency' if name=='Friendship points' else 'summon','buy'):
                 with self.subTest(name=name,omitted=omitted),self.assertRaises(MouseStopped):
                     currency_button(dict(words=[word for word in words if word['text']!=omitted]),[(1550,220,1810,300)],name)
+
+    def test_friendship_wrong_price_and_incomplete_lower_row_are_rejected(self):
+        with self.assertRaisesRegex(MouseStopped,'same row'):
+            currency_button(dict(words=currency_words('Friendship points',price='184,000')),[(1550,220,1810,300)],'Friendship points')
+        with self.assertRaises(IncompleteCurrencyRow):
+            currency_button(dict(words=currency_words('Friendship points',offset=820)),[],'Friendship points')
 
     def test_wrong_price_or_price_on_another_row_is_rejected(self):
         for price,shift in (('184,000',0),('280,000',430)):
@@ -69,11 +89,80 @@ class CurrencyRowTests(unittest.TestCase):
         self.assertIsNone(currency_button(dict(words=currency_words('Mystic medal')),[(1550,220,1810,300)],'Covenant bookmark'))
 
     def test_sold_out_row_is_ignored_only_when_no_active_buy_is_observed(self):
-        words=currency_words('Mystic medal')
-        for word in words:
-            if word['text']=='1':word['text']='0'
-        self.assertIsNone(currency_button(dict(words=words),[],'Mystic medal'))
-        self.assertIsNotNone(currency_button(dict(words=words),[(1550,220,1810,300)],'Mystic medal'))
+        for name in ('Covenant bookmark','Mystic medal','Friendship points'):
+            words=currency_words(name)
+            for word in words:
+                if word['text']=='1':word['text']='0'
+            with self.subTest(name=name):
+                self.assertIsNone(currency_button(dict(words=words),[],name))
+                self.assertIsNotNone(currency_button(dict(words=words),[(1550,220,1810,300)],name))
+
+    def test_available_buy_wins_over_purchased_text_for_every_currency(self):
+        for name in ('Covenant bookmark','Mystic medal','Friendship points'):
+            for status in ('Purchased','Sold Out'):
+                words=currency_words(name)+[dict(text=status,box=[1370,255,1470,285])]
+                with self.subTest(name=name,status=status):
+                    self.assertEqual(currency_button(dict(words=words),[(1550,220,1810,300)],name),(1711,244,1757,276))
+
+    def test_observed_zero_stock_overrides_retained_buy_and_only_one_available(self):
+        for name in ('Covenant bookmark','Mystic medal','Friendship points'):
+            for buttons in ([],[(1550,220,1810,300)]):
+                words=currency_words(name)+[dict(text='0/1',box=[1580,243,1628,276])]
+                with self.subTest(name=name,buttons=buttons):
+                    self.assertIsNone(currency_button(dict(words=words),buttons,name))
+                words[-1]['text']='1/1'
+                if buttons:self.assertIsNotNone(currency_button(dict(words=words),buttons,name))
+                else:
+                    with self.assertRaises(MouseStopped):currency_button(dict(words=words),buttons,name)
+
+    def test_zero_stock_requires_full_same_row_name_category_price_and_buy(self):
+        for name in ('Covenant bookmark','Mystic medal','Friendship points'):
+            words=currency_words(name)+[dict(text='0/1',box=[1580,243,1628,276])]
+            for omit in ('buy','currency' if name=='Friendship points' else 'summon',{'Covenant bookmark':'184,000','Mystic medal':'280,000','Friendship points':'18,000'}[name]):
+                with self.subTest(name=name,omit=omit),self.assertRaises(MouseStopped):
+                    currency_button(dict(words=[word for word in words if word['text']!=omit]),[(1550,220,1810,300)],name)
+
+    def test_unrelated_zero_and_other_row_stock_do_not_hide_available_currencies(self):
+        for name in ('Covenant bookmark','Mystic medal','Friendship points'):
+            for text,box in [('0',[1580,243,1628,276]),('01',[1580,243,1628,276]),('0/2',[1580,243,1628,276]),('10/1',[1580,243,1628,276]),('0/1',[1580,673,1628,706]),('0/1',[1050,243,1098,276]),('0/1',[1580,165,1628,198])]:
+                words=currency_words(name)+[dict(text=text,box=box)]
+                with self.subTest(name=name,text=text,box=box):
+                    self.assertIsNotNone(currency_button(dict(words=words),[(1550,220,1810,300)],name))
+
+    def test_conflicting_stock_insets_stop_instead_of_discarding_an_available_row(self):
+        for name in ('Covenant bookmark','Mystic medal','Friendship points'):
+            words=currency_words(name)+[dict(text='0/1',box=[1530,243,1578,276]),dict(text='1/1',box=[1600,243,1648,276])]
+            with self.subTest(name=name),self.assertRaisesRegex(MouseStopped,'stock is ambiguous'):
+                currency_button(dict(words=words),[(1500,220,1810,300)],name)
+
+    def test_row_retry_retains_stock_only_for_matching_buy_and_rejects_conflicts(self):
+        from e7_shop_flow import retain_row_stock
+        for name in ('Covenant bookmark','Mystic medal','Friendship points'):
+            original=dict(words=[*currency_words(name),dict(text='0/1',box=[1580,243,1628,276])])
+            row=dict(words=currency_words(name))
+            merged=retain_row_stock(original,row,(1711,244,1757,276))
+            self.assertIsNone(currency_button(merged,[(1550,220,1810,300)],name))
+            conflicting=dict(words=[*row['words'],dict(text='1/1',box=[1580,243,1628,276])])
+            with self.assertRaisesRegex(MouseStopped,'stock is ambiguous'):
+                retain_row_stock(original,conflicting,(1711,244,1757,276))
+            moved=dict(words=[dict(text=word['text'],box=[v+15 if i%2==0 else v for i,v in enumerate(word['box'])]) for word in row['words']])
+            with self.assertRaisesRegex(MouseStopped,'stock is ambiguous'):
+                retain_row_stock(original,moved,(1711,244,1757,276))
+            self.assertEqual(len(row['words']),len(currency_words(name)))
+
+    def test_purchased_button_area_is_ignored_for_all_currencies_in_a_new_session(self):
+        for name in ('Friendship points','Covenant bookmark','Mystic medal'):
+            for label in ('Purchased','Sold Out','SoldOut'):
+                with self.subTest(name=name,label=label):
+                    words=[word for word in currency_words(name) if word['text'] not in ('buy','18,000','184,000','280,000','only','1','available')]
+                    words.append(dict(text=label,box=[1590,245,1790,277]))
+                    self.assertIsNone(currency_button(dict(words=words),[],name))
+
+    def test_purchased_label_on_other_row_or_unknown_missing_buy_is_not_ignored(self):
+        words=[word for word in currency_words('Friendship points') if word['text']!='buy']
+        for status in ([],[dict(text='Purchased',box=[1590,675,1790,707])]):
+            with self.subTest(status=status),self.assertRaisesRegex(MouseStopped,'same row'):
+                currency_button(dict(words=words+status),[],'Friendship points')
 
 
 class PointerGlideTests(unittest.TestCase):
@@ -971,6 +1060,50 @@ class NativeEngineTests(unittest.TestCase):
         adb.assert_not_called()
         self.assertEqual(app.mouse.click.call_args_list[0].args,pos)
 
+    def test_icon_match_checks_stock_before_buy_for_covenant_and_mystic(self):
+        for name,price in (('Covenant bookmark',184000),('Mystic medal',280000)):
+            app=self.make_engine()
+            template=np.random.default_rng(7).integers(20,240,(40,40),dtype=np.uint8)
+            app.storage.inventory[name]=adb_engine.E7Item(template,price)
+            frame=shop();frame[200:240,800:840]=template[:,:,None];frame[220:300,1550:1810]=(20,110,40)
+            for stock in ('0/1','1/1'):
+                app._rgb=frame.copy()
+                self.ui_ocr.return_value=dict(words=currency_words(name)+[dict(text=stock,box=[1580,243,1628,276])])
+                with self.subTest(name=name,stock=stock):
+                    point=app.findItemPosition(cv_gray(frame),template)
+                    self.assertEqual(point,None if stock=='0/1' else (1741,260))
+            app.mouse.click.assert_not_called()
+
+    def test_stock_retry_recovers_small_fraction_and_caches_only_current_capture(self):
+        for stock in ('0/1','1/1'):
+            app=self.make_engine();app.storage.inventory['Friendship points']=adb_engine.E7Item(price=18000)
+            app._rgb[220:300,1550:1810]=(20,110,40)
+            self.ui_ocr.reset_mock()
+            base=dict(words=currency_words('Friendship points'))
+            row=dict(words=currency_words('Friendship points')+[dict(text=stock,box=[1580,243,1628,276])])
+            self.ui_ocr.side_effect=[base,row,base,row]
+            for index in range(3):
+                if index==2:app._rgb=app._rgb.copy()
+                point=app.findItemPosition(cv_gray(app._rgb),None)
+                self.assertEqual(point,None if stock=='0/1' else (1734,260))
+                self.assertEqual(self.ui_ocr.call_count,2 if index<2 else 4)
+            retry=self.ui_ocr.call_args_list[1]
+            self.assertEqual(retry.kwargs,dict(scale=2,contrast=True))
+            app.mouse.click.assert_not_called()
+        self.ui_ocr.side_effect=None
+
+    def test_scaled_row_ocr_maps_word_bounds_to_original_view(self):
+        from e7_mouse_confirmation import read_ui_text
+        rgb=shop();rgb[200:240,1500:1700]=80
+        def child(*args,**kwargs):
+            path=kwargs['env']['E7_MOUSE_OCR_FRAME']
+            with Image.open(path) as image:
+                self.assertEqual(image.size,(400,80))
+            return Mock(returncode=0,stdout=json.dumps(dict(text='0/1',words=[dict(text='0/1',box=[20,10,100,60])])))
+        with patch('e7_mouse_confirmation.subprocess.run',side_effect=child):
+            result=read_ui_text(rgb,(1500,200,1700,240),scale=2,contrast=True)
+        self.assertEqual(result['words'][0]['box'],[1510,205,1550,230])
+
     def add_real_currencies(self,app):
         for filename,name,price in (('cov.png','Covenant bookmark',184000),('mys.png','Mystic medal',280000)):
             path=Path(adb_engine.__file__).parent/'adb-assets'/filename
@@ -981,7 +1114,7 @@ class NativeEngineTests(unittest.TestCase):
     def test_currency_text_fallback_uses_buy_label_and_caches_only_current_capture(self):
         app=self.make_engine();self.add_real_currencies(app)
         frame=shop();frame[220:300,1550:1810]=(20,110,40);frame[650:730,1550:1810]=(20,110,40)
-        app._rgb=frame;self.ui_ocr.return_value=dict(words=currency_words('Covenant bookmark')+currency_words('Mystic medal',430))
+        app._rgb=frame;self.ui_ocr.return_value=dict(words=currency_words('Covenant bookmark')+currency_words('Mystic medal',430)+[dict(text='1/1',box=[1580,243,1628,276]),dict(text='1/1',box=[1580,673,1628,706])])
         points=[app.findItemPosition(cv_gray(frame),item.image) for item in app.storage.inventory.values()]
         self.assertEqual(points,[(1734,260),(1734,690)])
         self.assertEqual(self.ui_ocr.call_count,1)
@@ -1017,7 +1150,7 @@ class NativeEngineTests(unittest.TestCase):
                 if name not in bought:frame[top:top+80,1550:1810]=(20,110,40)
             return frame
         app.mouse.screenshot.side_effect=lambda:Image.fromarray(dialog('buy') if stage[0]=='confirm' else scene())
-        def words(rgb,region):
+        def words(rgb,region,**kwargs):
             result=[]
             for name,offset in (('Covenant bookmark',0),('Mystic medal',430)):
                 row=currency_words(name,offset)
@@ -1051,7 +1184,7 @@ class NativeEngineTests(unittest.TestCase):
     def test_offline_item_check_never_constructs_mouse_transport(self):
         with tempfile.TemporaryDirectory() as temp:
             path=Path(temp)/'shop.png';Image.fromarray(shop()).save(path)
-            with patch('e7_mouse_refresh.create_navigator') as navigator,patch('e7_mouse_refresh.WindowsMouse') as transport:
+            with patch('e7_shop_flow.read_ui_text',return_value=dict(words=[])),patch('e7_mouse_refresh.create_navigator') as navigator,patch('e7_mouse_refresh.WindowsMouse') as transport:
                 result=inspect_mouse_items(path,Path(adb_engine.__file__).parent/'adb-assets')
             navigator.return_value.require_shop.assert_called_once()
             transport.assert_not_called()
@@ -1062,7 +1195,7 @@ class NativeEngineTests(unittest.TestCase):
         exposed=[False];events=[]
         page=shop();page[220:300,1550:1810]=(20,110,40);page[650:730,1550:1810]=(20,110,40)
         app.mouse.screenshot.side_effect=lambda:Image.fromarray(page if exposed[0] else shop())
-        self.ui_ocr.side_effect=lambda rgb,region:dict(words=(currency_words('Covenant bookmark')+currency_words('Mystic medal',430)) if exposed[0] else [])
+        self.ui_ocr.side_effect=lambda rgb,region,**kwargs:dict(words=(currency_words('Covenant bookmark')+currency_words('Mystic medal',430)) if exposed[0] else [])
         def drag(*args,**kw):exposed[0]=True;events.append('drag')
         def buy(pos):events.append('buy '+app._item_name);return True
         def refresh():events.append('refresh');app.loop_active=False;return True

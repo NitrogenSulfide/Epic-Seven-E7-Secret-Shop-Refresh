@@ -6,11 +6,11 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from PIL import Image
+from PIL import Image, ImageOps
 import numpy as np
 
 
-def read_ui_text(rgb, region):
+def read_ui_text(rgb, region, *, scale=1, contrast=False):
     helper = Path('mouse_confirmation_ocr.ps1')
     if not helper.is_file():
         raise ValueError('The Mouse confirmation helper is missing. Use the complete player folder.')
@@ -22,7 +22,12 @@ def read_ui_text(rgb, region):
     with tempfile.TemporaryDirectory(prefix='e7-confirm-') as temp:
         path = Path(temp)/'dialog.png'
         left,top,right,bottom = region
-        Image.fromarray(rgb[top:bottom,left:right]).save(path)
+        crop = Image.fromarray(rgb[top:bottom,left:right])
+        if contrast:
+            crop = ImageOps.autocontrast(crop.convert('L')).convert('RGB')
+        if scale != 1:
+            crop = crop.resize((crop.width*scale,crop.height*scale),Image.Resampling.BICUBIC)
+        crop.save(path)
         environment = dict(os.environ); environment['E7_MOUSE_OCR_FRAME'] = str(path)
         child = subprocess.run([str(powershell),'-NoProfile','-NonInteractive','-EncodedCommand',encoded],
                                env=environment,capture_output=True,text=True,
@@ -33,7 +38,8 @@ def read_ui_text(rgb, region):
         result = json.loads(child.stdout)
         result['text'] = str(result['text']).lower()
         result['words'] = [dict(text=str(word['text']).lower(),
-            box=[word['box'][0]+left,word['box'][1]+top,word['box'][2]+left,word['box'][3]+top])
+            box=[word['box'][0]/scale+left,word['box'][1]/scale+top,
+                 word['box'][2]/scale+left,word['box'][3]/scale+top])
             for word in result.get('words',[])]
         return result
     except (ValueError,KeyError,TypeError):
@@ -67,13 +73,17 @@ def confirmation_matches(text,operation,item_name=None):
         # STOVE's dialog omits the amount; its exact operation prompt confirms
         # the game's fixed three-skystone Refresh. Reject contradictory numbers.
         numbers=re.findall(r'\b\d[\d,.\u00a0]*\b',text)
-        if re.search(r'\b(buy|purchase|covenant|mystic)\b',text):return False
+        if re.search(r'\b(buy|purchase|covenant|mystic|friendship)\b',text):return False
         if any(re.sub(r'[, .\u00a0]','',number)!='3' for number in numbers):return False
         return 'refresh' in text and 'skystone' in text and (bool(numbers) or native_prompt)
-    if operation != 'buy' or item_name not in ('Covenant bookmark','Mystic medal'):
+    expected = {'Covenant bookmark':('covenant','bookmarks?','184000'),
+                'Mystic medal':('mystic','medals?','280000'),
+                'Friendship points':('friendship','points?','18000')}
+    if operation != 'buy' or item_name not in expected:
         return False
-    item,noun,price,other = ('covenant','bookmarks?','184000','mystic') if item_name == 'Covenant bookmark' else ('mystic','medals?','280000','covenant')
-    if re.search(r'\b'+other+r'\b|\brefresh\b',text):return False
+    item,noun,price = expected[item_name]
+    others = [prefix for prefix,_,_ in expected.values() if prefix != item]
+    if re.search(r'\b(?:'+'|'.join(others)+r'|refresh)\b',text):return False
     if not re.search(r'\b'+item+r'\s+'+noun+r'\b',text):return False
     numbers=[re.sub(r'[, .\u00a0]','',number) for number in re.findall(r'\b\d[\d,.\u00a0]*\b',text)]
     amounts=[number for number in numbers if int(number)>=1000]

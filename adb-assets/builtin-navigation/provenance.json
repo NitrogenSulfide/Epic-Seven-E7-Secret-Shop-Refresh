@@ -2,7 +2,7 @@
   "description": "Generic English shop labels and native home control icon masks for normalized 1920x1080 recognition.",
   "source": "UI-only crops derived from owner-supplied game screenshots and visually inspected; original screenshots and personal calibration remain private.",
   "credit": "Epic Seven, Smilegate and respective game/artwork rights holders. Software GPL does not relicense third-party game artwork.",
-  "processing": "Existing grayscale text labels retained byte-for-byte. Native icon is a tightly cropped binary mask of its four white question-mark components, from an authorized STOVE home capture on 2026-10-04. No wallpaper, account details or original screen is included. Sanctuary and Epic Pass binary UI masks were isolated from the same authorized STOVE controls capture; matching their joint layout does not require wallpaper or OCR text.",
+  "processing": "Existing grayscale text labels retained byte-for-byte. Native icon is a tightly cropped binary mask of its four white question-mark components, from an authorized STOVE home capture on 2026-10-04. No wallpaper, account details or original screen is included. Sanctuary and Epic Pass binary UI masks were isolated from the same authorized STOVE controls capture; matching their joint layout does not require wallpaper or OCR text. Event binary mask added from the owner-supplied BlueStacks home failure crop on 2026-10-09; only the card outline, star and clock components are retained, with no caption, wallpaper or personal details. Event and Epic Pass are alternative third controls in the same observed home layout.",
   "files": {
     "menu-secret-shop.png": {
       "sha256": "1e9dd7ebde1a6fd2c1a86e87ccea65f038f5b37ea02f3505b0eaf0cddef631fa",
@@ -33,6 +33,11 @@
       "sha256": "39341fbd4b97749c859bbd683aeec6f3c3003ae60349c21f34e122bf2f512a12",
       "width": 65,
       "height": 65
+    },
+    "native-event-icon.png": {
+      "sha256": "e5d197b538fb47b0b69df84ccae74e91ea05e83f0049e67a078ba5f888774ca8",
+      "width": 61,
+      "height": 58
     }
   }
 }

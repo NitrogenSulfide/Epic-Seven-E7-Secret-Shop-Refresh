@@ -1,6 +1,6 @@
 import subprocess
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from e7_connection import check_connection, epic_seven_resumed
 
 GAME = 'topResumedActivity=ActivityRecord{a1 u0 com.stove.epic7.google/.MainActivity t1}'
@@ -12,6 +12,11 @@ def response(output='', error='', code=0):
 
 
 class ConnectionTests(unittest.TestCase):
+    def setUp(self):
+        probe = patch('e7_connection.discover_bluestacks_endpoints', return_value=())
+        probe.start()
+        self.addCleanup(probe.stop)
+
     def test_scan_counts_only_authorized_online_devices_and_never_connects(self):
         runner = Mock(side_effect=[response('List of devices attached\na\tdevice\nb\toffline\nc\tunauthorized\na\tdevice\n'), response(GAME)])
         result = check_connection('adb.exe', '.', runner=runner)

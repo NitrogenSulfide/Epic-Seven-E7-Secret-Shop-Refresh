@@ -16,9 +16,10 @@ class RunSettings:
     debug: bool
     tap_jitter: float = 0.03
     trace_input: bool = False
+    buy_friendship: bool = False
 
 
-def validate_settings(device, budget, delay, stop_key, random_offset, debug, tap_jitter=0.03, trace_input=False):
+def validate_settings(device, budget, delay, stop_key, random_offset, debug, tap_jitter=0.03, trace_input=False, buy_friendship=False):
     if not re.fullmatch(r'[0-9]+', str(budget).strip()):
         raise ValueError("The skystone budget must be a whole number of at least 3.")
     try:
@@ -36,7 +37,11 @@ def validate_settings(device, budget, delay, stop_key, random_offset, debug, tap
         raise ValueError("Use Esc or a single letter, number, or / . , ' ; [ ] ` as the stop key.")
     if type(trace_input) is not bool:
         raise ValueError('Input tracing must be on or off.')
-    return RunSettings(device, amount, sleep, key, bool(random_offset), bool(debug), jitter, trace_input)
+    if type(buy_friendship) is not bool:
+        raise ValueError('Friendship purchases must be on or off.')
+    if debug and buy_friendship:
+        raise ValueError('Turn off Friendship purchases for ADB calibration.')
+    return RunSettings(device, amount, sleep, key, bool(random_offset), bool(debug), jitter, trace_input, buy_friendship)
 
 
 class EngineProtocol:

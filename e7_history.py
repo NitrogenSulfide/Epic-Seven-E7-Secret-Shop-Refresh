@@ -12,9 +12,9 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 FIELDS = ['Session ID', 'Started at', 'Control mode', 'Mode', 'Outcome', 'Reason',
           'Duration', 'Skystone spent', 'Gold spent', 'Covenant bookmark', 'Mystic medal',
-          'Friendship bookmark', 'Legacy extra fields']
+          'Friendship points', 'Friendship bookmark', 'Legacy extra fields']
 NUMERIC_FIELDS = {'Duration', 'Skystone spent', 'Gold spent', 'Covenant bookmark',
-                  'Mystic medal', 'Friendship bookmark'}
+                  'Mystic medal', 'Friendship bookmark', 'Friendship points'}
 LEGACY_FIELDS = ['Duration', 'Skystone spent', 'Gold spent', 'Covenant bookmark', 'Mystic medal']
 
 
@@ -106,6 +106,10 @@ def _column(number):
 def export_sessions(path, records):
     """Write a real .xlsx using the standard library; text cannot become formulas."""
     fields = list(FIELDS)
+    fields.insert(fields.index('Friendship points')+1,'Friendship points gained')
+    numeric=NUMERIC_FIELDS|{'Friendship points gained'}
+    headers={'Covenant bookmark':'Covenant buys','Mystic medal':'Mystic buys',
+        'Friendship points':'Friendship buys','Friendship bookmark':'Legacy Friendship bookmarks'}
     for record in records:
         fields.extend(key for key in record if key not in fields)
     if len(records) > 1_048_573:
@@ -121,6 +125,7 @@ def export_sessions(path, records):
     columns = node(sheet, 'cols')
     for index, field in enumerate(fields, 1):
         width = 48 if field == 'Reason' else 28 if field in ('Started at', 'Session ID') else 21
+        width=max(width,len(headers.get(field,field))+2)
         node(columns, 'col', min=str(index), max=str(index), width=str(width), customWidth='1')
     data = node(sheet, 'sheetData')
     def text_cell(row, address, value, style='0'):
@@ -132,15 +137,20 @@ def export_sessions(path, records):
     header = node(data, 'row', r='1')
     for index, field in enumerate(fields, 1):
         text_cell(header, f'{_column(index)}1', 'Duration (seconds)' if field == 'Duration' else
-                  'Started at (UTC)' if field == 'Started at' else field, '1')
-    totals = {key: 0 for key in NUMERIC_FIELDS}
+                  'Started at (UTC)' if field == 'Started at' else headers.get(field,field), '1')
+    totals = {key: 0 for key in numeric}
     for row_index, record in enumerate(records, 2):
         row = node(data, 'row', r=str(row_index))
         for index, field in enumerate(fields, 1):
             address = f'{_column(index)}{row_index}'
             value = record.get(field, '')
+            if field=='Friendship points gained':
+                try:
+                    buys=float(record.get('Friendship points',''))
+                    value=buys*50 if math.isfinite(buys) and buys>=0 and buys.is_integer() else ''
+                except (ValueError,TypeError):value=''
             try:
-                number = float(value) if field in NUMERIC_FIELDS and value not in ('', None) else None
+                number = float(value) if field in numeric and value not in ('', None) else None
             except (TypeError, ValueError):
                 number = None
             if number is not None and math.isfinite(number):
@@ -155,7 +165,7 @@ def export_sessions(path, records):
         row = node(data, 'row', r=str(last + 1))
         text_cell(row, f'A{last + 1}', 'Totals', '1')
         for index, field in enumerate(fields, 1):
-            if field in NUMERIC_FIELDS:
+            if field in numeric:
                 cell = node(row, 'c', r=f'{_column(index)}{last + 1}', s='3' if field == 'Duration' else '2')
                 node(cell, 'f').text = f'SUM({_column(index)}2:{_column(index)}{last})'
                 node(cell, 'v').text = str(totals[field])

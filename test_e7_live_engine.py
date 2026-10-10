@@ -15,6 +15,16 @@ import E7ADBShopRefresh as engine
 
 
 class StartupSelectionTests(unittest.TestCase):
+    def test_friendship_is_opt_in_and_rejected_in_calibration_before_transport(self):
+        with patch.object(engine.E7ADBShopRefresh,'checkScreenDimension'),patch.object(engine,'create_navigator'):
+            app=engine.E7ADBShopRefresh(buy_friendship=True)
+        self.assertEqual(app.storage.inventory['Friendship points'].price,18000)
+        self.assertIsNone(app.storage.inventory['Friendship points'].image)
+        with patch.object(engine.E7ADBShopRefresh,'checkScreenDimension') as capture:
+            for kwargs in (dict(buy_friendship='yes'),dict(buy_friendship=True,debug=True)):
+                with self.assertRaises(ValueError):engine.E7ADBShopRefresh(**kwargs)
+            capture.assert_not_called()
+
     def test_calibration_and_normal_inventory_exclude_friendship(self):
         import numpy as np
         for debug in (False, True):
@@ -145,17 +155,22 @@ class EngineTests(unittest.TestCase):
 
     def test_key_poll_yields_and_detects_stop(self):
         app = self.make_engine()
-        with patch.object(engine.keyboard, 'is_pressed', side_effect=[False, False, True]) as key, patch.object(engine.time, 'sleep') as sleep, contextlib.redirect_stdout(io.StringIO()) as output:
+        monitor=Mock();monitor.pressed.side_effect=[False,False,True]
+        with patch.object(engine,'stop_key_monitor') as factory, patch.object(engine.time, 'sleep') as sleep, contextlib.redirect_stdout(io.StringIO()) as output:
+            factory.return_value.__enter__.return_value=monitor
+            monitor.backend='Windows global hotkey'
+            monitor.detected_by='injected keyboard event';monitor.injected=True
             app.checkKeyPress()
-        self.assertEqual(key.call_count, 3)
+        self.assertEqual(monitor.pressed.call_count, 3)
         self.assertEqual(sleep.call_args_list, [unittest.mock.call(.02)] * 2)
         self.assertFalse(app.loop_active)
         self.assertIn('Shop refresh terminated!', output.getvalue())
+        self.assertIn('"source": "injected keyboard event"',output.getvalue())
 
     def test_normal_end_does_not_claim_stop_key(self):
         app = self.make_engine()
         app.end_of_refresh = True
-        with patch.object(engine.keyboard, 'is_pressed') as key, contextlib.redirect_stdout(io.StringIO()) as output:
+        with patch.object(engine,'stop_key_monitor') as key, contextlib.redirect_stdout(io.StringIO()) as output:
             app.checkKeyPress()
         key.assert_not_called()
         self.assertEqual(output.getvalue(), '')
@@ -208,11 +223,20 @@ class EngineTests(unittest.TestCase):
     def test_start_cleans_up_poll_thread_after_failure(self):
         app = self.make_engine()
         app.keyboard_thread = threading.Thread(target=app.checkKeyPress)
-        with patch.object(engine.keyboard, 'is_pressed', return_value=False), patch.object(app, 'refreshShop', side_effect=RuntimeError('fake failure')):
+        with patch.object(engine,'stop_key_monitor') as factory, patch.object(app, 'refreshShop', side_effect=RuntimeError('fake failure')):
+            factory.return_value.__enter__.return_value.pressed.return_value=False
+            factory.return_value.__enter__.return_value.backend='Windows global hotkey'
             with self.assertRaises(RuntimeError):
                 app.start()
         self.assertTrue(app.end_of_refresh)
         self.assertFalse(app.keyboard_thread.is_alive())
+
+    def test_unavailable_global_stop_key_blocks_refresh_before_input(self):
+        app=self.make_engine();app._stop_key_ready=threading.Event()
+        app.keyboard_thread=threading.Thread(target=app.checkKeyPress)
+        with patch.object(engine,'stop_key_monitor',side_effect=ValueError('Stop key already registered')),patch.object(app,'refreshShop') as refresh,contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(engine.MouseStopped,'already registered'):app.start()
+        refresh.assert_not_called();self.assertFalse(app.keyboard_thread.is_alive())
 
     def test_shop_already_open_sends_no_navigation_tap(self):
         app = self.make_engine()

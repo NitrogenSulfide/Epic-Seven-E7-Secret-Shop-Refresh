@@ -124,5 +124,15 @@
       }
     },
     "alterations": "None to original files; proportional UI resizing only."
+  },
+  "friendship_counter_heart": {
+    "output": "friendship-points-heart.png",
+    "output_sha256": "d1c752f05d3bf039fd662bab4d7f7b5c258c9f65a4424af9e55e4506bcaec557",
+    "input_sha256": "a7b9783993ce93d90e77abb5fe9410b946c54cd065edf29e3d08bf8849957a88",
+    "source": "Owner-supplied Epic Seven game crop, 2026-10-09",
+    "edit_tool": "built-in image_gen",
+    "use_case": "background-extraction",
+    "rights": "Derivative game artwork; respective rightsholders retain rights. Project GPL does not relicense artwork.",
+    "prompt": "Use case: background-extraction. Asset type: Epic Seven Friendship points counter UI icon. Input image: edit target. Extract only the existing green two-leaf heart emblem, preserving its exact distinctive shape, colours, shading, dark outline, central seam and highlights. Remove the brown square tile, frame and white '50' text completely. Do not redesign or replace the emblem with a generic heart. Put the faithful green leaf heart cutout alone centered on a genuinely transparent background with a small transparent margin. No text, no tile, no new decorations."
   }
 }

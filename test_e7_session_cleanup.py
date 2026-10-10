@@ -22,6 +22,46 @@ from E7ADBShopRefresh import E7ADBShopRefresh, run_gui_session
 
 
 class SessionCleanupTests(unittest.TestCase):
+    def test_excel_places_current_friendship_buys_beside_mystic_and_preserves_legacy(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'sessions.xlsx'
+            records=[{'Mystic medal':1,'Friendship points':2,'Friendship bookmark':'','Custom':'retained'},
+                     {'Friendship bookmark':3}]
+            export_sessions(path,records)
+            with ZipFile(path) as archive:
+                ns={'s':'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+                root=ET.fromstring(archive.read('xl/worksheets/sheet1.xml'))
+                rows=root.findall('s:sheetData/s:row',ns)
+                headers=[cell.find('s:is/s:t',ns).text for cell in rows[0]]
+                mystic=headers.index('Mystic buys');friend=headers.index('Friendship buys')
+                self.assertEqual(friend,mystic+1)
+                gained=headers.index('Friendship points gained');legacy=headers.index('Legacy Friendship bookmarks')
+                self.assertEqual(gained,friend+1)
+                def cell(row,index):
+                    address=rows[0][index].get('r')[:-1]+str(row+1)
+                    return next(value for value in rows[row] if value.get('r')==address)
+                value=lambda row,index:float(cell(row,index).find('s:v',ns).text)
+                self.assertEqual(value(1,friend),2);self.assertEqual(value(1,gained),100)
+                self.assertEqual(value(2,legacy),3)
+                self.assertIsNone(rows[2][friend].find('s:v',ns));self.assertIsNone(rows[2][gained].find('s:v',ns))
+                self.assertEqual(value(3,friend),2);self.assertEqual(value(3,gained),100)
+                self.assertIsNotNone(cell(3,gained).find('s:f',ns))
+                self.assertEqual(rows[1][headers.index('Custom')].find('s:is/s:t',ns).text,'retained')
+            self.assertNotIn('Friendship points gained',records[0])
+
+    def test_friendship_points_history_is_distinct_from_retired_bookmarks(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'history.csv'
+            old=new_session_metadata('ADB',True);old.update({'Friendship bookmark':3})
+            current=new_session_metadata('Mouse');current.update({'Friendship points':2,'Gold spent':36000})
+            append_session(path,old);append_session(path,current)
+            rows=read_sessions(path)
+            self.assertEqual(rows[0]['Friendship bookmark'],'3')
+            self.assertEqual(rows[0]['Friendship points'],'')
+            self.assertEqual(rows[1]['Friendship points'],'2')
+            self.assertEqual(rows[1]['Friendship bookmark'],'')
+            self.assertEqual(rows[1]['Mode'],'Normal')
+
     def test_all_entry_points_reject_invalid_delays_before_capture(self):
         for delay in (0, -.1, 2.01, 86400, float('nan'), float('inf')):
             with self.subTest(delay=delay), self.assertRaises(ValueError):
@@ -131,6 +171,12 @@ class SessionCleanupTests(unittest.TestCase):
         self.assertIn('E7GUI_STARTED', output.getvalue())
         listener.return_value.start.assert_called_once()
         fake.start.assert_called_once()
+
+    def test_structured_adb_passes_friendship_selection_without_prompt_answers(self):
+        settings=dict(device='fake',budget=3,tap_sleep=.3,stop_key='esc',random_offset=False,debug=False,tap_jitter=0,buy_friendship=True)
+        with patch('E7ADBShopRefresh.E7ADBShopRefresh') as engine,patch('E7ADBShopRefresh.threading.Thread'),contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(run_gui_session(['--gui-session',json.dumps(settings)]),0)
+        self.assertTrue(engine.call_args.kwargs['buy_friendship'])
 
     def test_bug_link_prefills_version_and_mode_without_private_logs(self):
         from urllib.parse import parse_qs, urlparse

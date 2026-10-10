@@ -44,3 +44,13 @@ deploy, merge or publish.
 Automated checks, independent review, live-engine/game verification and
 publication approval are separate gates. Approval names the exact package and
 destination. Never push to Solunium's upstream repository.
+
+# Local artifact retention
+
+Keep the current version plus five previous distinct versions as complete local
+packages. Preserve compact iteration notes, source/evidence, screenshots, logs,
+package receipts and SHA-256s for older versions. Follow docs/LOCAL-RETENTION.md
+and the General/scripts/e7_release_retention.py preview/archive workflow after
+verified releases. Review the exact payload deletion scope before pruning;
+never delete source Git checkouts, generic workspace recovery snapshots, shared
+fixtures, installed runtime data or held versions automatically.

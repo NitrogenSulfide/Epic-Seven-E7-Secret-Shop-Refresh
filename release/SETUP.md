@@ -251,5 +251,48 @@ screen’s Buy me a coffee button opens https://ko-fi.com/bluenatto only when cl
 
 Testing has been limited to Google Play
 Games on PC Developer Emulator and the official STOVE client of Epic Seven.
-Other emulators and methods have not been tested. Both modes buy only Covenant
-Bookmarks and Mystic Medals; Friendship purchases are removed from calibration too.
+Other emulators and methods have not been tested. Both modes buy Covenant
+Bookmarks and Mystic Medals by default. Optionally enable **Also buy Friendship
+Points** for the current heart item (50 points for 18,000 gold per buy), using
+this trial's matching engine. Calibration excludes Friendship. Friendship has
+offline recognition and fake-engine verification; live purchase remains unverified.
+
+## BlueStacks 5
+
+Enable ADB in the intended BlueStacks player and leave its window open. In ADB
+mode, use **Scan** and select that player by name. The number shown beside it is
+its current port; Player 2 can use a different port from Player 1. The selected
+full address and connection state appear below the selector. Scan does not
+connect; **Start Refresh** connects only the selected endpoint and checks that
+Epic Seven is active before launching the refresh engine.
+
+Mouse mode uses the player's verified game surface, excluding emulator toolbars
+and advertising. If Windows denies the permission check, the app offers an
+administrator retry. That retry does not start a session automatically. If the
+check remains denied, use ADB or reopen the player without administrator
+privileges. Use the complete matching new player folder with the v9 Mouse engine.
+
+The owner reports rc4 ADB and Mouse working at maximized and smaller sizes,
+including hidden home controls. The rc6 streamed/global Stop key needs its own live
+check. Stop is registered for the active session regardless of ordinary window
+focus; if the key is reserved by another app, startup stops and asks for another
+key. Rc6 also listens to keyboard events, including brief injected streaming
+presses. Diagnostics record how Stop was detected. Finishing the session releases
+the listener and registration. Moonlight must forward the key to the host;
+client-consumed keys cannot reach the app.
+
+The heart-icon Friendship buys counter sits to the right of Mystic buys.
+Diagnostics show its count and whether buying is enabled. Excel exports put
+Friendship buys beside Mystic buys and show points gained (50 per buy), with
+legacy Friendship Bookmarks in a separate column. Buying remains optional.
+
+The green leaf-heart icon is a cutout generated from the supplied game image.
+Purchased/sold-out rows are skipped, including purchases made before this session.
+Only purchases completed by this session contribute to its counters and spending.
+
+Rc7 recognizes 0/1 stock beside Buy on a pre-purchased row, even when the button,
+price and “Only 1 available” remain visible. A verified 1/1 row still follows
+normal purchase checks. Stock recognition uses item and control positions;
+your shop wallpaper does not need to match the supplied example. Use the whole
+rc7 folder with its matching runtime. Enable Also buy Friendship Points if you
+want new Friendship purchases; its default remains off.

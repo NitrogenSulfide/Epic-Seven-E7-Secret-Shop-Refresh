@@ -85,11 +85,14 @@ def native_home_control_target(rgb):
     distance=cv2.distanceTransform(255-edges,cv2.DIST_L2,3)
     proximity=np.maximum(0,1-distance/2.5).astype('float32')
     candidates={}
-    for name in ('sanctuary','secret-shop','epic-pass'):
+    # The third home control rotates between Epic Pass and Event. Require the
+    # same three-symbol layout with either observed icon, without depending on
+    # OCR of captions over animated artwork.
+    for name in ('sanctuary','secret-shop','epic-pass','event'):
         path=Path(f'adb-assets/builtin-navigation/native-{name}-icon.png')
-        if not path.is_file():return None
+        if not path.is_file():continue
         mask=cv2.imdecode(np.frombuffer(path.read_bytes(),dtype=np.uint8),cv2.IMREAD_GRAYSCALE)
-        if mask is None:return None
+        if mask is None:continue
         if name=='secret-shop':mask=np.pad(mask,2)
         matches=[]
         for scale in np.linspace(.85,1.15,13):
@@ -104,13 +107,15 @@ def native_home_control_target(rgb):
                 if gray[y:y+h,x:x+w][icon>170].mean()>=170:
                     matches.append((score,float(scale),(x+w/2,180+y+h/2)))
                 scores[max(0,y-h//2):y+h//2+1,max(0,x-w//2):x+w//2+1]=-1
-        if not matches:return None
         candidates[name]=matches
+    if not candidates.get('sanctuary') or not candidates.get('secret-shop'):return None
+    third=candidates.get('epic-pass',[])+candidates.get('event',[])
+    if not third:return None
     groups=[]
     for shop in candidates['secret-shop']:
         for castle in candidates['sanctuary']:
             if abs(shop[2][0]-castle[2][0])>22 or not 100<=shop[2][1]-castle[2][1]<=340:continue
-            for epic in candidates['epic-pass']:
+            for epic in third:
                 if abs(shop[2][0]-epic[2][0])>22 or not 65<=epic[2][1]-shop[2][1]<=175:continue
                 if max(shop[1],castle[1],epic[1])-min(shop[1],castle[1],epic[1])>.10:continue
                 groups.append(((shop[0]+castle[0]+epic[0])/3,shop[2]))
@@ -203,10 +208,52 @@ class IncompleteCurrencyRow(MouseStopped):
     pass
 
 
+def button_stock(result,label,button=None):
+    """Read the stock inset paired with this Buy label, independent of artwork."""
+    middle=lambda box:(box[1]+box[3])/2
+    height=label[3]-label[1]
+    ratios=[]
+    for word in result.get('words',[]):
+        # Keep the slash: normal name/price normalization discards it. Only
+        # literal stock fractions qualify, never a lone zero or price digit.
+        match=re.fullmatch(r'([01])\s*/\s*1',str(word['text']).strip())
+        if match is None:continue
+        box=tuple(word['box'])
+        if not (1480<=box[0]<box[2]<=label[0]-8 and label[0]-box[2]<=200
+                and abs(middle(box)-middle(label))<=max(12,height*.35)
+                and height*.45<=box[3]-box[1]<=height*1.6):continue
+        if button is not None and not (button[0]<=box[0]<box[2]<=button[2]
+                and button[1]<=box[1]<box[3]<=button[3]):continue
+        ratios.append(int(match[1]))
+    if len(ratios)>1:
+        raise MouseStopped('The shop button stock is ambiguous. Stopped before scrolling or refreshing.')
+    return ratios[0] if ratios else None
+
+
+def retain_row_stock(original,row,label):
+    """Retain observed stock only when both reads agree on the Buy bounds."""
+    before=button_stock(original,label)
+    if before is None:return row
+    labels=[tuple(word['box']) for word in row.get('words',[])
+            if str(word['text']).lower()=='buy'
+            and max(abs(a-b) for a,b in zip(word['box'],label))<=12]
+    if len(labels)!=1:
+        raise MouseStopped('The shop button stock is ambiguous. Stopped before scrolling or refreshing.')
+    after=button_stock(row,labels[0])
+    if after is not None:
+        if before!=after:
+            raise MouseStopped('The shop button stock is ambiguous. Stopped before scrolling or refreshing.')
+        return row
+    words=[word for word in original.get('words',[])
+           if button_stock(dict(words=[word]),labels[0])==before]
+    return dict(row,words=[*row.get('words',[]),*words])
+
+
 def currency_button(result, boxes, item_name):
-    """Associate native summon name, gold price and Buy text on one row."""
+    """Associate currency category/name, gold price and Buy text on one row."""
     expected = {'Covenant bookmark':('covenant','bookmark','184000'),
-                'Mystic medal':('mystic','medal','280000')}
+                'Mystic medal':('mystic','medal','280000'),
+                'Friendship points':('friendship','point','18000')}
     if item_name not in expected:
         return None
     prefix,noun,price = expected[item_name]
@@ -223,16 +270,29 @@ def currency_button(result, boxes, item_name):
     suffixes = [box for word,box in words if word in (noun,noun+'s')
                 and name[2]<=box[0]<=name[2]+60 and box[2]<=1480 and abs(middle(box)-y)<=20]
     complete = text!=prefix or len(suffixes)==1
+    # Purchased status can replace the button on the right, rather than the
+    # availability text beneath the name. Require the status on this row;
+    # missing Buy/price alone must never silently discard an available item.
     row_words = [word for word,box in sorted(words,key=lambda pair:pair[1][0])
-                 if 1010<=box[0]<box[2]<=1480 and y+15<middle(box)<y+85]
+                 if 1010<=box[0]<box[2]<=1880 and -20<=middle(box)-y<=90]
     unavailable = complete and re.search(r'\bsold\s*out\b|\bpurchased\b|\bonly\s+0\s+available\b',' '.join(row_words))
-    summons = [box for word,box in words if word=='summon' and 1010<=box[0]<box[2]<=1480
+    category = 'currency' if item_name=='Friendship points' else 'summon'
+    summons = [box for word,box in words if word==category and 1010<=box[0]<box[2]<=1480
                and 25<=y-middle(box)<=80]
     prices = [box for word,box in words if word==price and 1480<=box[0]<box[2]<=1880
               and -80<=middle(box)-y<=10]
-    buys = [(label,button) for word,label in words if word=='buy'
-            for button in boxes if button[0]<=label[0]<label[2]<=button[2]
-            and button[1]<=label[1]<label[3]<=button[3] and 0<=middle(label)-y<=90]
+    labels = [label for word,label in words if word=='buy' and 1480<=label[0]<label[2]<=1880
+              and 0<=middle(label)-y<=90]
+    # A bought row retains "Only 1 available", its price, and a dim green Buy
+    # button; the inset changes to 0/1. Require the complete item/category/price
+    # association before accepting that fraction even if color detection fails.
+    if complete and len(summons)==len(prices)==len(labels)==1:
+        label=labels[0]
+        if 40<=middle(label)-middle(prices[0])<=125 and button_stock(result,label)==0:
+            return None
+    buys = [(label,button) for label in labels for button in boxes
+            if button[0]<=label[0]<label[2]<=button[2]
+            and button[1]<=label[1]<label[3]<=button[3]]
     if unavailable and not buys:
         return None
     if complete and len(summons)==len(prices)==len(buys)==1:
@@ -458,7 +518,7 @@ class ObservedShopFlow:
         region = cv2.cvtColor(self._rgb,cv2.COLOR_RGB2GRAY)[110:1080,760:1030]
         item_name = next((name for name,item in self.storage.inventory.items() if item.image is template),None)
         best = None
-        for scale in np.linspace(.65,1.45,17):
+        for scale in (np.linspace(.65,1.45,17) if template is not None else ()):
             item = cv2.resize(template,None,fx=float(scale),fy=float(scale),interpolation=cv2.INTER_LINEAR)
             if item.shape[0] >= region.shape[0] or item.shape[1] >= region.shape[1]:
                 continue
@@ -469,6 +529,21 @@ class ObservedShopFlow:
         choices = [] if best is None else sorted((abs((box[1]+box[3])/2-best[1]),box) for box in boxes)
         if choices and choices[0][0]<=90 and (len(choices)==1 or choices[1][0]-choices[0][0]>=15):
             box = choices[0][1]
+            # Apply the same observed stock guard to Covenant/Mystic's icon
+            # path. Purchased icons and dim Buy buttons can still match.
+            result=self._shop_text()
+            if not self.loop_active:return None
+            labels=[tuple(word['box']) for word in result.get('words',[])
+                    if str(word['text']).lower()=='buy' and box[0]<=word['box'][0]<word['box'][2]<=box[2]
+                    and box[1]<=word['box'][1]<word['box'][3]<=box[3]]
+            if len(labels)!=1 or button_stock(result,labels[0],box) is None:
+                result=self._stock_row_text((box[1]+box[3])/2,box[2]+15)
+                if not self.loop_active:return None
+                labels=[tuple(word['box']) for word in result.get('words',[])
+                        if str(word['text']).lower()=='buy' and box[0]<=word['box'][0]<word['box'][2]<=box[2]
+                        and box[1]<=word['box'][1]<word['box'][3]<=box[3]]
+            if len(labels)==1 and button_stock(result,labels[0],box)==0:
+                return None
             # The left stock-count inset can ignore clicks in the native skin.
             # Keep icon-based purchases within the observed button's right side.
             width,height = box[2]-box[0],box[3]-box[1]
@@ -476,15 +551,13 @@ class ObservedShopFlow:
                    box[2]-round(width*.08),box[3]-round(height*.2))
             method = 'icon'
         else:
-            if item_name not in ('Covenant bookmark','Mystic medal'):
+            if item_name not in ('Covenant bookmark','Mystic medal','Friendship points'):
                 return None
-            if getattr(self,'_shop_ocr_source',None) is not self._rgb:
-                self._shop_ocr = read_ui_text(self._rgb,(1010,110,1880,1080))
-                self._shop_ocr_source = self._rgb
+            result=self._item_text(item_name)
             if not self.loop_active:
                 return None
             try:
-                box = currency_button(self._shop_ocr,boxes,item_name)
+                box = currency_button(result,boxes,item_name)
             except IncompleteCurrencyRow:
                 if getattr(self,'_scan_page',2)==1:
                     return None
@@ -500,6 +573,50 @@ class ObservedShopFlow:
         if not getattr(self,'_quiet_items',False):
             print('E7GUI_MOUSE_ITEM '+json.dumps(dict(item=item_name,method=method,buy=list(point))),flush=True)
         return point
+
+
+    def _shop_text(self):
+        if getattr(self,'_shop_ocr_source',None) is not self._rgb:
+            self._shop_ocr = read_ui_text(self._rgb,(1010,110,1880,1080))
+            self._shop_ocr_source = self._rgb
+            self._stock_rows = {}
+        return self._shop_ocr
+
+
+    def _stock_row_text(self,center,right=1880):
+        self._shop_text()
+        region=(1010,max(110,round(center-120)),min(1880,round(right)),min(1080,round(center+80)))
+        if region not in self._stock_rows:
+            # Small dim stock text can disappear in whole-list OCR. Isolate
+            # its row, enlarge/normalize contrast, and map bounds back to the
+            # same view. This reads controls, never a wallpaper reference.
+            self._stock_rows[region]=read_ui_text(self._rgb,region,scale=2,contrast=True)
+        return self._stock_rows[region]
+
+
+    def _item_text(self,item_name):
+        result=self._shop_text()
+        prefix={'Covenant bookmark':'covenant','Mystic medal':'mystic','Friendship points':'friendship'}[item_name]
+        names=[word['box'] for word in result.get('words',[])
+               if re.sub(r'[^a-z]','',word['text'].lower()).startswith(prefix)
+               and 1010<=word['box'][0]<word['box'][2]<=1480]
+        if len(names)!=1:return result
+        center=(names[0][1]+names[0][3])/2
+        labels=[tuple(word['box']) for word in result.get('words',[])
+                if str(word['text']).lower()=='buy' and 1480<=word['box'][0]<word['box'][2]<=1880
+                and -20<=(word['box'][1]+word['box'][3])/2-center<=90]
+        if len(labels)==1 and button_stock(result,labels[0]) is not None:
+            try:
+                currency_button(result,green_buttons(self._rgb,(1480,110,1880,1080)),item_name)
+                return result
+            except IncompleteCurrencyRow:
+                return result
+            except MouseStopped as error:
+                if 'could not be verified on the same row' not in str(error):raise
+        if len(labels)==1:
+            row=self._stock_row_text((labels[0][1]+labels[0][3])/2,labels[0][2]+70)
+            return retain_row_stock(result,row,labels[0])
+        return self._stock_row_text(center+40)
 
 
     def _click_button(self,box, action='buy'):
@@ -607,7 +724,7 @@ class ObservedShopFlow:
 
     @recheck_mouse_action
     def clickBuy(self,pos):
-        if pos is None or not self.loop_active or self._item is None:
+        if pos is None or not self.loop_active or (self._item is None and self._item_name != 'Friendship points'):
             return False
         frame = self.takeScreenshot(); self.navigation.require_shop(frame)
         current = self.findItemPosition(frame,self._item)

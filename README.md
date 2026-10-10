@@ -69,6 +69,14 @@ Native STOVE does not support ADB.
 
 See the [setup guide](release/SETUP.md) if the device isn't detected.
 
+BlueStacks 5 players appear in **Scan** by instance name and current port when
+their player windows are open and ADB is enabled. Select the intended player;
+its port can differ from 5555 and change between starts. Scanning only discovers
+endpoints. **Start Refresh** connects to the selected endpoint and checks that
+Epic Seven is active. Switching from a selected BlueStacks Mouse window chooses
+that same player in ADB mode. BlueStacks game-surface and permission handling
+have offline regression coverage; live refresh/purchase testing remains pending.
+
 ## Features and updates
 
 Live counters, used/total Skystone budget, configurable Stop key, smooth Mouse
@@ -76,7 +84,13 @@ movement and dragging, randomized tap offsets, adjustable timing variation up to
 ±0.10 seconds, session history, day/night themes, and in-app Quickstart/release notes.
 Excel export includes the full saved history with timestamps, outcomes and stop reasons.
 Optional click/timing diagnostics work in Mouse and ADB; enable them in Diagnostics
-before starting. Calibration is ADB-only. Only Covenant Bookmarks and Mystic Medals are purchased.
+before starting. Calibration is ADB-only. Covenant Bookmarks and Mystic Medals
+are purchased by default. The source adds an optional **Also buy Friendship Points**
+setting for normal ADB and Mouse sessions, requiring a matching rebuilt engine.
+It buys the current heart-icon 50-point item for 18,000 gold using observed
+name/category/price recognition, and counts purchases rather than points awarded.
+The old upstream clover bookmark image is retained for provenance and is not
+used for this feature. See [Friendship verification](ENGINE.md#friendship-points-source-feature).
 
 The app verifies shop controls and confirmation text before continuing. Unknown or
 changed screens can stop a session. Passing tested cases does not establish support
@@ -99,3 +113,14 @@ rights and provenance. This is an independent community tool with no official
 endorsement. Upstream source history is preserved.
 
 Optional support: [Buy me a coffee](https://ko-fi.com/bluenatto).
+
+## Private trial 0.1.4-rc7
+
+Recognizes 0/1 stock beside Buy on pre-purchased currency rows, retains the
+injected-key listener for brief streamed Stop presses, and uses the supplied
+game's green leaf-heart cutout. Includes a global Stop key and a Friendship buys
+counter beside Mystic, with corresponding diagnostics and Excel columns.
+Recognizes either Event or Epic Pass beside the home Secret Shop menu in both
+transports. BlueStacks Mouse accepts only the verified direct Qt input host
+when Windows skips its disabled render child. Offline failure-frame and fake
+cross-client regressions cover these changes; live input is a separate check.

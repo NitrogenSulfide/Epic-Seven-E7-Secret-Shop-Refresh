@@ -43,3 +43,9 @@ https://brand.github.com/foundations/logo
 Downloaded from https://brand.github.com/GitHub_Logos.zip on 2026-10-04.
 Images are resized proportionally in memory; original file bytes preserved.
 Coffee cup: original simple drawing rendered by e7_appearance.py.
+Friendship counter heart: green leaf-heart game artwork from an Epic Seven crop
+supplied by the owner on 2026-10-09. Background/frame/50 text removed using the
+built-in image_gen tool at the owner's request. The generated cutout is a
+derivative of game artwork, not an original project drawing. Epic Seven artwork
+belongs to its respective rightsholders; project GPL does not relicense it.
+Source/output hashes and the edit prompt are recorded in provenance.json.
