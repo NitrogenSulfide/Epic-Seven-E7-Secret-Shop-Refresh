@@ -66,7 +66,7 @@ def capture_selected(target, destination, *, backend=None, grabber=None, cancel=
     image.save(destination)
     left, top = before.rectangle[:2]
     return GameWindow(before.handle,before.pid,before.title,
-                      (left+bounds[0],top+bounds[1],left+bounds[2],top+bounds[3]))
+                      (left+bounds[0],top+bounds[1],left+bounds[2],top+bounds[3]), before.render_handle)
 
 
 def analyze_capture(engine, runtime, capture, report, *, runner=None):

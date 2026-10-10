@@ -1,3 +1,78 @@
+0.1.4-rc7 · Recognize purchased stock beside Buy
+
+• Recognizes the observed 0/1 stock inset on pre-purchased currency rows,
+  even when Buy, the price and “Only 1 available” remain visible.
+• Pairs stock with the same row's Buy label; requires its full name, category
+  and expected price in the text path. Available 1/1 rows retain purchase checks.
+• Checks retained Covenant/Mystic icons for purchased stock too, caching OCR
+  with bounded row OCR retries for small/dim stock text. No shop wallpaper
+  matching is introduced.
+• Offline supplied-crop OCR and fake cross-client checks cover purchased and
+  available mixed inventories. Actual game input remains a separate live check.
+
+0.1.4-rc6 · Purchased rows, streamed Stop key and game heart
+
+• Skips verified purchased/sold-out currency rows with status in the right-hand
+  button area, including Friendship Points purchased before the session began.
+  Missing or ambiguous Buy/price without sold-out evidence still stops safely.
+• Adds a session-owned Windows keyboard event listener alongside hotkey messages
+  and held-key state. Brief and injected streamed presses are latched, passed
+  through, and reported in diagnostics. Hook/registration failures block input.
+• Replaces the generic pink heart with an imagegen cutout of the supplied green
+  game leaf-heart artwork; preserves its asset source, prompt and credits.
+• Remote physical Stop with Moonlight and live purchased-row recognition remain
+  separate live checks; fake cross-client regressions cover the source changes.
+
+0.1.4-rc5 · Global Stop key and Friendship counter
+
+• Uses Windows system-wide hotkey registration during active sessions, released
+  on completion, Stop or error. Registration is verified before refresh input;
+  a key already reserved by another app blocks startup with its actual reason.
+• Adds a heart-icon Friendship buys card immediately to the right of Mystic
+  buys, retaining that order when the dashboard wraps in smaller windows.
+• Diagnostics include Stop key readiness, Friendship buying and all buy counters.
+• Excel places Friendship buys beside Mystic buys, adds points gained (50 per
+  buy), and keeps retired Friendship Bookmark counts in a separate legacy column.
+• Owner reports rc4 BlueStacks ADB/Mouse entry working at maximized and smaller
+  window sizes, including hidden UI. rc5 global key and new UI need live checks.
+
+0.1.4-rc4 · BlueStacks input host and Event home menu
+
+• Recognizes Event as an alternative to Epic Pass in the home menu's three-icon
+  layout. Opens the observed Secret Shop icon after a fresh recheck, even when
+  wallpaper causes caption OCR errors. Applies to both ADB and Mouse.
+• Mouse accepts BlueStacks' verified Qt input host when Windows skips its disabled
+  render child. Requires the direct parent, matching process and game bounds;
+  unrelated windows, sibling overlays and changed surfaces still block input.
+• Requires the matching window-mouse-v8 engine. Offline user failure frames and
+  fake transports cover these fixes; live input remains a separate check.
+
+0.1.4-rc3 · BlueStacks instance selection and Mouse startup
+
+• ADB Scan lists enabled, open BlueStacks players by name and their current
+  instance ports. Scans never connect; Start connects only the selected endpoint.
+  Switching from a selected BlueStacks Mouse window prefers that same player.
+• Mouse captures BlueStacks' verified game child window and maps input to that
+  surface, excluding toolbars and advertising. A changed surface stops input;
+  sibling overlays block it even inside the same emulator window.
+• Windows access-denied permission checks offer a user-approved administrator
+  retry without assuming the game is elevated or starting a session automatically.
+• Requires a matching window-mouse-v7 engine. Fake devices/windows and offline
+  regression checks cover these fixes; live BlueStacks gameplay is not verified.
+
+0.1.4-rc2 · Optional Friendship Points purchases
+
+• Adds an off-by-default “Also buy Friendship Points” setting in normal Mouse
+  and ADB sessions, using the matching bundled engine.
+• Recognizes the current heart-item Currency name, 18,000-gold price and Buy
+  button. Does not use the retired clover Friendship Bookmark template.
+• Reuses the existing item loop for Friendship alone and mixed Covenant/Mystic
+  inventories, with duplicate prevention across both scans.
+• Reports Friendship buys and includes their cost in history/Excel totals.
+  Legacy Friendship Bookmark records remain separate.
+• Offline saved-screen recognition and fake-engine checks passed. A real
+  Friendship purchase dialog and completed live purchase remain unverified.
+
 0.1.4-rc1 · Remaining time and session shortcuts
 
 • Shows approximate remaining time after the first few confirmed refreshes in

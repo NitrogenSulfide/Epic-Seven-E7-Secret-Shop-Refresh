@@ -137,6 +137,49 @@ prompt("press enter to exit...", "")
 
 
 class GuiTests(unittest.TestCase):
+    def test_friendship_toggle_persists_and_reports_current_points(self):
+        self.assertFalse(self.app.buy_friendship.get())
+        self.app.buy_friendship.set(True)
+        settings=self.app.save_settings()
+        self.assertTrue(settings.buy_friendship)
+        self.app.buy_friendship.set(False);self.app._load_config()
+        self.assertTrue(self.app.buy_friendship.get())
+        self.app.run_settings=settings
+        self.app._handle_line('E7GUI_STATS '+json.dumps(dict(refreshes=1,skystone_spent=3,covenant=1,mystic=1,friendship=2)))
+        self.assertEqual(self.app.friendship.get(),'2')
+        self.assertEqual(self.app.metric_captions[-1].cget('text'),'Friendship buys')
+        self.assertIn('friendship',self.app.currency_images)
+        self.assertEqual(len(self.app.metric_cards),5)
+        self.app._handle_line('E7GUI_STOP_KEY '+json.dumps(dict(key='esc',status='ready',backend='Windows global hotkey')))
+        with patch.object(self.app,'clipboard_clear'),patch.object(self.app,'clipboard_append') as copy:
+            self.app._copy_diagnostics()
+        self.assertIn('Friendship Points buying: on',copy.call_args.args[0])
+        self.assertIn('Friendship 2',copy.call_args.args[0])
+        self.assertIn('esc · Windows global hotkey',copy.call_args.args[0])
+        self.assertIn('Friendship buys: 2 (on)',self.app.diagnostics_summary.get())
+        self.app._handle_line('E7GUI_STOP_KEY '+json.dumps(dict(key='esc',status='pressed',source='injected keyboard event',injected=True)))
+        self.app._handle_line('E7GUI_STOP_KEY '+json.dumps(dict(key='esc',status='released')))
+        self.assertIn('esc · released',self.app.diagnostics_summary.get())
+        self.assertIn('injected keyboard event',self.app.diagnostics_summary.get())
+        self.assertIn('Friendship buys: 2',self.app.progress_text.get())
+        events=[self.app.activity.item(item)['values'][1] for item in self.app.activity.get_children()]
+        self.assertIn('Friendship purchases: 2.',events)
+        self.app._handle_line('Friendship points : 3')
+        self.assertEqual(self.app.friendship.get(),'3')
+        self.app._set_controls(True)
+        self.assertTrue(self.app.friendship_check.instate(['disabled']))
+        self.app._set_controls(False)
+        self.assertFalse(self.app.friendship_check.instate(['disabled']))
+
+    def test_friendship_rejects_old_engine_before_launch(self):
+        self.app.buy_friendship.set(True)
+        settings=self.app._settings()
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='gui session v1')) as verify,patch.object(gui,'launch_engine') as launch:
+            self.app._begin_refresh(settings)
+        self.assertIn('Friendship purchases need',self.app.connection_warning)
+        launch.assert_not_called()
+        self.assertEqual(verify.call_args.args[0][-1],'--verify')
+
     def _eta_stats(self, count):
         return 'E7GUI_STATS '+json.dumps(dict(refreshes=count, skystone_spent=count*3,
                                              covenant=0, mystic=0, friendship=0))+'\n'
@@ -424,10 +467,10 @@ class GuiTests(unittest.TestCase):
         self.config = self.root / "ADBconfig.ini"
         self.gui_config = self.root / "ShopRefreshGUI.ini"
         # Legacy fake-engine tests explicitly exercise the ADB transport.
-        self.gui_config.write_text('[GUI]\ncontrol_mode = ADB\n', encoding='utf-8')
+        self.gui_config.write_text('[GUI]\ncontrol_mode = ADB\ndevice = localhost:5555\n', encoding='utf-8')
         self.assets = self.root / 'assets'
         self.assets.mkdir()
-        for name in ('start.wav', 'end.wav'):
+        for name in ('start.wav', 'end.wav','friendship-points-heart.png'):
             shutil.copyfile(PACKAGED_ASSETS / name, self.assets / name)
         self.history = self.root / "history.csv"
         def connected(app, settings):
@@ -628,7 +671,7 @@ class GuiTests(unittest.TestCase):
         quickstart = dialog.readers[titles.index('Quickstart')].get('1.0', 'end')
         self.assertIn('Mouse mode', quickstart); self.assertIn('ADB mode', quickstart)
         self.assertIn(e7_about.TESTED_CLIENTS, quickstart)
-        self.assertNotIn('Friendship', quickstart)
+        self.assertIn('Also buy Friendship Points', quickstart)
         self.assertNotIn('unavailable', dialog.readers[titles.index('Release notes')].get('1.0', 'end'))
         self.assertFalse(hasattr(dialog, 'github_button'))
         self.assertEqual(self.app.github_button.cget('text'), 'GitHub')  # Empty fixture asset folder.
@@ -732,7 +775,7 @@ class GuiTests(unittest.TestCase):
         self.app._apply_mouse_windows([target],'')
         self.fake.write_text('print("E7GUI_STARTED",flush=True)\nprint(\'E7GUI_STATS {"refreshes":4,"skystone_spent":12,"covenant":0,"mystic":0,"friendship":0}\',flush=True)\nprint("---Result---\\nCovenant bookmark:0\\nMystic medal:0\\nSkystone spent:12",flush=True)\n')
         self.fake.with_suffix('.sha256').write_text(hashlib.sha256(self.fake.read_bytes()).hexdigest())
-        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v6; tap timing v2')), \
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v9; tap timing v2; global stop key v2')), \
                 patch.object(gui,'activate_native_target',return_value=target) as activate, \
                 patch.object(gui,'check_connection') as adb,patch.object(gui,'launch_engine',wraps=gui.launch_engine) as launch:
             self.start_fake()
@@ -754,18 +797,18 @@ class GuiTests(unittest.TestCase):
                 patch.object(gui,'activate_native_target') as activate,patch.object(gui,'launch_engine') as launch:
             self.app.start_refresh()
         activate.assert_not_called(); launch.assert_not_called()
-        self.assertIn('matching rc39',self.app.connection_warning)
+        self.assertIn('matching new engine',self.app.connection_warning)
 
     def test_permission_mismatch_is_explained_before_engine_launch(self):
         self.choose_mouse_fixture();self.app.control_mode.set('Mouse');self.app._change_control_mode()
-        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v6; tap timing v2')),patch.object(gui,'activate_native_target',side_effect=ValueError('Epic Seven is running as administrator. Reopen with Run as administrator.')),patch.object(gui,'launch_engine') as launch:
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v9; tap timing v2; global stop key v2')),patch.object(gui,'activate_native_target',side_effect=ValueError('Epic Seven is running as administrator. Reopen with Run as administrator.')),patch.object(gui,'launch_engine') as launch:
             self.app.start_refresh()
         launch.assert_not_called()
         self.assertIn('Run as administrator',self.app.connection_warning)
 
     def test_verified_permission_mismatch_offers_restart_without_engine_input(self):
         self.choose_mouse_fixture(); self.app.control_mode.set('Mouse'); self.app._change_control_mode()
-        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v6; tap timing v2')), \
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v9; tap timing v2; global stop key v2')), \
                 patch.object(gui,'activate_native_target',side_effect=gui.MouseElevationRequired('Administrator needed.')), \
                 patch.object(gui.messagebox,'askyesno',return_value=False) as offer, \
                 patch.object(gui,'restart_as_administrator') as restart, patch.object(gui,'launch_engine') as launch:
@@ -815,7 +858,7 @@ class GuiTests(unittest.TestCase):
         reason='The selected game lost focus. No input sent.'
         self.fake.write_text('print("E7GUI_STARTED",flush=True)\nprint(\'E7GUI_MOUSE_STOPPED {"reason":"The selected game lost focus. No input sent."}\',flush=True)\nprint("---Result---\\nSkystone spent:0",flush=True)\n')
         self.fake.with_suffix('.sha256').write_text(hashlib.sha256(self.fake.read_bytes()).hexdigest())
-        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v6; tap timing v2')),patch.object(gui,'activate_native_target',return_value=target):
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v9; tap timing v2; global stop key v2')),patch.object(gui,'activate_native_target',return_value=target):
             self.start_fake()
             self.pump_until(lambda:self.app.status.get()=='Needs attention' and self.app.process.poll() is not None)
             self.pump_until(lambda:self.app._finalized_run_id==self.app.run_id)
@@ -1033,7 +1076,7 @@ class GuiTests(unittest.TestCase):
     def test_currency_art_preserves_transparency_and_fits_counter_size(self):
         from e7_appearance import currency_icons
         images = currency_icons(self.app, PACKAGED_ASSETS, 40)
-        self.assertEqual(set(images), {'spent', 'covenant', 'mystic'})
+        self.assertEqual(set(images), {'spent', 'covenant', 'mystic','friendship'})
         for image in images.values():
             self.assertEqual((image.width(),image.height()), (40,40))
 

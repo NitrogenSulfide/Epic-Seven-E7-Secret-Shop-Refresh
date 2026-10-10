@@ -17,7 +17,13 @@ class MouseStopped(RuntimeError):
 
 
 class MouseElevationRequired(ValueError):
-    """Only a verified game/app elevation mismatch may offer a UAC restart."""
+    """Permission mismatch or access denial may offer a user-approved retry."""
+
+
+class MousePermissionCheckFailed(ValueError):
+    def __init__(self, winerror):
+        self.winerror = winerror
+        super().__init__(f'Could not verify game/app administrator permissions (Windows error {winerror}). No Mouse input sent.')
 
 
 class MouseRecheckRequired(MouseStopped):
@@ -66,9 +72,10 @@ def process_name(pid):
         api.CloseHandle(handle)
 
 
-def process_is_elevated(pid=None, *, kernel=None, security=None):
+def process_is_elevated(pid=None, *, kernel=None, security=None, last_error=None):
     kernel = kernel or ctypes.WinDLL('kernel32',use_last_error=True)
     security = security or ctypes.WinDLL('advapi32',use_last_error=True)
+    last_error = last_error or ctypes.get_last_error
     kernel.GetCurrentProcess.restype = w.HANDLE
     kernel.OpenProcess.argtypes = [w.DWORD,w.BOOL,w.DWORD]; kernel.OpenProcess.restype = w.HANDLE
     kernel.CloseHandle.argtypes = [w.HANDLE]
@@ -81,7 +88,7 @@ def process_is_elevated(pid=None, *, kernel=None, security=None):
     try:
         elevated,size = w.DWORD(),w.DWORD()
         if not process or not security.OpenProcessToken(process,8,ctypes.byref(token)) or not security.GetTokenInformation(token,20,ctypes.byref(elevated),4,ctypes.byref(size)):
-            raise ValueError('Could not verify game/app administrator permissions. No Mouse input sent.')
+            raise MousePermissionCheckFailed(last_error())
         return bool(elevated.value)
     finally:
         if token:
@@ -91,14 +98,24 @@ def process_is_elevated(pid=None, *, kernel=None, security=None):
 
 
 def require_mouse_permissions(target):
-    if process_is_elevated(target.pid) and not process_is_elevated():
+    try:
+        game_elevated = process_is_elevated(target.pid)
+    except MousePermissionCheckFailed as error:
+        if error.winerror != 5:
+            raise
+        # Access denied does not prove the player's elevation. Keep input
+        # blocked, but let a non-elevated GUI offer one explicit UAC retry.
+        if not process_is_elevated():
+            raise MouseElevationRequired('Windows denied access to the selected game’s permissions (error 5). Restart this app as administrator to retry the check, or reopen the game without administrator privileges. No Mouse input sent.') from error
+        raise ValueError('Windows denied access to the selected game’s permissions (error 5), even with this app running as administrator. Reopen the game without administrator privileges, or use ADB mode. No Mouse input sent.') from error
+    if game_elevated and not process_is_elevated():
         raise MouseElevationRequired('The selected game is running as administrator. Restart this app as administrator, or close it and use Run as administrator, then press Start. Windows blocks normal apps from controlling an elevated game. No Mouse input sent.')
 
 
 def verify_native_target(target, *, backend=None, lookup=process_name):
     backend = backend or WindowsCapture()
     current = backend.inspect(target.handle)
-    if (current.pid,current.title) != (target.pid,target.title):
+    if (current.pid,current.title,current.render_handle) != (target.pid,target.title,target.render_handle):
         raise ValueError('The selected window changed. Scan and select it again.')
     # The selected emulator hosts the game in its own process. Verify that the
     # process is readable, then let observed game controls authorize actions.

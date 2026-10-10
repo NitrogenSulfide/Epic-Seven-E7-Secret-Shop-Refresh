@@ -9,7 +9,6 @@ from PIL import Image
 import threading
 import cv2
 import numpy as np
-import keyboard
 import random
 import configparser
 import json
@@ -22,6 +21,7 @@ from e7_frame import normalize_game_frame
 from e7_timing import validate_timing, sample_tap_delay
 from e7_history import append_session, new_session_metadata
 from e7_session_control import listen_for_stop
+from e7_stop_key import stop_key_monitor
 from e7_input_trace import InputTrace
 
 class E7Item:
@@ -78,7 +78,9 @@ class E7Inventory:
         append_session(os.path.join('ShopRefreshHistory', 'ADB_History.csv'), record)
 
 class E7ADBShopRefresh(ObservedShopFlow):
-    def __init__(self, tap_sleep:float = 0.3, budget=None, ip_port=None, stop_refresh_key='esc', random_offset = False, debug=False, tap_jitter=None, adb_runner=None, trace_input=False):
+    def __init__(self, tap_sleep:float = 0.3, budget=None, ip_port=None, stop_refresh_key='esc', random_offset = False, debug=False, tap_jitter=None, adb_runner=None, trace_input=False, buy_friendship=False):
+        if type(buy_friendship) is not bool or (debug and buy_friendship):
+            raise ValueError('Friendship purchases require normal mode and an on/off setting.')
         if budget is not None:
             if isinstance(budget, bool) or not math.isfinite(float(budget)) or int(budget) != float(budget) or int(budget) < 3:
                 raise ValueError('Skystone budget must be a whole number of at least 3.')
@@ -111,6 +113,8 @@ class E7ADBShopRefresh(ObservedShopFlow):
         self.device_args = [] if ip_port is None else ['-s', ip_port]
         self.refresh_count = 0
         self.keyboard_thread = threading.Thread(target=self.checkKeyPress)
+        self._stop_key_ready = threading.Event()
+        self._stop_key_error = ''
         self.adb_path = os.path.join('adb-assets','platform-tools', 'adb')
         self._adb_runner=adb_runner or subprocess.run
         self.storage = E7Inventory()
@@ -126,6 +130,11 @@ class E7ADBShopRefresh(ObservedShopFlow):
 
         self.storage.addItem('cov.png', 'Covenant bookmark', 184000)
         self.storage.addItem('mys.png', 'Mystic medal', 280000)
+        if buy_friendship:
+            # Current Secret Shop sells heart-icon Friendship Points. The
+            # retained upstream fb.png is a retired clover bookmark template.
+            # Use observed name/category/price recognition for this item.
+            self.storage.inventory['Friendship points'] = E7Item(price=18000)
 
     def start(self):
         if not hasattr(self, '_stop_requested'):
@@ -140,9 +149,16 @@ class E7ADBShopRefresh(ObservedShopFlow):
         self._session_clock = time.monotonic()
         self.keyboard_thread.start()
         try:
+            ready=getattr(self,'_stop_key_ready',None)
+            if ready is not None and not ready.wait(2):
+                self._stop_key_error='The global Stop key monitor did not start. No refresh input sent.'
+                self.request_stop('The global Stop key monitor did not start. No refresh input sent.')
+                raise MouseStopped(self._stop_reason)
+            if self._stop_requested.is_set():
+                raise MouseStopped(self._stop_reason)
             self.refreshShop()
         except Exception as error:
-            self.record_session('stopped' if self._stop_requested.is_set() else 'failed',
+            self.record_session('stopped' if self._stop_requested.is_set() and not getattr(self,'_stop_key_error','') else 'failed',
                                 self._stop_reason or str(error))
             raise
         finally:
@@ -182,16 +198,37 @@ class E7ADBShopRefresh(ObservedShopFlow):
 
     #threads
     def checkKeyPress(self):
-        while(self.loop_active and not self.end_of_refresh):
-            if keyboard.is_pressed(self.stop_refresh_key):
-                if hasattr(self, '_stop_requested'):
-                    self.request_stop('Stop key pressed.')
-                else:
-                    self.loop_active = False
-                print('Shop refresh terminated!', flush=True)
-                return
-            # Yield the GIL/CPU so keyboard hooks and foreground typing can run.
-            time.sleep(0.02)
+        if not self.loop_active or self.end_of_refresh:
+            ready=getattr(self,'_stop_key_ready',None)
+            if ready is not None:ready.set()
+            return
+        opened=False
+        try:
+            with stop_key_monitor(self.stop_refresh_key) as monitor:
+                opened=True
+                print('E7GUI_STOP_KEY '+json.dumps(dict(key=self.stop_refresh_key,status='ready',backend=monitor.backend)),flush=True)
+                ready=getattr(self,'_stop_key_ready',None)
+                if ready is not None:ready.set()
+                while self.loop_active and not self.end_of_refresh:
+                    if monitor.pressed():
+                        if hasattr(self,'_stop_requested'):self.request_stop('Stop key pressed.')
+                        else:self.loop_active=False
+                        print('E7GUI_STOP_KEY '+json.dumps(dict(key=self.stop_refresh_key,status='pressed',
+                            source=getattr(monitor,'detected_by',monitor.backend),
+                            injected=getattr(monitor,'injected',False))),flush=True)
+                        print('Shop refresh terminated!',flush=True)
+                        return
+                    time.sleep(.02)
+        except (ValueError,OSError) as error:
+            self._stop_key_error=str(error)
+            if hasattr(self,'_stop_requested'):self.request_stop(str(error))
+            else:self.loop_active=False
+            print('E7GUI_STOP_KEY '+json.dumps(dict(key=self.stop_refresh_key,status='failed',reason=str(error))),flush=True)
+            ready=getattr(self,'_stop_key_ready',None)
+            if ready is not None:ready.set()
+        finally:
+            if opened and not getattr(self,'_stop_key_error',''):
+                print('E7GUI_STOP_KEY '+json.dumps(dict(key=self.stop_refresh_key,status='released')),flush=True)
 
     def reportLiveStats(self):
         counts = {name: item.count for name, item in self.storage.inventory.items()}
@@ -200,7 +237,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
             'skystone_spent': self.refresh_count * 3,
             'covenant': counts.get('Covenant bookmark', 0),
             'mystic': counts.get('Mystic medal', 0),
-            'friendship': 0,  # Reserved legacy protocol field; no Friendship purchases.
+            'friendship': counts.get('Friendship points', 0),
         }), flush=True)
 
     def refreshShop(self):
@@ -540,11 +577,11 @@ def run_gui_session(arguments):
         if not isinstance(data, dict) or any(type(data.get(key)) is not bool for key in ('random_offset', 'debug')):
             raise ValueError('Invalid GUI session settings.')
         settings = validate_settings(data['device'], data['budget'], data['tap_sleep'], data['stop_key'],
-                                     data['random_offset'], data['debug'], data['tap_jitter'], data.get('trace_input', False))
+                                     data['random_offset'], data['debug'], data['tap_jitter'], data.get('trace_input', False), data.get('buy_friendship', False))
         app = E7ADBShopRefresh(tap_sleep=settings.tap_sleep, budget=settings.budget,
                               ip_port=settings.device, stop_refresh_key=settings.stop_key,
                               random_offset=settings.random_offset, debug=settings.debug, tap_jitter=settings.tap_jitter,
-                              trace_input=settings.trace_input)
+                              trace_input=settings.trace_input, buy_friendship=settings.buy_friendship)
         threading.Thread(target=listen_for_stop, args=(sys.stdin, app), daemon=True).start()
         if settings.trace_input:
             print('E7GUI_TRACE_READY', flush=True)
@@ -593,7 +630,7 @@ if __name__ == '__main__':
         parser = argparse.ArgumentParser(description='Read a saved confirmation offline; no input, ADB or spending.')
         parser.add_argument('--check-mouse-confirmation',required=True)
         parser.add_argument('--operation',choices=('refresh','buy'),required=True)
-        parser.add_argument('--item-name',choices=('Covenant bookmark','Mystic medal'))
+        parser.add_argument('--item-name',choices=('Covenant bookmark','Mystic medal','Friendship points'))
         args = parser.parse_args()
         with Image.open(args.check_mouse_confirmation) as image:
             rgb = np.asarray(image.convert('RGB').resize((1920,1080),Image.Resampling.LANCZOS))
@@ -627,7 +664,7 @@ if __name__ == '__main__':
         print('Private Secret Shop references prepared and checked offline.')
         sys.exit(0)
     if sys.argv[1:] == ['--verify']:
-        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; window mouse v6; tap timing v2; gui session v1; input trace v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
+        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; window mouse v9; global stop key v2; tap timing v2; gui session v1; input trace v1; friendship purchases v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
         sys.exit(0)
     if sys.argv[1:2] == ['--check-navigation-frame']:
         import argparse

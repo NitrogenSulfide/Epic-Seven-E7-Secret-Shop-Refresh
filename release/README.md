@@ -1,8 +1,13 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Local trial **0.1.4-rc1** adds approximate remaining time, Open Logs Folder,
-and unique timestamped Excel export names. Extract this trial into a fresh
-folder and use its bundled runtime. The stable release information follows.
+Private trial **0.1.4-rc7** recognizes pre-purchased rows by their 0/1 stock inset
+beside Buy, accepts brief/injected streamed Stop events, and uses the supplied
+game's green heart.
+Includes a global Stop key, the Friendship buys
+counter beside Mystic buys, and corresponding diagnostics and Excel columns.
+It retains the BlueStacks instance, Event home-menu and Mouse input-host fixes.
+Extract this trial into a fresh folder and use its bundled runtime.
+The stable release information follows.
 
 Version **0.1.3** adds optional click/timing diagnostics, full-history Excel export,
 richer session records and cooperative Stop for the matching Mouse/ADB engine.
@@ -70,5 +75,8 @@ screen’s Buy me a coffee button opens https://ko-fi.com/bluenatto only when cl
 
 Testing has been limited to Google Play
 Games on PC Developer Emulator and the official STOVE client of Epic Seven.
-Other emulators and methods have not been tested. Both modes buy only Covenant
-Bookmarks and Mystic Medals; Friendship purchases are removed from calibration too.
+Other emulators and methods have not been tested. Both modes buy Covenant
+Bookmarks and Mystic Medals by default. Optionally enable **Also buy Friendship
+Points** for the current heart item (50 points for 18,000 gold per buy), using
+this trial's matching engine. Calibration excludes Friendship. Friendship has
+offline recognition and fake-engine verification; live purchase remains unverified.

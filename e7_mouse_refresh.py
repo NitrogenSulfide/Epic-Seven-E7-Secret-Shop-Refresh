@@ -91,6 +91,7 @@ def inspect_mouse_items(path,assets='adb-assets'):
         if template is None:
             raise ValueError('A currency item template is missing or unreadable.')
         app.storage.inventory[name] = E7Item(template,price)
+    app.storage.inventory['Friendship points'] = E7Item(price=18000)
     items = []
     for name,item in app.storage.inventory.items():
         point = app.findItemPosition(frame,item.image)
@@ -108,6 +109,7 @@ def run_mouse_session(arguments):
     parser.add_argument('--random-offset',choices=('yes','no'),required=True)
     parser.add_argument('--tap-jitter',type=float,default=None)
     parser.add_argument('--trace-input', action='store_true')
+    parser.add_argument('--buy-friendship', action='store_true')
     args = parser.parse_args(arguments)
     if not math.isfinite(args.budget) or args.budget < 3:
         parser.error('Invalid budget or delay')
@@ -120,10 +122,11 @@ def run_mouse_session(arguments):
     app = None; started = time.time()
     try:
         data = json.loads(args.mouse_session)
-        target = GameWindow(int(data['handle']),int(data['pid']),str(data['title']),tuple(data['rectangle']))
+        target = GameWindow(int(data['handle']),int(data['pid']),str(data['title']),tuple(data['rectangle']),
+                            int(data['render_handle']) if data.get('render_handle') is not None else None)
         app = E7MouseShopRefresh(target,budget=args.budget,tap_sleep=args.delay,
                                 stop_refresh_key=args.stop_key,random_offset=args.random_offset=='yes',debug=False,tap_jitter=args.tap_jitter,
-                                trace_input=data.get('trace_input', args.trace_input))
+                                trace_input=data.get('trace_input', args.trace_input), buy_friendship=args.buy_friendship)
         if sys.stdin is not None:
             threading.Thread(target=listen_for_stop,args=(sys.stdin,app),daemon=True).start()
         if app.input_trace.enabled:

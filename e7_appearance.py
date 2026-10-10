@@ -90,7 +90,7 @@ def currency_icons(master, assets, size):
     if Image is None:
         return {}
     icons = {}
-    for key, name in (('mystic','mystic-medal.png'),('covenant','covenant-bookmark.png'),('spent','skystone.png')):
+    for key, name in (('mystic','mystic-medal.png'),('covenant','covenant-bookmark.png'),('spent','skystone.png'),('friendship','friendship-points-heart.png')):
         path = assets/name
         if path.is_file():
             with Image.open(path) as original:

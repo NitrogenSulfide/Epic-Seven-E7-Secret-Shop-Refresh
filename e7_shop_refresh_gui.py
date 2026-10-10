@@ -29,7 +29,7 @@ from e7_about import AboutDialog
 from e7_setup import missing_references, has_builtin_references, RecognitionSetup, verify_setup_engine
 from e7_native_mouse import activate_native_target, release_native_button, MouseElevationRequired
 from e7_elevation import restart_as_administrator, ElevationCancelled
-from e7_connection import check_connection, ConnectionCheck
+from e7_connection import check_connection, ConnectionCheck, endpoint_key
 from e7_windows_capture import WindowsCapture
 
 PROJECT_DIR = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
@@ -178,11 +178,12 @@ class RefreshGui(tk.Tk):
         self.budget = tk.StringVar(value="12")
         self.tap_sleep = tk.StringVar(value="0.3")
         self.stop_key = tk.StringVar(value="`")
-        self.device = tk.StringVar(value="localhost:6520")
+        self.device = tk.StringVar(value="")
         self.device_labels = {}
         self.connected_devices = []
         self.debug_mode = tk.BooleanVar(value=False)
         self.trace_input = tk.BooleanVar(value=False)
+        self.buy_friendship = tk.BooleanVar(value=False)
         self.random_offset = tk.BooleanVar(value=True)
         self.tap_jitter = tk.DoubleVar(value=0.03)
         self.tap_jitter_text = tk.StringVar()
@@ -202,6 +203,10 @@ class RefreshGui(tk.Tk):
         self.spent.trace_add('write', lambda *_: self._update_spent_display())
         self.covenant = tk.StringVar(value="—")
         self.mystic = tk.StringVar(value="—")
+        self.friendship = tk.StringVar(value="—")
+        self.diagnostics_summary=tk.StringVar(value='Purchases · Covenant — · Mystic — · Friendship —')
+        for var in (self.covenant,self.mystic,self.friendship,self.buy_friendship):
+            var.trace_add('write',lambda *_:self._update_diagnostics_summary())
         self.progress_text = tk.StringVar(value="Waiting for a session")
         self.ev = tk.StringVar()
         self._load_config()
@@ -393,6 +398,7 @@ class RefreshGui(tk.Tk):
         self.history.tag_configure('debug', background='#422006' if dark else '#fff4d6', foreground='#fcd34d' if dark else '#92400e')
         for tag, color in (('covenant', '#67e8f9' if dark else '#0e7490'),
                            ('mystic', '#c4b5fd' if dark else '#6d28d9'),
+                           ('friendship', '#f9a8d4' if dark else '#be185d'),
                            ('success', '#86efac' if dark else '#166534'),
                            ('warning', '#fcd34d' if dark else '#92400e'),
                            ('error', '#fca5a5' if dark else '#b91c1c')):
@@ -517,13 +523,14 @@ class RefreshGui(tk.Tk):
         self.copy_diagnostics_button.grid(row=0 if inline_logs else 1, column=2,
                                           pady=(0 if inline_logs else self._dp(6), 0))
         self.history_label.configure(wraplength=max(self._dp(250), width-self._dp(12)))
-        # Four cards on wide windows, two per row when the viewport is narrower.
+        # Keep Mystic and Friendship adjacent even when the cards wrap.
         minimum_card = max(self.heading_font.measure("Skystone spent ≈") + self._dp(38), self.value_font.measure("12h 59m 59s")) + self._dp(32)
-        columns = 4 if width >= minimum_card*4 + self._dp(18) else 2
-        for i in range(4):
+        columns = 5 if width >= minimum_card*5+self._dp(24) else 3 if width >= minimum_card*3+self._dp(12) else 2
+        for i in range(len(self.metric_cards)):
             self.metrics.columnconfigure(i, weight=1 if i < columns else 0, minsize=0, uniform="metrics" if i < columns else "")
         for i, card in enumerate(self.metric_cards):
-            card.grid(row=i//columns, column=i%columns, sticky="nsew", padx=(0 if i%columns == 0 else self._dp(6), 0), pady=(0, self._dp(6) if columns == 2 else 0))
+            row,column,span=(0,0,2) if columns==2 and i==0 else ((i+1)//2,(i+1)%2,1) if columns==2 else (i//columns,i%columns,1)
+            card.grid(row=row,column=column,columnspan=span,sticky="nsew",padx=(0 if column==0 else self._dp(6),0),pady=(0,self._dp(6) if columns<5 else 0))
         # Measure both messages even when detail is hidden in a short window,
         # so hiding it cannot flip the layout back and forth on the next pass.
         banner_height = 0 if self.home_ui_hint_dismissed else self.home_ui_banner.winfo_reqheight() + self._dp(6)
@@ -718,10 +725,15 @@ class RefreshGui(tk.Tk):
         self.debug_check = ttk.Checkbutton(controls, text="Debug / calibration mode\n(only in ADB mode)", variable=self.debug_mode, style="Large.TCheckbutton")
         self.debug_check.grid(row=9, column=0, sticky="w")
         self.settings_widgets.extend([self.random_check, self.debug_check])
+        self.friendship_check = ttk.Checkbutton(controls, text='Also buy Friendship Points',
+                                               variable=self.buy_friendship, style='Large.TCheckbutton')
+        self.friendship_check.grid(row=10, column=0, sticky='w', pady=(dp(5), 0))
+        self.settings_widgets.append(self.friendship_check)
+        ThemeHint(self.friendship_check, lambda: 'Optional extra purchases · 18,000 gold per buy · normal mode only')
         self.details_button = ttk.Button(controls, text='▸ Estimate & calibration help', command=self._toggle_settings_details)
-        self.details_button.grid(row=10, column=0, sticky='ew', pady=(dp(8), dp(12)))
+        self.details_button.grid(row=11, column=0, sticky='ew', pady=(dp(8), dp(12)))
         self.settings_details = ttk.Frame(controls)
-        self.settings_details.grid(row=11, column=0, sticky='ew', pady=(dp(6), 0))
+        self.settings_details.grid(row=12, column=0, sticky='ew', pady=(dp(6), 0))
         self.settings_details.columnconfigure(0, weight=1)
         ttk.Label(self.settings_details, text="ADB calibration pauses before each click.\nCheck the image, then press a key other than Esc to continue.", style="Muted.TLabel", wraplength=dp(350)).grid(row=0, column=0, sticky="w", pady=(0, dp(6)))
         self.start_button = ttk.Button(action_dock, text="Start Refresh", style="Accent.TButton", command=self.start_refresh)
@@ -739,6 +751,7 @@ class RefreshGui(tk.Tk):
         ttk.Label(estimate, textvariable=self.ev, wraplength=dp(320), justify=tk.LEFT).grid(sticky="w")
         ttk.Label(estimate, text="Statistical estimate; results vary.", style="Muted.TLabel", wraplength=dp(320)).grid(sticky="w", pady=(dp(8), 0))
         self.budget.trace_add("write", lambda *_: self._update_ev())
+        self.buy_friendship.trace_add('write', lambda *_: self._update_ev())
         self.tap_sleep.trace_add('write', lambda *_: self._update_tap_jitter())
         self.random_offset.trace_add('write', lambda *_: self._update_tap_jitter())
         self.debug_mode.trace_add('write', lambda *_: self._update_tap_jitter())
@@ -803,7 +816,7 @@ class RefreshGui(tk.Tk):
         self.metric_captions = []
         self.currency_images = currency_icons(self, ASSET_DIR, dp(34))
         self.currency_labels = {}
-        for i, (label, var, key) in enumerate((("Elapsed", self.elapsed, None), ("Skystone spent", self.spent_display, 'spent'), ("Covenant buys", self.covenant, 'covenant'), ("Mystic buys", self.mystic, 'mystic'))):
+        for i, (label, var, key) in enumerate((("Elapsed", self.elapsed, None), ("Skystone spent", self.spent_display, 'spent'), ("Covenant buys", self.covenant, 'covenant'), ("Mystic buys", self.mystic, 'mystic'),('Friendship buys',self.friendship,'friendship'))):
             metrics.columnconfigure(i, weight=1, uniform="metrics")
             card = ttk.Frame(metrics, padding=dp(10))
             card.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 6, 0))
@@ -818,6 +831,8 @@ class RefreshGui(tk.Tk):
             self.metric_captions.append(caption)
             ttk.Label(card, textvariable=var, style="Value.TLabel").grid(row=1,column=column,sticky="w",pady=(dp(3),0))
             self.metric_cards.append(card)
+        if 'friendship' in self.currency_labels:
+            ThemeHint(self.currency_labels['friendship'],lambda:'Friendship Points · 50 points per buy · optional purchases for 18,000 gold')
         self.progress_frame = progress = ttk.Frame(right)
         progress.grid(row=3, column=0, sticky="ew", pady=(12, 12))
         progress.columnconfigure(0, weight=1)
@@ -857,7 +872,7 @@ class RefreshGui(tk.Tk):
         self.activity.configure(xscrollcommand=activity_xscroll.set)
         diagnostics_tab.columnconfigure(0, weight=1)
         diagnostics_tab.rowconfigure(1, weight=1)
-        self.diagnostics_label = ttk.Label(diagnostics_tab, text="Full engine output · startup prompts are handled automatically", style="Muted.TLabel", wraplength=dp(600))
+        self.diagnostics_label = ttk.Label(diagnostics_tab,textvariable=self.diagnostics_summary,style="Muted.TLabel",wraplength=dp(600))
         self.diagnostics_label.grid(row=0, column=0, sticky="w", pady=(0, dp(6)))
         self.log = tk.Text(diagnostics_tab, wrap=tk.WORD, height=3, bg="#111827", fg="#e5e7eb", font=("Consolas", 11), relief=tk.FLAT, state=tk.DISABLED)
         self.log.grid(row=1, column=0, sticky="nsew")
@@ -892,10 +907,10 @@ class RefreshGui(tk.Tk):
         history_frame.grid(row=6, column=0, sticky="nsew")
         history_frame.columnconfigure(0, weight=1)
         history_frame.rowconfigure(0, weight=1)
-        self.history = ttk.Treeview(history_frame, columns=("mode", "duration", "skystone", "gold", "cov", "mys", "started", "control", "outcome"), show="headings", height=6)
-        for key, label, width in (("mode", "Mode", 80), ("duration", "Duration", 125), ("skystone", "Skystone", 95), ("gold", "Gold", 120), ("cov", "Covenant buys", 115), ("mys", "Mystic buys", 105)):
+        self.history = ttk.Treeview(history_frame, columns=("mode", "duration", "skystone", "gold", "cov", "mys", "friend", "started", "control", "outcome"), show="headings", height=6)
+        for key, label, width in (("mode", "Mode", 80), ("duration", "Duration", 125), ("skystone", "Skystone", 95), ("gold", "Gold", 120), ("cov", "Covenant buys", 115), ("mys", "Mystic buys", 105), ('friend', 'Friendship buys', 120)):
             self.history.heading(key, text=label, anchor=tk.W if key in ("mode", "duration") else tk.E)
-            samples = {"mode": "Unknown", "duration": "12h 59m 59s", "skystone": "99,999", "gold": "999,999,999", "cov": "9,999", "mys": "9,999"}
+            samples = {"mode": "Unknown", "duration": "12h 59m 59s", "skystone": "99,999", "gold": "999,999,999", "cov": "9,999", "mys": "9,999", 'friend': '9,999'}
             column_width = max(self.heading_font.measure(label), self.ui_font.measure(samples[key])) + dp(24)
             self.history.column(key, width=column_width, minwidth=column_width, anchor=tk.W if key in ("mode", "duration") else tk.E, stretch=key != 'mode')
         for key, label, sample in (('started', 'Started (UTC)', '2026-10-05 14:30:00'), ('control', 'Control', 'Unknown'), ('outcome', 'Outcome', 'Unknown (legacy)')):
@@ -936,6 +951,7 @@ class RefreshGui(tk.Tk):
             parser.read(GUI_CONFIG_FILE)
             self.sound_enabled.set(parser.getboolean("GUI", "sound_enabled", fallback=True))
             self.trace_input.set(parser.getboolean('GUI', 'trace_input', fallback=False))
+            self.buy_friendship.set(parser.getboolean('GUI', 'buy_friendship', fallback=False))
             self.dark_mode.set(parser.getboolean("GUI", "dark_mode", fallback=False))
             self.credits_seen.set(parser.getboolean("GUI", "credits_seen", fallback=False))
             self.credits_on_startup.set(parser.getboolean("GUI", "show_credits_on_startup", fallback=False))
@@ -958,6 +974,7 @@ class RefreshGui(tk.Tk):
             parser.add_section("GUI")
         parser["GUI"]["sound_enabled"] = str(self.sound_enabled.get())
         parser['GUI']['trace_input'] = str(self.trace_input.get())
+        parser['GUI']['buy_friendship'] = str(self.buy_friendship.get())
         parser["GUI"]["dark_mode"] = str(self.dark_mode.get())
         parser["GUI"]["credits_seen"] = str(self.credits_seen.get())
         parser["GUI"]["show_credits_on_startup"] = str(self.credits_on_startup.get())
@@ -1001,35 +1018,54 @@ class RefreshGui(tk.Tk):
         return "break"
 
     def _settings(self):
-        if self.control_mode.get() == 'ADB' and len(self.connected_devices) > 1 and not self.device.get().strip():
-            raise ValueError("Choose the emulator you want to use from the device list.")
+        if self.control_mode.get() == 'ADB' and not self.device.get().strip():
+            raise ValueError('Choose the emulator from the device list, or enter its ADB endpoint. Use Scan to discover BlueStacks.')
         device = self._device_address() or ('native-mouse' if self.control_mode.get() != 'ADB' else '')
-        return validate_settings(device, self.budget.get(), self.tap_sleep.get(), self.stop_key.get(), self.random_offset.get(), self.debug_mode.get(), round(self.tap_jitter.get(), 2), self.trace_input.get())
+        return validate_settings(device, self.budget.get(), self.tap_sleep.get(), self.stop_key.get(), self.random_offset.get(), self.debug_mode.get(), round(self.tap_jitter.get(), 2), self.trace_input.get(), self.buy_friendship.get())
 
     def _device_address(self):
         value = self.device.get().strip()
         return self.device_labels.get(value, value)
 
-    def _apply_devices(self, devices, note, raw):
+    def _apply_devices(self, devices, note, raw, endpoints=()):
         previous = self._device_address()
         self.connected_devices = list(dict.fromkeys(devices))
-        labels = [f"{address} (default)" if len(self.connected_devices) == 1 else address for address in self.connected_devices]
-        self.device_labels = dict(zip(labels, self.connected_devices))
+        self.discovered_endpoints = tuple(endpoints)
+        named = {}
+        for endpoint in endpoints:
+            serial = next((address for address in self.connected_devices if endpoint_key(address) == endpoint_key(endpoint.address)), endpoint.address)
+            named[f'{endpoint.name} · {serial.rsplit(":", 1)[-1]}'] = serial
+        named_keys = {endpoint_key(address) for address in named.values()}
+        other = [address for address in self.connected_devices if endpoint_key(address) not in named_keys]
+        total = len(named) + len(other)
+        self.device_labels = {**named, **{f'{address} (default)' if total == 1 else address: address for address in other}}
+        labels = list(self.device_labels)
         self.device_box.configure(values=labels)
         running = self._checking_connection or (self.process is not None and self.process.poll() is None)
-        if self.connected_devices:
-            if len(self.connected_devices) == 1:
+        if labels:
+            preferred = getattr(self, '_adb_preferred_window', None)
+            match = next((label for label, address in self.device_labels.items() if endpoint_key(address) == endpoint_key(previous)), None)
+            preferred_matches = [label for label, address in named.items() if any(endpoint.name == preferred and endpoint_key(endpoint.address) == endpoint_key(address) for endpoint in endpoints)]
+            if not running and len(preferred_matches) == 1:
+                self.device.set(preferred_matches[0])
+                self._adb_preferred_window = None
+                note = 'Selected the same BlueStacks player as Mouse mode. Start connects only this endpoint.'
+            elif len(labels) == 1:
                 if not running:
                     self.device.set(labels[0])
-                note = "Default: the only connected emulator.\nEmulator ports can change."
-            elif previous in self.connected_devices:
+                note = ('Select Start to connect to this BlueStacks player. Its port can change.' if named and not self.connected_devices else
+                        'Default: the only connected emulator.\nEmulator ports can change.')
+            elif match is not None:
                 if not running:
-                    self.device.set(previous)
-                note = "Several emulators connected. Your previous choice is selected."
+                    self.device.set(match)
+                note = 'Several emulators available. Your previous choice is selected.'
             else:
                 if not running:
                     self.device.set("")
-                note = "Several emulators connected. Choose one from the list."
+                note = 'Several emulators available. Choose one from the list.'
+        if self._device_address():
+            state = 'connected' if self._device_address() in self.connected_devices else 'connect on Start'
+            note += f'\nSelected: {self._device_address()} · {state}'
         self.device_notice.set(note)
         if not running:
             self.device_button.configure(state=tk.NORMAL)
@@ -1088,6 +1124,9 @@ class RefreshGui(tk.Tk):
         self._connection_check_id += 1
         self._device_scan_busy = self._mouse_scan_busy = False
         mouse = self.control_mode.get() != 'ADB'
+        if not mouse:
+            previous_game = self.mouse_windows.get(self.mouse_target.get())
+            self._adb_preferred_window = previous_game.title if previous_game is not None else None
         self._update_debug_availability()
         self.device_box.configure(textvariable=self.mouse_target if mouse else self.device,
                                   values=list(self.mouse_windows) if mouse else list(self.device_labels),
@@ -1106,6 +1145,11 @@ class RefreshGui(tk.Tk):
 
     def _select_mouse_window(self, _event=None):
         if self.control_mode.get() == 'ADB':
+            self._adb_preferred_window = None
+            address = self._device_address()
+            state = 'connected' if address in self.connected_devices else 'connect on Start'
+            self.device_notice.set(f'Selected: {address} · {state}')
+            self._set_connection_warning('')
             return
         if self.mouse_windows.get(self.mouse_target.get()) is not None:
             self._set_connection_warning('')
@@ -1190,7 +1234,7 @@ class RefreshGui(tk.Tk):
         self._checking_connection = False
         self._structured_adb = structured
         self._set_controls(False)
-        self._apply_devices(result.devices, result.warning, result.diagnostics)
+        self._apply_devices(result.devices, result.warning, result.diagnostics, result.endpoints)
         self._set_connection_warning(result.warning, reveal=True)
         if not result.ready:
             self.status.set('Not ready' if settings.device in result.devices else 'Not connected')
@@ -1264,12 +1308,14 @@ class RefreshGui(tk.Tk):
             verify_setup_engine(ENGINE_EXE)
             check = subprocess.run([str(ENGINE_EXE),'--verify'],cwd=APP_DIR,capture_output=True,text=True,
                                    timeout=15,creationflags=NO_WINDOW)
-            if check.returncode or 'window mouse v6' not in check.stdout or 'tap timing v2' not in check.stdout:
-                raise ValueError('Mouse mode needs the matching rc39 or newer engine for emulator support. Use the complete new player folder.')
+            if check.returncode or 'window mouse v9' not in check.stdout or 'tap timing v2' not in check.stdout or 'global stop key v2' not in check.stdout:
+                raise ValueError('Mouse mode needs the matching new engine with global Stop key support. Use the complete new player folder.')
+            if settings.buy_friendship and 'friendship purchases v1' not in check.stdout:
+                raise ValueError('Friendship purchases need the matching new engine. Use a complete player folder built with Friendship support.')
             target = activate_native_target(target)
         except MouseElevationRequired as error:
             self._set_connection_warning(str(error), reveal=True)
-            self._offer_administrator_restart(settings)
+            self._offer_administrator_restart(settings, reason=str(error))
             return
         except (ValueError,OSError,RuntimeError,subprocess.SubprocessError) as error:
             self._set_connection_warning(str(error),reveal=True)
@@ -1277,11 +1323,10 @@ class RefreshGui(tk.Tk):
         self._set_connection_warning('')
         self._begin_refresh(settings,mouse_target=target)
 
-    def _offer_administrator_restart(self, settings):
+    def _offer_administrator_restart(self, settings, *, reason=None):
         if not messagebox.askyesno(
                 'Restart as administrator?',
-                'The selected game runs as administrator. Windows requires this app '
-                'to have the same permission for Mouse mode.\n\n'
+                (reason or 'Windows requires compatible permissions for Mouse mode.') + '\n\n' +
                 'Restart as administrator now? Your settings will be saved, then '
                 'Windows will ask for permission. Select your game and press Start '
                 'Refresh again after the app reopens. No session starts automatically.',
@@ -1302,6 +1347,17 @@ class RefreshGui(tk.Tk):
         self._close()
 
     def _begin_refresh(self, settings, *, mouse_target=None):
+        if settings.buy_friendship:
+            try:
+                check = subprocess.run([str(ENGINE_EXE), '--verify'], cwd=APP_DIR, capture_output=True,
+                                       text=True, timeout=15, creationflags=NO_WINDOW)
+                if check.returncode or 'friendship purchases v1' not in check.stdout:
+                    raise ValueError('Friendship purchases need the matching new engine. Use a complete player folder built with Friendship support.')
+                if mouse_target is None and not self._structured_adb:
+                    raise ValueError('Friendship purchases require GUI session support from the matching new engine.')
+            except (ValueError, OSError, subprocess.SubprocessError) as error:
+                self._set_connection_warning(str(error), reveal=True)
+                return
         if settings.debug:
             message = "Debug uses a fixed 100-skystone test budget, the Esc stop key, and randomized offsets. It pauses BEFORE each click. Check each image, then press a key other than Esc in that image to continue. Buy and confirmation each have a pause. Continue?"
             if not messagebox.askyesno("Start calibration?", message, parent=self):
@@ -1323,6 +1379,8 @@ class RefreshGui(tk.Tk):
         self._session_log_path = None
         self._session_log_writer = None
         self._trace_ready = False
+        self._stop_key_status = 'Starting'
+        self._stop_key_detection = ''
         if mouse_target or settings.trace_input:
             try:
                 folder = APP_DIR/('mouse-session-logs' if mouse_target else 'input-session-logs')
@@ -1347,7 +1405,7 @@ class RefreshGui(tk.Tk):
         self.log.delete("1.0", tk.END)
         self.log.configure(state=tk.DISABLED)
         self.activity.delete(*self.activity.get_children())
-        for var in (self.spent, self.covenant, self.mystic):
+        for var in (self.spent, self.covenant, self.mystic, self.friendship):
             var.set("—")
         self._update_spent_display()
         self.progress.configure(value=0)
@@ -1360,10 +1418,13 @@ class RefreshGui(tk.Tk):
         arguments = [str(ENGINE_EXE)]
         if mouse_target is not None:
             arguments += ['--mouse-session',json.dumps(dict(handle=mouse_target.handle,pid=mouse_target.pid,
-                          title=mouse_target.title,rectangle=mouse_target.rectangle,trace_input=settings.trace_input)),
+                          title=mouse_target.title,rectangle=mouse_target.rectangle,render_handle=mouse_target.render_handle,
+                          trace_input=settings.trace_input)),
                           '--budget',str(settings.budget),'--delay',str(settings.tap_sleep),
                           '--stop-key',settings.stop_key,'--random-offset','yes' if settings.random_offset else 'no',
                           '--tap-jitter',str(settings.tap_jitter)]
+            if settings.buy_friendship:
+                arguments.append('--buy-friendship')
         else:
             arguments += ['--gui-session', json.dumps(asdict(settings))] if self._structured_adb else ['--tap-jitter',str(settings.tap_jitter)]
         try:
@@ -1525,6 +1586,26 @@ class RefreshGui(tk.Tk):
                     self._update_remaining_time(observed_at)
             self._event(line)
             return
+        if line.startswith('E7GUI_STOP_KEY '):
+            try:
+                hotkey=json.loads(line[len('E7GUI_STOP_KEY '):])
+                if hotkey['status']=='ready':
+                    self._stop_key_status=f"{hotkey['key']} · {hotkey['backend']}"
+                    self._event(f"Global Stop key ready: {hotkey['key']}.")
+                elif hotkey['status']=='failed':
+                    self._stop_key_status=hotkey['reason']
+                    self.detail.set(hotkey['reason']);self._event(hotkey['reason'])
+                elif hotkey['status']=='pressed':
+                    self._stop_key_detection=str(hotkey['source'])
+                    self._stop_key_status=f"{hotkey['key']} · {self._stop_key_detection}"
+                    self._event(f"Stop key detected: {hotkey['key']} via {self._stop_key_detection}.")
+                elif hotkey['status']=='released':
+                    self._stop_key_status=f"{hotkey['key']} · released"
+                    detection=getattr(self,'_stop_key_detection','')
+                    if detection:self._stop_key_status+=f" · {detection}"
+                self._update_diagnostics_summary()
+            except (ValueError,KeyError,TypeError):pass
+            return
         if line.startswith('E7GUI_STATS '):
             try:
                 stats = json.loads(line[len('E7GUI_STATS '):])
@@ -1538,15 +1619,17 @@ class RefreshGui(tk.Tk):
             self._live_stats_seen = True
             self.session_estimate.observe(stats['refreshes'], observed_at)
             self._update_remaining_time(observed_at)
-            for key, var in (('skystone_spent', self.spent), ('covenant', self.covenant), ('mystic', self.mystic)):
+            for key, var in (('skystone_spent', self.spent), ('covenant', self.covenant), ('mystic', self.mystic), ('friendship', self.friendship)):
                 value = number_text(stats[key])
                 if var.get() != value:
-                    if key in ('covenant', 'mystic') and stats[key] > 0:
-                        self._event(f"{'Covenant' if key == 'covenant' else 'Mystic'} purchases: {value}.")
+                    if key in ('covenant', 'mystic', 'friendship') and stats[key] > 0:
+                        self._event(f"{key.capitalize()} purchases: {value}.")
                     var.set(value)
             percent = min(100, stats['skystone_spent'] / self.run_settings.budget * 100)
             self.progress.configure(value=percent)
             self.progress_text.set(f"{stats['refreshes']:,} refreshes · {stats['skystone_spent']:,} skystone spent · engine reported")
+            if self.run_settings.buy_friendship:
+                self.progress_text.set(self.progress_text.get()+f" · Friendship buys: {stats['friendship']:,}")
             self.metric_captions[1].configure(text='Skystone spent')
             return
         if "Shop refresh terminated!" in line:
@@ -1579,7 +1662,7 @@ class RefreshGui(tk.Tk):
             self.remaining_time.set('Time remaining: Session stopped' if self.stopping or self.stop_key_pressed or self._mouse_failure else 'Time remaining: Complete')
             self._freeze_elapsed()
             self._event("Refresh ended. Recording session results.")
-        for label, var in (("Covenant bookmark", self.covenant), ("Mystic medal", self.mystic), ("Skystone spent", self.spent)):
+        for label, var in (("Covenant bookmark", self.covenant), ("Mystic medal", self.mystic), ('Friendship points', self.friendship), ("Skystone spent", self.spent)):
             if match := re.match(rf"{label}\s*:\s*(\d+)", line):
                 var.set(number_text(match[1]))
         if re.search(r"Traceback|Error:|Exception:|Fail to connect|folder is missing|screen.*(?:wrong|incorrect)", line, re.I):
@@ -1756,8 +1839,9 @@ class RefreshGui(tk.Tk):
                 self._device_scan_busy = False
                 token, value, background = value
                 if token == self._connection_check_id and self.control_mode.get() == 'ADB' and not self._checking_connection and not (self.process and self.process.poll() is None):
-                    if not background or list(value.devices) != self.connected_devices:
-                        self._apply_devices(value.devices, value.warning, value.diagnostics)
+                    if (not background or list(value.devices) != self.connected_devices or
+                            value.endpoints != getattr(self, 'discovered_endpoints', ())):
+                        self._apply_devices(value.devices, value.warning, value.diagnostics, value.endpoints)
                     else:
                         self.device_button.configure(state=tk.NORMAL)
                         self.device_notice.set(value.warning or f'{len(value.devices)} connected device(s).')
@@ -1798,6 +1882,7 @@ class RefreshGui(tk.Tk):
             self.activity.column("event", minwidth=required, width=required)
         tag = ('covenant' if text.startswith('Covenant purchases:') else
                'mystic' if text.startswith('Mystic purchases:') else
+               'friendship' if text.startswith('Friendship purchases:') else
                'error' if re.search(r'failed|error|exception|traceback|not recognized|could not|cannot', text, re.I) else
                'warning' if re.search(r'stop|pause|waiting|cancel|needs help', text, re.I) else
                'success' if re.search(r'completed|finished|refresh ended|resumed', text, re.I) else '')
@@ -1807,9 +1892,20 @@ class RefreshGui(tk.Tk):
             self.activity.delete(items[0])
         self.activity.see(item)
 
+    def _update_diagnostics_summary(self):
+        settings=self.run_settings
+        enabled=settings.buy_friendship if settings else self.buy_friendship.get()
+        self.diagnostics_summary.set(f"Covenant buys: {self.covenant.get()} · Mystic buys: {self.mystic.get()} · Friendship buys: {self.friendship.get()} ({'on' if enabled else 'off'})\n"
+            f"Stop key: {getattr(self,'_stop_key_status','No active session')}")
+
     def _copy_diagnostics(self):
         self.clipboard_clear()
-        self.clipboard_append(f"App: v{APP_VERSION}\nControl: {self.control_mode.get()}\nEngine: {ENGINE_EXE}\nState: {self.status.get()}\n\n{self.raw_output}")
+        settings=self.run_settings
+        enabled=settings.buy_friendship if settings else self.buy_friendship.get()
+        stop_status=getattr(self,'_stop_key_status','No active session')
+        self.clipboard_append(f"App: v{APP_VERSION}\nControl: {self.control_mode.get()}\nEngine: {ENGINE_EXE}\nState: {self.status.get()}\n"
+            f"Stop key: {stop_status}\nFriendship Points buying: {'on' if enabled else 'off'}\n"
+            f"Purchases: Covenant {self.covenant.get()} · Mystic {self.mystic.get()} · Friendship {self.friendship.get()}\n\n{self.raw_output}")
 
     def _open_logs_folder(self):
         if self.control_mode.get() == 'Mouse' and (self._checking_connection or (self.process and self.process.poll() is None)):
@@ -1841,7 +1937,7 @@ class RefreshGui(tk.Tk):
         for i, row in enumerate(reversed(rows)):
             mode = row['Mode']
             tags = ('debug',) if mode == 'Debug' else ('even',) if i % 2 == 0 else ()
-            item = self.history.insert("", tk.END, tags=tags, values=(mode, duration_text(row.get("Duration")), *(number_text(row.get(key)) for key in ("Skystone spent", "Gold spent", "Covenant bookmark", "Mystic medal")),
+            item = self.history.insert("", tk.END, tags=tags, values=(mode, duration_text(row.get("Duration")), *(number_text(row.get(key)) for key in ("Skystone spent", "Gold spent", "Covenant bookmark", "Mystic medal", 'Friendship points')),
                                 row.get('Started at', '').replace('T', ' ').replace('+00:00', ''), row.get('Control mode', 'Unknown'), row.get('Outcome', 'Unknown (legacy)')))
             if not hasattr(self, '_history_reasons'):
                 self._history_reasons = {}
@@ -1959,6 +2055,8 @@ class RefreshGui(tk.Tk):
             if budget < 3:
                 raise ValueError
             self.ev.set(f"Gold needed ≈ {int(budget * 1691.04536):,}\nCovenant buys ≈ {budget * 0.006602509:.1f}\nMystic buys ≈ {budget * 0.001700646:.1f}")
+            if self.buy_friendship.get():
+                self.ev.set(self.ev.get()+'\nFriendship adds 18,000 gold per buy.')
         except (ValueError, OverflowError):
             self.ev.set("Enter a valid budget to see the estimate.")
         self._update_spent_display()

@@ -1,5 +1,34 @@
 # E7 live-counter engine — v0.1.0
 
+## Friendship Points source feature
+
+The working source adds optional Friendship purchases, off by default, to the
+existing Covenant/Mystic item loop in normal ADB and Mouse sessions. Every selected
+item is checked on both scans and purchased at most once per generated inventory.
+The current item is **Friendship Points**, shown as a green heart: 50 points for
+18,000 gold. The upstream `adb-assets/fb.png` shows a retired clover bookmark and
+is never loaded or matched for this feature. Friendship uses observed **Currency**
+category, full name, price and Buy bounds; the fresh confirmation must say
+Friendship Points and 18,000 gold. Contradictory names/prices stop confirmation.
+
+The GUI toggle requires an engine advertising `friendship purchases v1` and
+uses structured ADB settings or Mouse `--buy-friendship`. Calibration excludes
+Friendship. The existing live `friendship` field now counts completed point-item
+purchases; history stores these under `Friendship points`, separately from legacy
+`Friendship bookmark` records. Gold totals include these purchases.
+
+Evidence: the existing private saved `client-mystic.png` shop image confirms the
+heart, current name/category and 18,000 price; offline Windows OCR identifies
+Friendship and Mystic in that image. Fake-transport tests cover Friendship alone,
+all item combinations, both scans and duplicate prevention. The private
+0.1.4-rc7 trial candidate packages these changes and passed its packaged
+fake-transport regressions; they have not been live-tested. A real Friendship
+purchase dialog and live completion remain unverified. The February 19, 2026 update replaced Secret Shop
+Friendship Bookmarks with 50 Friendship Points; see the
+[archived update notice](https://epic7db.com/news/219-thu-update-content).
+
+## Existing release behavior
+
 Modified from Solunium's GPL-3.0 E7 ADB engine, maintained by
 NitrogenSulfide (Blue Natto).
 Source: `E7ADBShopRefresh.py`. The upstream history remains in the maintained
@@ -44,10 +73,24 @@ black-bar crop); normalized recognition points map back to desktop coordinates.
 Google Play Games windows can additionally crop an observed mostly black custom
 title bar when the remaining image fits the game aspect ratio. No fixed toolbar
 height is assumed. A bounded startup reveal attempt can precede home recognition;
-shop-menu and purchase/refresh input require recognized controls. The GUI requires window mouse v6
-so an older STOVE-only engine cannot be used accidentally.
+shop-menu and purchase/refresh input require recognized controls. The GUI requires window mouse v9
+so engines without verified render-child/input-host support are rejected.
+BlueStacks players use a visible `BlueStacksApp` render child belonging to the
+selected player process. Its screen bounds are used for capture, visibility
+checks and mapped input. Missing, ambiguous, replaced or moved surfaces block
+input; sibling emulator overlays do not count as a visible game target.
+When BlueStacks disables its render child, Windows hit-testing reports its Qt
+input host. Only the enabled direct parent, in the same process and with exactly
+the same client bounds, is accepted. Other ancestors and siblings still block.
+Home recognition requires Sanctuary, Secret Shop and either Epic Pass or Event
+icons in the observed menu layout. Both transports recheck the matched shop
+icon before entry and verify the shop before refresh or purchase actions.
 The native preflight checks process elevation: a normal app cannot control an
 elevated game. It stops with a Run as administrator instruction before activation.
+An access-denied token check also blocks input and allows a non-elevated GUI to
+offer a user-approved administrator retry. This does not establish that the
+player is elevated. A denial after that retry remains blocked; no automatic
+session or repeated elevation request is sent.
 Mouse mode brings the game forward once after Start, does not resize it, uses
 verified cursor movement and an 80 ms click hold. rc32 adds
 an eased pointer glide lasting 0.12–0.38 seconds according to travel distance,
@@ -307,3 +350,39 @@ Epic Pass glyph edges in their joint layout, with foreground brightness and
 ambiguity checks. This path needs neither wallpaper references nor readable
 caption OCR. The existing caption fallback remains for other skins. The saved
 Mouse-home CLI uses the same grouped-control recognition as live startup.
+Windows sessions register the selected Stop key on the engine's monitor thread
+with `RegisterHotKey`/`WM_HOTKEY`, plus held-key polling via `GetAsyncKeyState`'s
+high bit. 0.1.4-rc6 also installs a `WH_KEYBOARD_LL` event listener on that thread,
+pumping its message queue and latching brief key-down events including injected
+streaming input. The listener only tracks the Stop key and chord modifiers;
+it never suppresses input or records other keys. Both registration and listener
+must succeed before shop input. Completion, Stop and errors release this session's
+hook and registration. Diagnostics show readiness, detection source, release or
+failure. A Moonlight client must forward the key to this Windows host; keys
+consumed by the client or host input restrictions cannot be observed here.
+Standalone non-Windows calls
+retain the upstream keyboard-hook fallback. GUI shutdown/Stop also retains its
+independent stdin command and owned-process cleanup.
+
+Purchased/sold-out currency status is accepted in the availability text or the
+right-hand button area of the same recognized item row when there is no active
+Buy button. These rows are skipped without adding buys or gold spending to this
+session. Missing price/Buy without purchased evidence remains an error; status
+on a different row does not permit skipping an available item.
+
+0.1.4-rc7 also recognizes the literal 0/1 stock fraction beside the same Buy label:
+the owner's pre-purchased row retained its green Buy button, price and “Only 1
+available” text. The name/price path requires the complete currency name,
+category and expected price with their existing row geometry before skipping.
+The icon path requires its recognized currency icon and an observed button with
+Buy and 0/1 inside it. Stock must be immediately left of Buy, aligned vertically
+and at a compatible text size; unrelated zeros, other rows and conflicting
+fractions cannot authorize skipping. Available 1/1 retains purchase verification.
+The same guard covers Friendship, Covenant and Mystic. Whole-list OCR and any
+bounded row retries are cached for each captured frame
+and invalidated by the next capture. If small/dim stock or price text is missing,
+row OCR enlarges the pixels and normalizes contrast. Stock from the first read
+is retained only when both reads agree on Buy bounds; conflicting readings stop.
+Neither wallpaper art nor
+a saved shop background is used to decide stock. Counters and gold totals include
+only purchases completed by this session.

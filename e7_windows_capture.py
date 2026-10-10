@@ -11,6 +11,7 @@ class GameWindow:
     pid: int
     title: str
     rectangle: tuple[int, int, int, int]
+    render_handle: int | None = None
 
     @property
     def label(self):
@@ -25,6 +26,10 @@ class WindowsCapture:
         self.callback_type = ctypes.WINFUNCTYPE(w.BOOL, w.HWND, w.LPARAM)
         signatures = {
             'EnumWindows': ([self.callback_type, w.LPARAM], w.BOOL),
+            'EnumChildWindows': ([w.HWND, self.callback_type, w.LPARAM], w.BOOL),
+            'IsChild': ([w.HWND, w.HWND], w.BOOL),
+            'GetParent': ([w.HWND], w.HWND),
+            'IsWindowEnabled': ([w.HWND], w.BOOL),
             'IsWindowVisible': ([w.HWND], w.BOOL), 'IsIconic': ([w.HWND], w.BOOL),
             'GetWindowTextLengthW': ([w.HWND], ctypes.c_int),
             'GetWindowTextW': ([w.HWND, w.LPWSTR, ctypes.c_int], ctypes.c_int),
@@ -54,7 +59,37 @@ class WindowsCapture:
         box = (point.x, point.y, point.x+rectangle.right, point.y+rectangle.bottom)
         if box[2]-box[0] < 640 or box[3]-box[1] < 360:
             raise ValueError('Make the game window at least 640 × 360 pixels.')
-        return GameWindow(int(handle), pid.value, title.value, box)
+        surface = self._bluestacks_surface(handle, pid.value, box)
+        if surface is None and title.value.lower().startswith('bluestacks app player'):
+            raise ValueError('BlueStacks game surface is unavailable. Open its player and game, then Scan again.')
+        render_handle, box = surface if surface is not None else (None, box)
+        return GameWindow(int(handle), pid.value, title.value, box, render_handle)
+
+    def _bluestacks_surface(self, parent, pid, outer):
+        """Use BlueStacks' real render child; exclude toolbars and advertising."""
+        surfaces = []
+        @self.callback_type
+        def visit(child, _):
+            name = ctypes.create_unicode_buffer(256)
+            self.user.GetClassNameW(child, name, len(name))
+            if name.value != 'BlueStacksApp' or not self.user.IsWindowVisible(child):
+                return True
+            child_pid = w.DWORD()
+            self.user.GetWindowThreadProcessId(child, ctypes.byref(child_pid))
+            if child_pid.value != pid or self.user.GetAncestor(child, 2) != parent:
+                return True
+            rect, point = w.RECT(), w.POINT()
+            if not self.user.GetClientRect(child, ctypes.byref(rect)) or not self.user.ClientToScreen(child, ctypes.byref(point)):
+                return True
+            box = (point.x, point.y, point.x + rect.right, point.y + rect.bottom)
+            if (rect.right >= 640 and rect.bottom >= 360 and
+                    outer[0] <= box[0] < box[2] <= outer[2] and outer[1] <= box[1] < box[3] <= outer[3]):
+                surfaces.append((int(child), box))
+            return True
+        self.user.EnumChildWindows(parent, visit, 0)
+        if len(surfaces) > 1:
+            raise ValueError('BlueStacks has multiple game surfaces. No Mouse input sent; reopen its player and Scan again.')
+        return surfaces[0] if surfaces else None
 
     def list_windows(self):
         windows = []
@@ -62,6 +97,8 @@ class WindowsCapture:
         def visit(handle, _):
             try:
                 target = self.inspect(handle)
+                if 'bluestacks' in target.title.lower() and target.render_handle is None:
+                    return True
                 if re.search(r'google play games|epic\s*(seven|7)|mumu|bluestacks|ldplayer|nox', target.title, re.I):
                     windows.append(target)
             except ValueError:
@@ -74,17 +111,40 @@ class WindowsCapture:
     def point_visible(self, target, point):
         hit=self.user.WindowFromPoint(w.POINT(*point))
         root=self.user.GetAncestor(hit,2)
-        if root==target.handle:
+        surface = target.render_handle
+        if root==target.handle and (surface is None or hit == surface or self.user.IsChild(surface, hit)):
+            return True
+        if root==target.handle and surface is not None and self._render_parent_hit(target,hit,point):
             return True
         self._record_coverage(target,point,hit,root)
         return False
 
+    def _render_parent_hit(self,target,hit,point):
+        # BlueStacks disables its render child. WindowFromPoint therefore
+        # reports the enabled Qt host which receives the player's mouse input.
+        # Accept only that direct parent, with the same verified game bounds;
+        # other ancestors, sibling overlays and foreign windows still block.
+        u=self.user
+        if (hit==target.handle or u.GetParent(target.render_handle)!=hit or
+                u.IsWindowEnabled(target.render_handle) or not u.IsWindowEnabled(hit)):
+            return False
+        name=ctypes.create_unicode_buffer(256);u.GetClassNameW(hit,name,len(name))
+        pid=w.DWORD();u.GetWindowThreadProcessId(hit,ctypes.byref(pid))
+        if not re.fullmatch(r'Qt\d+QWindowIcon',name.value) or pid.value!=target.pid:
+            return False
+        rect,origin=w.RECT(),w.POINT()
+        if not u.GetClientRect(hit,ctypes.byref(rect)) or not u.ClientToScreen(hit,ctypes.byref(origin)):
+            return False
+        box=(origin.x,origin.y,origin.x+rect.right,origin.y+rect.bottom)
+        return box==target.rectangle and box[0]<=point[0]<box[2] and box[1]<=point[1]<box[3]
+
     def _record_coverage(self,target,point,hit,root):
         pid=w.DWORD();self.user.GetWindowThreadProcessId(root,ctypes.byref(pid))
-        name=ctypes.create_unicode_buffer(256);self.user.GetClassNameW(root,name,len(name))
+        name=ctypes.create_unicode_buffer(256);self.user.GetClassNameW(hit,name,len(name))
+        root_name=ctypes.create_unicode_buffer(256);self.user.GetClassNameW(root,root_name,len(root_name))
         self.visibility_details=dict(client_point=[point[0]-target.rectangle[0],point[1]-target.rectangle[1]],
             hit_window=int(hit or 0),root_window=int(root or 0),process_id=pid.value,
-            window_class=name.value,target_window=target.handle)
+            window_class=name.value,root_window_class=root_name.value,target_window=target.handle)
 
     def unobstructed(self, target, *, margin=None):
         u = self.user
