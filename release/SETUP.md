@@ -293,6 +293,7 @@ Only purchases completed by this session contribute to its counters and spending
 Rc7 recognizes 0/1 stock beside Buy on a pre-purchased row, even when the button,
 price and “Only 1 available” remain visible. A verified 1/1 row still follows
 normal purchase checks. Stock recognition uses item and control positions;
-your shop wallpaper does not need to match the supplied example. Use the whole
-rc7 folder with its matching runtime. Enable Also buy Friendship Points if you
+your shop wallpaper does not need to match the supplied example. Rc8 also handles
+that row at the bottom of the scrolled list. Use the whole
+rc8 folder with its matching runtime. Enable Also buy Friendship Points if you
 want new Friendship purchases; its default remains off.

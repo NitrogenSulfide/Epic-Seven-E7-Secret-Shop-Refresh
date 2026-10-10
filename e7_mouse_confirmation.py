@@ -1,6 +1,7 @@
 """Read confirmation text locally; never move the pointer or contact the game."""
 import json
 import base64
+import math
 import os
 from pathlib import Path
 import re
@@ -8,6 +9,26 @@ import subprocess
 import tempfile
 from PIL import Image, ImageOps
 import numpy as np
+
+
+def level_box(box, angle, size):
+    """Map a word box from Windows OCR's deskewed frame back to the image.
+
+    Game UI text is level, but sparse crops (one shop row) can be assigned a
+    small text angle. Windows then reports word bounds rotated about the image
+    centre, shifting far-apart words in opposite directions. Rotate each word
+    centre back; the box size is kept.
+    """
+    if not angle:
+        return list(box)
+    theta = math.radians(float(angle))
+    cx, cy = size[0]/2, size[1]/2
+    x1, y1, x2, y2 = box
+    dx, dy = (x1+x2)/2-cx, (y1+y2)/2-cy
+    x = cx + dx*math.cos(theta) - dy*math.sin(theta)
+    y = cy + dx*math.sin(theta) + dy*math.cos(theta)
+    half_width, half_height = (x2-x1)/2, (y2-y1)/2
+    return [x-half_width, y-half_height, x+half_width, y+half_height]
 
 
 def read_ui_text(rgb, region, *, scale=1, contrast=False):
@@ -37,9 +58,10 @@ def read_ui_text(rgb, region, *, scale=1, contrast=False):
     try:
         result = json.loads(child.stdout)
         result['text'] = str(result['text']).lower()
+        size = (crop.width,crop.height)
         result['words'] = [dict(text=str(word['text']).lower(),
-            box=[word['box'][0]/scale+left,word['box'][1]/scale+top,
-                 word['box'][2]/scale+left,word['box'][3]/scale+top])
+            box=[value/scale+offset for value,offset in
+                 zip(level_box(word['box'],result.get('angle'),size),(left,top,left,top))])
             for word in result.get('words',[])]
         return result
     except (ValueError,KeyError,TypeError):

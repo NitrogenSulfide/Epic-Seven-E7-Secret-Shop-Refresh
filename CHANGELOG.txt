@@ -1,3 +1,14 @@
+0.1.4-rc8 · Purchased Friendship at the bottom of the shop
+
+• Fixes a false "shop button stock is ambiguous" stop when a pre-purchased
+  Friendship row sits at the bottom of the scrolled list (observed on Google
+  Play Games). The enlarged single-row OCR read could report a small text tilt,
+  shifting its word bounds; they are now mapped back to the level shop view.
+• Re-reads an unclear row from up to two fresh captures, 0.4 seconds apart,
+  before stopping. No input is sent between reads and all row checks still apply.
+• Replayed against the owner's screenshot with scroll offset, blur, brightness,
+  resolution and background-colour variations; live input remains a separate check.
+
 0.1.4-rc7 · Recognize purchased stock beside Buy
 
 • Recognizes the observed 0/1 stock inset on pre-purchased currency rows,

@@ -208,6 +208,10 @@ class IncompleteCurrencyRow(MouseStopped):
     pass
 
 
+class UnclearShopRow(MouseStopped):
+    """Row text could not be verified on this capture; a fresh one may differ."""
+
+
 def button_stock(result,label,button=None):
     """Read the stock inset paired with this Buy label, independent of artwork."""
     middle=lambda box:(box[1]+box[3])/2
@@ -226,7 +230,7 @@ def button_stock(result,label,button=None):
                 and button[1]<=box[1]<box[3]<=button[3]):continue
         ratios.append(int(match[1]))
     if len(ratios)>1:
-        raise MouseStopped('The shop button stock is ambiguous. Stopped before scrolling or refreshing.')
+        raise UnclearShopRow('The shop button stock is ambiguous. Stopped before scrolling or refreshing.')
     return ratios[0] if ratios else None
 
 
@@ -238,11 +242,11 @@ def retain_row_stock(original,row,label):
             if str(word['text']).lower()=='buy'
             and max(abs(a-b) for a,b in zip(word['box'],label))<=12]
     if len(labels)!=1:
-        raise MouseStopped('The shop button stock is ambiguous. Stopped before scrolling or refreshing.')
+        raise UnclearShopRow('The shop button stock is ambiguous. Stopped before scrolling or refreshing.')
     after=button_stock(row,labels[0])
     if after is not None:
         if before!=after:
-            raise MouseStopped('The shop button stock is ambiguous. Stopped before scrolling or refreshing.')
+            raise UnclearShopRow('The shop button stock is ambiguous. Stopped before scrolling or refreshing.')
         return row
     words=[word for word in original.get('words',[])
            if button_stock(dict(words=[word]),labels[0])==before]
@@ -265,7 +269,7 @@ def currency_button(result, boxes, item_name):
     if not names:
         return None
     if len(names)!=1:
-        raise MouseStopped(f'The {item_name} rows are ambiguous. Stopped before scrolling or refreshing.')
+        raise UnclearShopRow(f'The {item_name} rows are ambiguous. Stopped before scrolling or refreshing.')
     text,name = names[0]; y = middle(name)
     suffixes = [box for word,box in words if word in (noun,noun+'s')
                 and name[2]<=box[0]<=name[2]+60 and box[2]<=1480 and abs(middle(box)-y)<=20]
@@ -301,7 +305,7 @@ def currency_button(result, boxes, item_name):
             return label
     if not buys and name[3]+70>1080:
         raise IncompleteCurrencyRow(f'The {item_name} row is partly offscreen. Stopped before refreshing; expose its full Buy button.')
-    raise MouseStopped(f'The {item_name} name was recognized, but its price and Buy button could not be verified on the same row. Stopped before scrolling or refreshing.')
+    raise UnclearShopRow(f'The {item_name} name was recognized, but its price and Buy button could not be verified on the same row. Stopped before scrolling or refreshing.')
 
 
 def green_buttons(rgb, region, *, max_width=450):
