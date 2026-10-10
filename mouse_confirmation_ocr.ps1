@@ -32,7 +32,9 @@ try {
                     ($_.BoundingRect.X + $_.BoundingRect.Width), ($_.BoundingRect.Y + $_.BoundingRect.Height)) }
             }
         })
-        @{ text = $result.Text; words = $words } | ConvertTo-Json -Compress -Depth 5
+        # Word bounds follow the detected text angle; report it so callers can
+        # map them back to image coordinates.
+        @{ text = $result.Text; angle = $result.TextAngle; words = $words } | ConvertTo-Json -Compress -Depth 5
     }
     finally { $bitmap.Dispose() }
 }

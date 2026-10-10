@@ -14,7 +14,7 @@ import configparser
 import json
 import math
 from e7_shop_navigation import create_navigator, NavigationSetupRequired, prepare_references
-from e7_shop_flow import ObservedShopFlow
+from e7_shop_flow import ObservedShopFlow, UnclearShopRow
 from e7_mouse_confirmation import read_confirmation_text,read_ui_text
 from e7_native_mouse import MouseStopped
 from e7_frame import normalize_game_frame
@@ -240,6 +240,24 @@ class E7ADBShopRefresh(ObservedShopFlow):
             'friendship': counts.get('Friendship points', 0),
         }), flush=True)
 
+    def _find_item_rechecked(self, screenshot, image, attempts=3):
+        """Re-read unclear row text from fresh captures before stopping.
+
+        A frame taken while the list still settles can blur small stock/price
+        text. No input is sent between reads, and the same row checks apply.
+        """
+        for attempt in range(attempts):
+            try:
+                return self.findItemPosition(screenshot, image)
+            except UnclearShopRow:
+                if attempt == attempts-1 or not self.loop_active:
+                    raise
+            self._wait_observed(.4, 'row recheck')
+            if not self.loop_active:
+                return None
+            screenshot = self.takeScreenshot()
+            self.navigation.require_shop(screenshot)
+
     def refreshShop(self):
         if not self.clickShop():
             return
@@ -269,7 +287,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
             self.navigation.require_shop(screenshot)
             #print(len(self.storage.inventory.items()))
             for key, value in self.storage.inventory.items():
-                pos = self.findItemPosition(screenshot, value.image)
+                pos = self._find_item_rechecked(screenshot, value.image)
                 if pos is not None:
                     if self.clickBuy(pos):
                         value.count += 1
@@ -296,7 +314,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
             for key, value in self.storage.inventory.items():
                 if key in brought:
                     continue
-                pos = self.findItemPosition(screenshot, value.image)
+                pos = self._find_item_rechecked(screenshot, value.image)
                 if pos is not None:
                     if self.clickBuy(pos):
                         value.count += 1

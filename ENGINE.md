@@ -383,6 +383,15 @@ bounded row retries are cached for each captured frame
 and invalidated by the next capture. If small/dim stock or price text is missing,
 row OCR enlarges the pixels and normalizes contrast. Stock from the first read
 is retained only when both reads agree on Buy bounds; conflicting readings stop.
+0.1.4-rc8: Windows OCR can assign a small text angle to a sparse crop such as
+one enlarged row, and then reports word bounds rotated about the crop centre.
+On Google Play Games a purchased Friendship row at the bottom of the list was
+read at about -4 degrees, moving its Buy bounds ~22 pixels from the whole-list
+read and stopping the session as ambiguous. Word bounds are now rotated back to
+the level view before any pairing. An unclear row (ambiguous stock, ambiguous
+names, or unverifiable price/Buy) is re-read from up to two fresh captures 0.4
+seconds apart before stopping; no input is sent and every row check reapplies.
+Visibility, Stop and partly offscreen rows keep their existing handling.
 Neither wallpaper art nor
 a saved shop background is used to decide stock. Counters and gold totals include
 only purchases completed by this session.

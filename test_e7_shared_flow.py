@@ -357,4 +357,50 @@ class SharedFlowTests(unittest.TestCase):
         with self.assertRaises(MouseStopped):normalize_game_frame(Image.new('RGB',(500,300)))
         with self.assertRaises(MouseStopped):normalize_game_frame(Image.new('RGB',(1920,800),(50,60,70)))
 
+class RowRecheckTests(unittest.TestCase):
+    def test_tilted_ocr_word_bounds_are_mapped_back_to_level_ui(self):
+        from e7_mouse_confirmation import level_box
+        self.assertEqual(level_box([1,2,3,4],None,(100,50)),[1,2,3,4])
+        self.assertEqual(level_box([1,2,3,4],0,(100,50)),[1,2,3,4])
+        # Google Play Games purchased Friendship row: the 2x row crop at
+        # (1010,894)-(1880,1080) read at -4 degrees placed Buy ~22px low.
+        # The level whole-list read of the same frame had Buy at
+        # (1772,997)-(1820,1031); stock pairing allows 12px.
+        x1,y1,x2,y2=level_box([1516,250,1618,324],-4.0,(1740,372))
+        buy=[x1/2+1010,y1/2+894,x2/2+1010,y2/2+894]
+        self.assertLessEqual(max(abs(a-b) for a,b in zip(buy,(1772,997,1820,1031))),12)
+
+    def recheck_app(self,outcomes):
+        from e7_shop_flow import UnclearShopRow
+        app=E7ADBShopRefresh.__new__(E7ADBShopRefresh)
+        app.loop_active=True
+        results=iter(outcomes)
+        def find(frame,image):
+            result=next(results)
+            if result=='unclear':raise UnclearShopRow('The shop button stock is ambiguous. Stopped before scrolling or refreshing.')
+            return result
+        app.findItemPosition=Mock(side_effect=find)
+        app.takeScreenshot=Mock(return_value='fresh')
+        app._wait_observed=Mock()
+        app.navigation=Mock()
+        return app
+
+    def test_unclear_row_is_reread_from_a_fresh_capture_without_input(self):
+        app=self.recheck_app(['unclear',None])
+        self.assertIsNone(app._find_item_rechecked('first','template'))
+        self.assertEqual([c.args[0] for c in app.findItemPosition.call_args_list],['first','fresh'])
+        app.navigation.require_shop.assert_called_once_with('fresh')
+        app=self.recheck_app(['unclear',(1796,1014)])
+        self.assertEqual(app._find_item_rechecked('first','template'),(1796,1014))
+
+    def test_persistently_unclear_row_still_stops_and_other_stops_are_not_retried(self):
+        from e7_shop_flow import UnclearShopRow
+        app=self.recheck_app(['unclear']*3)
+        with self.assertRaises(UnclearShopRow):app._find_item_rechecked('first','template')
+        self.assertEqual(app.findItemPosition.call_count,3)
+        app=self.recheck_app([])
+        app.findItemPosition=Mock(side_effect=MouseStopped('The selected game lost focus.'))
+        with self.assertRaises(MouseStopped):app._find_item_rechecked('first','template')
+        app.takeScreenshot.assert_not_called()
+
 if __name__=='__main__':unittest.main()

@@ -114,8 +114,10 @@ endorsement. Upstream source history is preserved.
 
 Optional support: [Buy me a coffee](https://ko-fi.com/bluenatto).
 
-## Private trial 0.1.4-rc7
+## Private trial 0.1.4-rc8
 
+Fixes a false stop when a pre-purchased Friendship row sits at the bottom of
+the scrolled shop, and re-reads unclear rows from fresh captures before stopping.
 Recognizes 0/1 stock beside Buy on pre-purchased currency rows, retains the
 injected-key listener for brief streamed Stop presses, and uses the supplied
 game's green leaf-heart cutout. Includes a global Stop key and a Friendship buys
