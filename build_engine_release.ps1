@@ -33,6 +33,7 @@ $sourceFiles = @('E7ADBShopRefresh.py', 'e7_shop_navigation.py', 'e7_mouse_analy
 $sourceFiles += @('e7_shop_flow.py', 'e7_frame.py', 'test_e7_shared_flow.py')
 $sourceFiles += @('e7_engine_protocol.py', 'e7_timing.py', 'e7_history.py', 'e7_session_control.py', 'e7_links.py', 'test_e7_session_cleanup.py')
 $sourceFiles += @('e7_input_trace.py', 'test_e7_input_trace.py')
+$sourceFiles += @('e7_stop_key.py', 'test_e7_stop_key.py')
 foreach ($name in $sourceFiles) { Copy-Item -LiteralPath (Join-Path $repository $name) -Destination (Join-Path $staging $name) }
 Copy-Item -LiteralPath (Join-Path $repository 'ENGINE.md') -Destination (Join-Path $staging 'README.md')
 Copy-Item -LiteralPath (Join-Path $repository 'release/SETUP.md') -Destination (Join-Path $staging 'SETUP.md')
