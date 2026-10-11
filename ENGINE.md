@@ -392,6 +392,17 @@ the level view before any pairing. An unclear row (ambiguous stock, ambiguous
 names, or unverifiable price/Buy) is re-read from up to two fresh captures 0.4
 seconds apart before stopping; no input is sent and every row check reapplies.
 Visibility, Stop and partly offscreen rows keep their existing handling.
+
+0.1.4-rc9: display tints reach the capture. With f.lux on native STOVE the
+Secret Shop icon measured about RGB 254/186/108 and failed the near-white icon
+mask, while a new Milestone of Radiance entry broke the grouped layout. The
+caption path now white-balances only the small icon search area (skipped
+unless a bright symbol is present) before the unchanged template match, and
+the grouped check uses the brightest channel instead of luma. Uniform 50%
+dimming of every visible-menu corpus frame still yields no target. Shop text
+OCR starts at x=960 instead of 1010 after one client's framing clipped
+"Currency". Recognition changes are gated on the private real-frame corpus
+(check_frame_corpus.py, docs/RECOGNITION-TESTING.md).
 Neither wallpaper art nor
 a saved shop background is used to decide stock. Counters and gold totals include
 only purchases completed by this session.

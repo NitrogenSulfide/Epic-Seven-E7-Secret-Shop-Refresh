@@ -34,6 +34,20 @@ def home_menu_target(result,rgb=None):
     return home_icon_target(rgb,choices[0]) if rgb is not None else choices[0]
 
 
+def white_balanced(crop):
+    """Neutralize a colour cast such as f.lux, Night light or warm lobby light.
+
+    Scales each channel so this region's brightest pixels become white. The
+    white UI symbol then keeps its shape and neutral colour; an untinted
+    region is essentially unchanged.
+    """
+    peaks=np.percentile(crop.reshape(-1,3),99.5,axis=0)
+    # Only rebalance a region with a bright symbol; never lift a dark region.
+    if peaks.max()<170 or peaks.min()<25:
+        return crop
+    return np.clip(crop.astype(np.float32)*(255/peaks),0,255).astype(np.uint8)
+
+
 def home_icon_target(rgb,caption):
     # Native STOVE captions are not the icon's clickable surface. Use the OCR
     # caption only to find the observed bright icon directly above it.
@@ -42,6 +56,7 @@ def home_icon_target(rgb,caption):
     crop=rgb[top:round(y-18),left:round(x+55)]
     if not crop.size:
         return None
+    crop=white_balanced(crop)
     mask=np.where((crop.min(axis=2)>170)&(crop.max(axis=2).astype(int)-crop.min(axis=2)<65),255,0).astype('uint8')
     # Match only the UI symbol. Bright particles in animated wallpapers can
     # add components around it; they must not enlarge or invalidate its box.
@@ -80,7 +95,9 @@ def native_home_control_target(rgb):
     rejects dimmed/inactive home menus. The shop point is measured from its
     matched icon, not assumed from a wallpaper or fixed coordinate.
     """
-    gray=cv2.cvtColor(rgb[180:920,:360],cv2.COLOR_RGB2GRAY)
+    # Brightest channel, not luma: a warm display tint (f.lux) lowers green and
+    # blue but keeps white symbols bright, while modal dimming lowers all three.
+    gray=np.ascontiguousarray(rgb[180:920,:360].max(axis=2))
     edges=cv2.Canny(gray,45,110)
     distance=cv2.distanceTransform(255-edges,cv2.DIST_L2,3)
     proximity=np.maximum(0,1-distance/2.5).astype('float32')
@@ -204,6 +221,11 @@ def idle_home_candidate(rgb, result):
     return bool(gray.std() >= 3)
 
 
+# Left edge of shop item text in the normalized view. Clients frame the list a
+# few pixels differently; a tight edge clipped "Currency" to ")urrency".
+TEXT_LEFT = 960
+
+
 class IncompleteCurrencyRow(MouseStopped):
     pass
 
@@ -264,7 +286,7 @@ def currency_button(result, boxes, item_name):
     words = [(re.sub(r'[^a-z0-9]','',word['text'].lower()),tuple(word['box']))
              for word in result.get('words',[])]
     middle = lambda box:(box[1]+box[3])/2
-    names = [(text,box) for text,box in words if 1010<=box[0]<box[2]<=1480
+    names = [(text,box) for text,box in words if TEXT_LEFT<=box[0]<box[2]<=1480
              and text in (prefix,prefix+noun,prefix+noun+'s')]
     if not names:
         return None
@@ -278,10 +300,10 @@ def currency_button(result, boxes, item_name):
     # availability text beneath the name. Require the status on this row;
     # missing Buy/price alone must never silently discard an available item.
     row_words = [word for word,box in sorted(words,key=lambda pair:pair[1][0])
-                 if 1010<=box[0]<box[2]<=1880 and -20<=middle(box)-y<=90]
+                 if TEXT_LEFT<=box[0]<box[2]<=1880 and -20<=middle(box)-y<=90]
     unavailable = complete and re.search(r'\bsold\s*out\b|\bpurchased\b|\bonly\s+0\s+available\b',' '.join(row_words))
     category = 'currency' if item_name=='Friendship points' else 'summon'
-    summons = [box for word,box in words if word==category and 1010<=box[0]<box[2]<=1480
+    summons = [box for word,box in words if word==category and TEXT_LEFT<=box[0]<box[2]<=1480
                and 25<=y-middle(box)<=80]
     prices = [box for word,box in words if word==price and 1480<=box[0]<box[2]<=1880
               and -80<=middle(box)-y<=10]
@@ -581,7 +603,7 @@ class ObservedShopFlow:
 
     def _shop_text(self):
         if getattr(self,'_shop_ocr_source',None) is not self._rgb:
-            self._shop_ocr = read_ui_text(self._rgb,(1010,110,1880,1080))
+            self._shop_ocr = read_ui_text(self._rgb,(TEXT_LEFT,110,1880,1080))
             self._shop_ocr_source = self._rgb
             self._stock_rows = {}
         return self._shop_ocr
@@ -589,7 +611,7 @@ class ObservedShopFlow:
 
     def _stock_row_text(self,center,right=1880):
         self._shop_text()
-        region=(1010,max(110,round(center-120)),min(1880,round(right)),min(1080,round(center+80)))
+        region=(TEXT_LEFT,max(110,round(center-120)),min(1880,round(right)),min(1080,round(center+80)))
         if region not in self._stock_rows:
             # Small dim stock text can disappear in whole-list OCR. Isolate
             # its row, enlarge/normalize contrast, and map bounds back to the
@@ -603,7 +625,7 @@ class ObservedShopFlow:
         prefix={'Covenant bookmark':'covenant','Mystic medal':'mystic','Friendship points':'friendship'}[item_name]
         names=[word['box'] for word in result.get('words',[])
                if re.sub(r'[^a-z]','',word['text'].lower()).startswith(prefix)
-               and 1010<=word['box'][0]<word['box'][2]<=1480]
+               and TEXT_LEFT<=word['box'][0]<word['box'][2]<=1480]
         if len(names)!=1:return result
         center=(names[0][1]+names[0][3])/2
         labels=[tuple(word['box']) for word in result.get('words',[])

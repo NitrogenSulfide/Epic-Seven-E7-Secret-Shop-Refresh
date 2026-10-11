@@ -114,9 +114,10 @@ endorsement. Upstream source history is preserved.
 
 Optional support: [Buy me a coffee](https://ko-fi.com/bluenatto).
 
-## Private trial 0.1.4-rc8
+## Private trial 0.1.4-rc9
 
-Fixes a false stop when a pre-purchased Friendship row sits at the bottom of
+Finds the STOVE Secret Shop icon under warm display tints (f.lux, Night light)
+and with the new Milestone of Radiance entry. Fixes a false stop when a pre-purchased Friendship row sits at the bottom of
 the scrolled shop, and re-reads unclear rows from fresh captures before stopping.
 Recognizes 0/1 stock beside Buy on pre-purchased currency rows, retains the
 injected-key listener for brief streamed Stop presses, and uses the supplied
