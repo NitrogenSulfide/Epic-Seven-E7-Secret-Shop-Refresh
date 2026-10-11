@@ -1,6 +1,7 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Private trial **0.1.4-rc8** fixes a false stop on a pre-purchased Friendship row at
+Private trial **0.1.4-rc9** handles warm display tints (f.lux, Night light) and
+the new home menu entry on STOVE. It also fixes a false stop on a pre-purchased Friendship row at
 the bottom of the shop. It recognizes pre-purchased rows by their 0/1 stock inset
 beside Buy, accepts brief/injected streamed Stop events, and uses the supplied
 game's green heart.

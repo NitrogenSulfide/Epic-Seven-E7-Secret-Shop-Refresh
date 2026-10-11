@@ -1,3 +1,19 @@
+0.1.4-rc9 · Display tints, menu changes and a real-frame test corpus
+
+• Finds the native STOVE Secret Shop icon under a warm display tint such as
+  f.lux or Night light, and with the new Milestone of Radiance menu entry.
+  The icon check now white-balances its small search area; dimmed menus behind
+  popups are still refused.
+• The grouped home-control check measures the brightest colour channel, so
+  warm tints no longer hide white symbols over bright wallpapers.
+• Reads shop item text slightly further left; one client's framing clipped
+  "Currency" and stopped on an available Friendship row.
+• Adds check_frame_corpus.py: every candidate is checked against labelled real
+  frames from BlueStacks, Google Play Games and STOVE, with night-light and
+  candle tints, before live testing. See docs/RECOGNITION-TESTING.md.
+• Owner reports rc8 manual regression passing in Mouse and ADB on Google Play
+  Games with Friendship pre-purchased.
+
 0.1.4-rc8 · Purchased Friendship at the bottom of the shop
 
 • Fixes a false "shop button stock is ambiguous" stop when a pre-purchased
