@@ -35,6 +35,13 @@ separate from the native OldUnreal UT2004 workspace.
 Respect the user's selected model and reasoning effort. Machine-specific Codex
 configuration remains ignored. Helper agents are opt-in.
 
+Claude is the primary agent: it plans, edits, builds and tests. Codex is a
+read-only second reviewer and edits only when the user starts Codex directly
+and asks it to, under the same rules. For code changes Claude runs
+`codex-review` (or `codex-review SINCE`), judges each finding independently,
+and reports which were accepted or rejected and why; one round per change.
+Skip it for docs-only and trivial changes.
+
 Invoke an independent reviewer when the user requests release-candidate review.
 Record the comparison-base commit, candidate commit and exact package SHA-256s.
 Report concrete blockers with source lines/package members, reproduction and
