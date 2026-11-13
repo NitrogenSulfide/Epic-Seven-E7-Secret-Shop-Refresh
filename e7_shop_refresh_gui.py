@@ -15,7 +15,7 @@ import time
 import uuid
 import webbrowser
 import tkinter as tk
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from tkinter import font as tkfont, messagebox, ttk, filedialog
 from e7_process import launch_engine
@@ -33,15 +33,27 @@ from e7_connection import check_connection, ConnectionCheck, endpoint_key
 from e7_windows_capture import WindowsCapture
 
 PROJECT_DIR = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
-DEFAULT_ENGINE_DIR = Path.home() / "Downloads" / "E7 Secret Shop Refresh"
+# Windows uses the installed player folder; elsewhere the source folder is the engine.
+DEFAULT_ENGINE_DIR = Path.home() / "Downloads" / "E7 Secret Shop Refresh" if os.name == "nt" else PROJECT_DIR
+ENGINE_NAME = "E7ADBShopRefresh.exe" if os.name == "nt" else "E7ADBShopRefresh.py"
+# Control modes this platform supports. Background drives Steam under Proton.
+CONTROL_MODES = ('ADB', 'Mouse') if os.name == "nt" else ('Background',)
+DEFAULT_CONTROL_MODE = 'Mouse' if os.name == "nt" else 'Background'
 ENGINE_LOCATION_FILE = PROJECT_DIR / "engine-location.ini"
 APP_DIR = DEFAULT_ENGINE_DIR
-ENGINE_EXE = APP_DIR / "E7ADBShopRefresh.exe"
+ENGINE_EXE = APP_DIR / ENGINE_NAME
 ADB_EXE = APP_DIR / "adb-assets" / "platform-tools" / "adb.exe"
 CONFIG_FILE = APP_DIR / "ADBconfig.ini"
 GUI_CONFIG_FILE = APP_DIR / "ShopRefreshGUI.ini"
 HISTORY_FILE = APP_DIR / "ShopRefreshHistory" / "ADB_History.csv"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+def engine_command():
+    """The engine program: the player EXE on Windows, the source script elsewhere."""
+    return [str(ENGINE_EXE)] if ENGINE_EXE.suffix.lower() == '.exe' else [sys.executable, str(ENGINE_EXE)]
+
+
 ASSET_DIR = PROJECT_DIR / "e7_gui_assets"
 try:
     APP_VERSION = (PROJECT_DIR / 'VERSION').read_text(encoding='utf-8-sig').strip()
@@ -94,9 +106,11 @@ def configure_engine_directory(directory):
     """Validate before redirecting any device scans, settings or history."""
     global APP_DIR, ENGINE_EXE, ADB_EXE, CONFIG_FILE, GUI_CONFIG_FILE, HISTORY_FILE
     directory = Path(directory)
-    engine = directory / "E7ADBShopRefresh.exe"
+    engine = directory / ENGINE_NAME
     adb = directory / "adb-assets" / "platform-tools" / "adb.exe"
-    missing = [str(path.relative_to(directory)) for path in (engine, adb) if not path.is_file()]
+    # ADB mode (Windows only) needs the bundled adb.exe; Background needs only the engine.
+    required = (engine, adb) if 'ADB' in CONTROL_MODES else (engine,)
+    missing = [str(path.relative_to(directory)) for path in required if not path.is_file()]
     if missing:
         raise ValueError(
             f"Engine folder: {directory}\nMissing: {', '.join(missing)}\n"
@@ -108,6 +122,33 @@ def configure_engine_directory(directory):
     CONFIG_FILE = directory / "ADBconfig.ini"
     GUI_CONFIG_FILE = directory / "ShopRefreshGUI.ini"
     HISTORY_FILE = directory / "ShopRefreshHistory" / "ADB_History.csv"
+
+
+def session_log_folder(mode):
+    return {'Mouse': 'mouse-session-logs', 'Background': 'background-session-logs'}.get(mode, 'input-session-logs')
+
+
+@dataclass(frozen=True)
+class BackgroundTarget:
+    """The running Steam game, shaped like a Mouse-mode window choice."""
+    title: str
+    label: str
+    handle: int
+    pid: int
+    rectangle: tuple
+    render_handle: int = 0
+
+
+def list_background_games():
+    """Read-only: find Epic Seven on Steam (Proton) and its X window. No input."""
+    from e7_background import XGameWindow, find_proton_session
+    find_proton_session()
+    window = XGameWindow()
+    try:
+        width, height = window.size()
+        return [BackgroundTarget('Epic Seven (Steam)', 'Epic Seven (Steam)', window.window.id, 0, (0, 0, width, height))]
+    finally:
+        window.display.close()
 
 
 def duration_text(value):
@@ -162,7 +203,7 @@ class RefreshGui(tk.Tk):
         self._device_scan_busy = False
         self._background_scan = False
         self.connection_warning = ''
-        self.control_mode = tk.StringVar(value='Mouse')
+        self.control_mode = tk.StringVar(value=DEFAULT_CONTROL_MODE)
         self.mouse_target = tk.StringVar(value='')
         self.mouse_windows = {}
         self._mouse_scan_busy = False
@@ -462,6 +503,8 @@ class RefreshGui(tk.Tk):
             reminder = 'Use an emulator with ADB enabled.'
         if self.control_mode.get() == 'Mouse':
             reminder = 'Mouse uses your pointer · leave the PC alone.'
+        elif self.control_mode.get() == 'Background':
+            reminder = 'Background never uses your pointer · keep it off the game window.'
         self.home_ui_hint.set(self.connection_warning or reminder)
         self._style_home_ui_banner()
         dark = self.dark_mode.get()
@@ -769,7 +812,7 @@ class RefreshGui(tk.Tk):
         mode_panel.columnconfigure(0,weight=1)
         ttk.Label(mode_panel,text='Control mode').grid(row=0,column=0,sticky='w')
         self.mode_box = ttk.Combobox(mode_panel,textvariable=self.control_mode,
-            values=('ADB','Mouse'),state='readonly',font=self.ui_font)
+            values=CONTROL_MODES,state='readonly',font=self.ui_font)
         self.mode_box.grid(row=1,column=0,sticky='ew',pady=(dp(4),0))
         self.mode_box.bind('<<ComboboxSelected>>',self._change_control_mode)
         self.settings_widgets.append(self.mode_box)
@@ -959,8 +1002,8 @@ class RefreshGui(tk.Tk):
             self.credits_on_startup.set(parser.getboolean("GUI", "show_credits_on_startup", fallback=False))
             self.adb_hint_dismissed.set(parser.getboolean("GUI", "adb_hint_dismissed", fallback=False))
             self.device.set(parser.get("GUI", "device", fallback=self.device.get()))
-            mode = parser.get('GUI','control_mode',fallback='Mouse')
-            self.control_mode.set(mode if mode in ('ADB','Mouse') else 'Mouse')
+            mode = parser.get('GUI','control_mode',fallback=DEFAULT_CONTROL_MODE)
+            self.control_mode.set(mode if mode in CONTROL_MODES else DEFAULT_CONTROL_MODE)
             legacy_jitter = min(float(self.tap_sleep.get()) * .1, .05)
             jitter = parser.getfloat('GUI', 'tap_jitter', fallback=legacy_jitter)
             self.tap_jitter.set(jitter if math.isfinite(jitter) and 0 <= jitter <= .1 else .03)
@@ -1139,7 +1182,9 @@ class RefreshGui(tk.Tk):
         self.home_ui_hint_dismissed = False
         self.home_ui_banner.grid()
         self.status.set('Ready')
-        self.detail.set('Press Start Refresh to bring the selected game window forward and automate the shop.' if mouse else
+        self.detail.set('Press Start Refresh to automate the shop in the background. You can keep using your PC.'
+                        if self.control_mode.get() == 'Background' else
+                        'Press Start Refresh to bring the selected game window forward and automate the shop.' if mouse else
                         'Open Epic Seven’s Secret Shop, then start a session.')
         if mouse:
             self._update_mouse_selection()
@@ -1161,7 +1206,9 @@ class RefreshGui(tk.Tk):
         target = self.mouse_windows.get(self.mouse_target.get())
         if target is not None:
             left, top, right, bottom = target.rectangle
-            next_step = 'Press Start Refresh to open the shop and run.\nMouse mode uses your actual pointer.'
+            next_step = ('Press Start Refresh to open the shop and run.\nBackground mode never moves your pointer; '
+                         'the game may be covered.' if self.control_mode.get() == 'Background' else
+                         'Press Start Refresh to open the shop and run.\nMouse mode uses your actual pointer.')
             self.device_notice.set(f'Selected: {target.title} · {right-left} × {bottom-top}\n'+next_step)
         elif self.mouse_windows:
             self.device_notice.set('Several game windows found. Choose your game above.')
@@ -1202,9 +1249,11 @@ class RefreshGui(tk.Tk):
         self.device_button.configure(state=tk.DISABLED)
         if not self._background_scan:
             self.device_notice.set('Looking for game windows…')
+        background = self.control_mode.get() == 'Background'  # read Tk state on this thread only
         def scan():
             try:
-                windows, error = WindowsCapture().list_windows(), ''
+                windows, error = (list_background_games() if background
+                                  else WindowsCapture().list_windows()), ''
             except (OSError,ValueError,RuntimeError) as exc:
                 windows, error = [], str(exc)
             self.log_queue.put((None,'windows',(token,windows,error)))
@@ -1222,7 +1271,7 @@ class RefreshGui(tk.Tk):
             structured = False
             if result.ready:
                 try:
-                    verify = subprocess.run([str(ENGINE_EXE), '--verify'], cwd=APP_DIR, capture_output=True,
+                    verify = subprocess.run([*engine_command(), '--verify'], stdin=subprocess.DEVNULL, cwd=APP_DIR, capture_output=True,
                                             text=True, timeout=15, creationflags=NO_WINDOW)
                     structured = verify.returncode == 0 and 'gui session v1' in verify.stdout
                 except (OSError, subprocess.SubprocessError):
@@ -1279,6 +1328,9 @@ class RefreshGui(tk.Tk):
         if self.control_mode.get() == 'Mouse':
             self._start_mouse_refresh()
             return
+        if self.control_mode.get() == 'Background':
+            self._start_background_refresh()
+            return
         if self._checking_connection or (self.process and self.process.poll() is None):
             return
         if not ENGINE_EXE.is_file():
@@ -1308,7 +1360,7 @@ class RefreshGui(tk.Tk):
             if target is None:
                 raise ValueError('Select the window showing Epic Seven first.')
             verify_setup_engine(ENGINE_EXE)
-            check = subprocess.run([str(ENGINE_EXE),'--verify'],cwd=APP_DIR,capture_output=True,text=True,
+            check = subprocess.run([*engine_command(), '--verify'], stdin=subprocess.DEVNULL,cwd=APP_DIR,capture_output=True,text=True,
                                    timeout=15,creationflags=NO_WINDOW)
             if check.returncode or 'window mouse v9' not in check.stdout or 'tap timing v2' not in check.stdout or 'global stop key v2' not in check.stdout:
                 raise ValueError('Mouse mode needs the matching new engine with global Stop key support. Use the complete new player folder.')
@@ -1324,6 +1376,26 @@ class RefreshGui(tk.Tk):
             return
         self._set_connection_warning('')
         self._begin_refresh(settings,mouse_target=target)
+
+    def _start_background_refresh(self):
+        if self._checking_connection or (self.process and self.process.poll() is None):
+            return
+        target = self.mouse_windows.get(self.mouse_target.get())
+        try:
+            settings = self._settings()
+            if settings.debug:
+                raise ValueError('Turn off Debug / calibration for Background mode.')
+            if target is None:
+                raise ValueError('Start Epic Seven on Steam, then Scan to find it.')
+            if not ENGINE_EXE.is_file():
+                raise ValueError(f'Could not find the engine: {ENGINE_EXE}')
+            from e7_background import helper_path
+            helper_path()
+        except (ValueError, OSError) as error:
+            self._set_connection_warning(str(error), reveal=True)
+            return
+        self._set_connection_warning('')
+        self._begin_refresh(settings, mouse_target=target)
 
     def _offer_administrator_restart(self, settings, *, reason=None):
         if not messagebox.askyesno(
@@ -1351,7 +1423,7 @@ class RefreshGui(tk.Tk):
     def _begin_refresh(self, settings, *, mouse_target=None):
         if settings.buy_friendship:
             try:
-                check = subprocess.run([str(ENGINE_EXE), '--verify'], cwd=APP_DIR, capture_output=True,
+                check = subprocess.run([*engine_command(), '--verify'], stdin=subprocess.DEVNULL, cwd=APP_DIR, capture_output=True,
                                        text=True, timeout=15, creationflags=NO_WINDOW)
                 if check.returncode or 'friendship purchases v1' not in check.stdout:
                     raise ValueError('Friendship purchases need the matching new engine. Use a complete player folder built with Friendship support.')
@@ -1376,7 +1448,8 @@ class RefreshGui(tk.Tk):
         run_id = self.run_id
         self.stopping = self.finished = False
         self._mouse_failure = None
-        self._native_mouse_run = mouse_target is not None
+        background = self.control_mode.get() == 'Background' and mouse_target is not None
+        self._native_mouse_run = mouse_target is not None and not background
         self._graceful_stop = mouse_target is not None or self._structured_adb
         self._session_log_path = None
         self._session_log_writer = None
@@ -1385,7 +1458,7 @@ class RefreshGui(tk.Tk):
         self._stop_key_detection = ''
         if mouse_target or settings.trace_input:
             try:
-                folder = APP_DIR/('mouse-session-logs' if mouse_target else 'input-session-logs')
+                folder = APP_DIR/session_log_folder(self.control_mode.get() if mouse_target else 'ADB')
                 folder.mkdir(exist_ok=True)
                 self._session_log_path = folder/f'{time.time_ns()}-{uuid.uuid4().hex}.log'
                 self._session_log_writer = BoundedSessionLog(self._session_log_path)
@@ -1411,14 +1484,22 @@ class RefreshGui(tk.Tk):
             var.set("—")
         self._update_spent_display()
         self.progress.configure(value=0)
-        self.progress_text.set('Preparing Mouse input…' if mouse_target else "Connecting and preparing the engine…")
+        self.progress_text.set('Preparing background input…' if background else
+                               'Preparing Mouse input…' if mouse_target else "Connecting and preparing the engine…")
         self.status.set("Starting")
-        self.detail.set('Mouse session is starting. Leave the game in front and the pointer alone.' if mouse_target else
+        self.detail.set('Background session is starting. Keep your pointer off the game window.' if background else
+                        'Mouse session is starting. Leave the game in front and the pointer alone.' if mouse_target else
                         "Preparing your session. Keep Epic Seven at home or in Secret Shop.")
         self._set_controls(True)
         self._event(f"Starting on {mouse_target.title if mouse_target else settings.device} · budget {settings.budget:,.0f} skystone.")
-        arguments = [str(ENGINE_EXE)]
-        if mouse_target is not None:
+        arguments = engine_command()
+        if background:
+            arguments += ['--background-session','--budget',str(settings.budget),'--delay',str(settings.tap_sleep),
+                          '--stop-key',settings.stop_key,'--random-offset','yes' if settings.random_offset else 'no',
+                          '--tap-jitter',str(settings.tap_jitter)]
+            arguments += ['--trace-input'] if settings.trace_input else []
+            arguments += ['--buy-friendship'] if settings.buy_friendship else []
+        elif mouse_target is not None:
             arguments += ['--mouse-session',json.dumps(dict(handle=mouse_target.handle,pid=mouse_target.pid,
                           title=mouse_target.title,rectangle=mouse_target.rectangle,render_handle=mouse_target.render_handle,
                           trace_input=settings.trace_input)),
@@ -1802,7 +1883,7 @@ class RefreshGui(tk.Tk):
         self._update_tap_jitter(running=running)
         self.clear_history_button.state(['disabled'] if running else ['!disabled'])
         self.export_history_button.state(['disabled'] if running else ['!disabled'])
-        self.open_logs_button.state(['disabled'] if running and self.control_mode.get() == 'Mouse' else ['!disabled'])
+        self.open_logs_button.state(['disabled'] if running and self.control_mode.get() != 'ADB' else ['!disabled'])
         self.start_button.configure(state=tk.DISABLED if running else tk.NORMAL)
         self.stop_button.configure(state=tk.NORMAL if running else tk.DISABLED)
         if not running and self.control_mode.get() != 'ADB':
@@ -1910,10 +1991,10 @@ class RefreshGui(tk.Tk):
             f"Purchases: Covenant {self.covenant.get()} · Mystic {self.mystic.get()} · Friendship {self.friendship.get()}\n\n{self.raw_output}")
 
     def _open_logs_folder(self):
-        if self.control_mode.get() == 'Mouse' and (self._checking_connection or (self.process and self.process.poll() is None)):
+        if self.control_mode.get() != 'ADB' and (self._checking_connection or (self.process and self.process.poll() is None)):
             return
         folder = self._session_log_path.parent if self._session_log_path else APP_DIR / (
-            'mouse-session-logs' if self.control_mode.get() == 'Mouse' else 'input-session-logs')
+            session_log_folder(self.control_mode.get()))
         try:
             folder.mkdir(parents=True, exist_ok=True)
             if hasattr(os, 'startfile'):

@@ -20,6 +20,10 @@ class EngineLocationTests(unittest.TestCase):
         self.saved = self.root / "engine-location.ini"
         names = ("APP_DIR", "ENGINE_EXE", "ADB_EXE", "CONFIG_FILE", "GUI_CONFIG_FILE", "HISTORY_FILE")
         globals_patch = patch.multiple(gui, **{name: getattr(gui, name) for name in names})
+        # The installed-player layout is the Windows one on every platform here.
+        platform_patch = patch.multiple(gui, ENGINE_NAME="E7ADBShopRefresh.exe", CONTROL_MODES=("ADB", "Mouse"))
+        platform_patch.start()
+        self.addCleanup(platform_patch.stop)
         globals_patch.start()
         self.addCleanup(globals_patch.stop)
 

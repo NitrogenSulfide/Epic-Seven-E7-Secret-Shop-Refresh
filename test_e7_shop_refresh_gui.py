@@ -481,7 +481,9 @@ class GuiTests(unittest.TestCase):
             app._checking_connection = True
             app._complete_connection_check(app._connection_check_id, settings,
                 gui.ConnectionCheck((settings.device,), '', '', True))
-        self.patches = [patch.object(gui, "APP_DIR", self.root), patch.object(gui, "CONFIG_FILE", self.config), patch.object(gui, "GUI_CONFIG_FILE", self.gui_config), patch.object(gui, "ASSET_DIR", self.assets), patch.object(gui, "HISTORY_FILE", self.history), patch.object(gui, "ENGINE_EXE", self.fake), patch.object(gui.RefreshGui, "refresh_devices", lambda _: None), patch.object(gui.RefreshGui, '_start_connection_check', connected), patch("winsound.PlaySound"), patch.object(gui,"release_native_button")]
+        self.patches = [patch.object(gui, "APP_DIR", self.root), patch.object(gui, "CONFIG_FILE", self.config), patch.object(gui, "GUI_CONFIG_FILE", self.gui_config), patch.object(gui, "ASSET_DIR", self.assets), patch.object(gui, "HISTORY_FILE", self.history), patch.object(gui, "ENGINE_EXE", self.fake), patch.object(gui.RefreshGui, "refresh_devices", lambda _: None), patch.object(gui.RefreshGui, '_start_connection_check', connected), patch("winsound.PlaySound"), patch.object(gui,"release_native_button"),
+            # These tests cover the Windows ADB/Mouse GUI on every platform.
+            patch.object(gui, "CONTROL_MODES", ("ADB", "Mouse")), patch.object(gui, "DEFAULT_CONTROL_MODE", "Mouse")]
         for p in self.patches:
             p.start()
         self.credits_auto_patch = patch.object(gui.RefreshGui, '_maybe_show_credits', lambda _: None)

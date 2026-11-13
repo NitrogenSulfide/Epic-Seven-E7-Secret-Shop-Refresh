@@ -36,3 +36,4 @@ mouse-failures/
 
 # Built locally by build_wine_input.sh
 e7_wine_input.exe
+background-session-logs/
