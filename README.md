@@ -48,15 +48,30 @@ This real-time clip ends just after the purchase; account details are covered.
 
 ## Tested game clients
 
-| Game client | Mouse | ADB |
-| --- | --- | --- |
-| Google Play Games on PC **Developer Emulator** | Tested | Tested |
-| Official native STOVE client | Tested | Unavailable |
+| Game client | Mouse | ADB | Background |
+| --- | --- | --- | --- |
+| Google Play Games on PC **Developer Emulator** | Tested | Tested | Unavailable |
+| Official native STOVE client | Tested | Unavailable | Unavailable |
+| Epic Seven on **Steam** (Windows 11) | Not yet tested | Unavailable | Tested |
+| Epic Seven on **Steam** (Linux, Proton) | Unavailable | Unavailable | Tested |
 
 Testing is limited to these two clients. Other emulators and methods have not been
 tested. Use English game text and a readable landscape 16:9 game view of at least
 640 × 360. Native STOVE Mouse mode also supports its wider maximized client area.
 ADB calibration requires a 1920 × 1080 Android display.
+
+## Background mode · Steam on Windows (preview)
+
+For **Epic Seven on Steam**, choose **Control mode → Background**. Clicks are sent
+to the game window directly and frames are read from the window itself, so your
+mouse pointer is never moved and other windows may cover the game. Steam's E7 runs
+as administrator, so the app offers to **restart as administrator** the first time;
+accept it, then press **Start Refresh** again.
+
+You can keep using your PC. Input waits while the pointer is *moving* over the
+game and resumes once it has been still for a second; a still pointer, or one over
+another window or the taskbar, is fine. Don't minimize or resize the game during a
+run. The Stop key works from any window.
 
 ## Linux · Steam on Proton (Background mode, preview)
 

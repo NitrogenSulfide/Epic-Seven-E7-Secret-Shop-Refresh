@@ -1,4 +1,4 @@
-"""Background (Steam on Linux) implementation of the shared shop refresh loop."""
+"""Background (Epic Seven on Steam, Windows or Linux) implementation of the shared shop refresh loop."""
 import argparse
 import json
 import math
@@ -76,7 +76,7 @@ class E7BackgroundShopRefresh(E7MouseShopRefresh):
 
 
 def run_background_session(arguments):
-    parser = argparse.ArgumentParser(description='Background refresh session for Epic Seven on Steam (Linux).')
+    parser = argparse.ArgumentParser(description='Background refresh session for Epic Seven on Steam (Windows, or Linux under Proton).')
     parser.add_argument('--background-session', action='store_true', required=True)
     parser.add_argument('--budget', type=int, required=True)
     parser.add_argument('--delay', type=float, required=True)

@@ -36,8 +36,9 @@ PROJECT_DIR = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', Fa
 # Windows uses the installed player folder; elsewhere the source folder is the engine.
 DEFAULT_ENGINE_DIR = Path.home() / "Downloads" / "E7 Secret Shop Refresh" if os.name == "nt" else PROJECT_DIR
 ENGINE_NAME = "E7ADBShopRefresh.exe" if os.name == "nt" else "E7ADBShopRefresh.py"
-# Control modes this platform supports. Background drives Steam under Proton.
-CONTROL_MODES = ('ADB', 'Mouse') if os.name == "nt" else ('Background',)
+# Control modes this platform supports. Background drives Epic Seven on Steam
+# (directly on Windows, under Proton on Linux) without the real pointer.
+CONTROL_MODES = ('ADB', 'Mouse', 'Background') if os.name == "nt" else ('Background',)
 DEFAULT_CONTROL_MODE = 'Mouse' if os.name == "nt" else 'Background'
 ENGINE_LOCATION_FILE = PROJECT_DIR / "engine-location.ini"
 APP_DIR = DEFAULT_ENGINE_DIR
@@ -142,7 +143,12 @@ class BackgroundTarget:
 
 
 def list_background_games():
-    """Read-only: find Epic Seven on Steam (Proton) and its X window. No input."""
+    """Read-only: find Epic Seven on Steam and its game window. No input."""
+    if os.name == "nt":
+        from e7_background import WinGameWindow
+        window = WinGameWindow()
+        width, height = window.size()
+        return [BackgroundTarget('Epic Seven (Steam)', 'Epic Seven (Steam)', window.hwnd, window.pid, (0, 0, width, height))]
     from e7_background import XGameWindow, find_proton_session
     find_proton_session()
     window = XGameWindow()
@@ -1391,9 +1397,22 @@ class RefreshGui(tk.Tk):
                 raise ValueError('Start Epic Seven on Steam, then Scan to find it.')
             if not ENGINE_EXE.is_file():
                 raise ValueError(f'Could not find the engine: {ENGINE_EXE}')
-            from e7_background import helper_path
-            helper_path()
-        except (ValueError, OSError) as error:
+            from e7_background import HELPER_NAME, require_background_permissions
+            helper = Path(os.environ.get('E7_WINE_INPUT') or APP_DIR/HELPER_NAME)
+            if not helper.is_file():
+                raise ValueError(f'The background input helper is missing: {helper}. '
+                                 + ('Use the complete player folder.' if os.name == 'nt' else 'Build it with build_wine_input.sh.'))
+            if os.name == 'nt':
+                check = subprocess.run([*engine_command(), '--verify'], stdin=subprocess.DEVNULL, cwd=APP_DIR,
+                                       capture_output=True, text=True, timeout=15, creationflags=NO_WINDOW)
+                if check.returncode or 'background session v1' not in check.stdout:
+                    raise ValueError('Background mode needs the matching new engine. Use the complete new player folder.')
+                require_background_permissions(target.pid)
+        except MouseElevationRequired as error:
+            self._set_connection_warning(str(error), reveal=True)
+            self._offer_administrator_restart(settings, reason=str(error))
+            return
+        except (ValueError, OSError, subprocess.SubprocessError) as error:
             self._set_connection_warning(str(error), reveal=True)
             return
         self._set_connection_warning('')

@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string] $BuildPython,
-    [Parameter(Mandatory=$true)][string] $OutputDirectory
+    [Parameter(Mandatory=$true)][string] $OutputDirectory,
+    [Parameter(Mandatory=$true)][string] $InputHelper
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -17,7 +18,7 @@ $output = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $output) { throw 'Choose a new candidate output directory.' }
 New-Item -ItemType Directory -Path $output | Out-Null
 & (Join-Path $repository 'build_release.ps1') -BuildPython $python -OutputDirectory (Join-Path $output 'gui-build')
-& (Join-Path $repository 'build_engine_release.ps1') -BuildPython $python -OutputDirectory (Join-Path $output 'engine-build')
+& (Join-Path $repository 'build_engine_release.ps1') -BuildPython $python -OutputDirectory (Join-Path $output 'engine-build') -InputHelper $InputHelper
 # The component ZIPs are private build evidence. Players receive one assembled ZIP.
 $staging = Join-Path $output 'player-staging'
 New-Item -ItemType Directory -Path $staging | Out-Null

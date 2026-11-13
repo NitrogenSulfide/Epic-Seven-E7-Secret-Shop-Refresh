@@ -1,17 +1,23 @@
-"""Background control of the Steam (Proton) game on Linux.
+"""Background control of Epic Seven on Steam (Linux/Proton and Windows).
 
-Capture reads the game's own X window, so other windows may cover it. Input is
-posted as window messages by e7_wine_input.exe running inside the game's Wine
-session, so the real pointer and keyboard focus are never used. The transport
-mirrors WindowsMouse (screenshot/click/move/drag in 1920 x 1080 game space).
+Input is posted as window messages by e7_wine_input.exe, so the real pointer
+and keyboard focus are never used. On Linux the helper runs inside the game's
+Wine session and capture reads the game's own X window. On Windows the helper
+runs directly and capture uses PrintWindow; both need administrator rights
+because the Steam game runs elevated. Other windows may cover the game. The
+transport mirrors WindowsMouse (screenshot/click/move/drag in 1920 x 1080
+game space).
 """
 from dataclasses import dataclass, field
 import json
 import math
 import os
 from pathlib import Path
+import queue
 import select
 import subprocess
+import sys
+import threading
 import time
 
 from e7_native_mouse import MouseStopped, MouseRecheckRequired
@@ -20,6 +26,9 @@ from e7_windows_capture import game_view
 STEAM_APP_ID = 5019180
 GAME_TITLE = 'Epic Seven'
 HELPER_NAME = 'e7_wine_input.exe'
+WINDOWS_GAME_EXE = 'epicseven_steam.exe'
+# Windows: a pointer over the game counts as in use until it has been still this long.
+POINTER_STILL_SECONDS = 1.0
 PAUSE_LIMIT = 10
 
 
@@ -75,30 +84,61 @@ def find_proton_session(app_id=STEAM_APP_ID, *, proc=Path('/proc')):
 
 def helper_path():
     configured = os.environ.get('E7_WINE_INPUT')
-    path = Path(configured) if configured else Path(__file__).resolve().with_name(HELPER_NAME)
+    # A frozen engine EXE ships the helper beside itself, not inside its bundle.
+    base = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
+    path = Path(configured) if configured else base/HELPER_NAME
     if not path.is_file():
-        raise ValueError(f'The background input helper is missing: {path}. Build it with build_wine_input.sh.')
+        fix = 'Use the complete player folder.' if os.name == 'nt' else 'Build it with build_wine_input.sh.'
+        raise ValueError(f'The background input helper is missing: {path}. {fix}')
     return path
 
 
 class WineInput:
-    """Persistent e7_wine_input.exe inside the game's Wine session."""
+    """Persistent e7_wine_input.exe: inside the game's Wine session on Linux
+    (session given), or run directly on Windows (session None)."""
+
+    # Windows cannot select() on pipes; there one reader thread feeds a queue.
+    _use_select = os.name != 'nt'
 
     def __init__(self, session, *, helper=None, timeout=10, popen=subprocess.Popen):
         self.timeout = timeout
-        self.process = popen([str(session.wine), str(helper or helper_path())],
-                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                             env=session.environment(), text=True, bufsize=1)
+        self._replies = None
+        command = [str(helper or helper_path())]
+        options = dict(stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+        if session is not None:
+            command.insert(0, str(session.wine))
+            options['env'] = session.environment()
+        else:
+            options['creationflags'] = 0x08000000  # CREATE_NO_WINDOW
+        self.process = popen(command, **options)
+
+    def _readline(self, timeout):
+        if self._use_select:
+            ready, _, _ = select.select([self.process.stdout], [], [], timeout)
+            return self.process.stdout.readline() if ready else None
+        if self._replies is None:
+            self._replies = queue.Queue()
+            def pump(stream=self.process.stdout, replies=self._replies):
+                for line in stream:
+                    replies.put(line)
+                replies.put('')
+            threading.Thread(target=pump, name='E7 input helper', daemon=True).start()
+        try:
+            return self._replies.get(timeout=timeout)
+        except queue.Empty:
+            return None
 
     def request(self, command, *, timeout=None):
         if self.process.poll() is not None:
             raise MouseStopped('The background input helper exited. No input sent.')
         self.process.stdin.write(command+'\n')
         self.process.stdin.flush()
-        ready, _, _ = select.select([self.process.stdout], [], [], timeout or self.timeout)
-        if not ready:
+        reply = self._readline(timeout or self.timeout)
+        if reply is None:
+            # A late answer would desynchronize later requests; stop the helper.
+            self.process.kill()
             raise MouseStopped(f'The background input helper did not answer "{command.split()[0]}".')
-        reply = self.process.stdout.readline().strip()
+        reply = reply.strip()
         if not reply:
             raise MouseStopped('The background input helper exited. No input sent.')
         if reply.startswith('err '):
@@ -193,9 +233,20 @@ class BackgroundGame:
 
     def __init__(self, active, *, window=None, wine=None, session=None):
         self.active = active
-        self.window = window or XGameWindow()
-        self.wine = wine or WineInput(session or find_proton_session())
-        _, width, height = self.wine.find()
+        if os.name == 'nt':
+            self.window = window or WinGameWindow()
+            if wine is None:
+                require_background_permissions(self.window.pid)
+            self.wine = wine or WineInput(None)
+        else:
+            self.window = window or XGameWindow()
+            self.wine = wine or WineInput(session or find_proton_session())
+        handle, width, height = self.wine.find()
+        expected = getattr(self.window, 'hwnd', None)
+        if expected is not None and handle != expected:
+            self.close()
+            raise ValueError('The input helper found a different Epic Seven window than the one captured. '
+                             'Close other copies of the game, then try again.')
         if (width, height) != self.window.size():
             self.close()
             raise ValueError(f'Wine reports a {width} x {height} game client but X reports '
@@ -286,3 +337,140 @@ class BackgroundGame:
 
     def close(self):
         self.wine.close()
+
+
+# ---- Windows ---------------------------------------------------------------
+
+def require_background_permissions(pid):
+    """The Steam game runs elevated; Windows blocks capture and input from a
+    normal app. Raise MouseElevationRequired so the GUI can offer a restart."""
+    from types import SimpleNamespace
+    from e7_native_mouse import MouseElevationRequired, require_mouse_permissions
+    try:
+        require_mouse_permissions(SimpleNamespace(pid=pid))
+    except MouseElevationRequired as error:
+        raise MouseElevationRequired(str(error).replace('No Mouse input sent.', 'No background input sent.')) from error
+
+
+class WinGameWindow:
+    """The Steam game's Win32 window: PrintWindow capture, state and pointer checks."""
+
+    def __init__(self, *, api=None):
+        import ctypes
+        from ctypes import wintypes as w
+        from e7_native_mouse import physical_pixel_coordinates, process_name
+        self.ctypes, self.w = ctypes, w
+        user = self.user = api or ctypes.WinDLL('user32', use_last_error=True)
+        self.gdi = ctypes.WinDLL('gdi32', use_last_error=True)
+        physical_pixel_coordinates(api=user)
+        self._prototypes()
+        found = []
+        @ctypes.WINFUNCTYPE(w.BOOL, w.HWND, w.LPARAM)
+        def visit(handle, _):
+            title, cls = ctypes.create_unicode_buffer(64), ctypes.create_unicode_buffer(64)
+            user.GetWindowTextW(handle, title, 64); user.GetClassNameW(handle, cls, 64)
+            if user.IsWindowVisible(handle) and title.value == GAME_TITLE and cls.value.startswith('GLFW'):
+                found.append(handle)
+            return True
+        user.EnumWindows(visit, 0)
+        steam = []
+        for handle in found:
+            pid = w.DWORD(); user.GetWindowThreadProcessId(handle, ctypes.byref(pid))
+            name = (process_name(pid.value) or '').replace('/', '\\').rsplit('\\', 1)[-1].lower()
+            if name == WINDOWS_GAME_EXE:
+                steam.append((handle, pid.value))
+        if not steam:
+            if found:
+                raise ValueError('Background mode supports Epic Seven on Steam. Use Mouse mode for this game client.')
+            raise ValueError('Epic Seven (Steam) is not running. Start the game, then try again.')
+        if len(steam) > 1:
+            raise ValueError('More than one Epic Seven game window is open. Close the extra one, then try again.')
+        self.hwnd, self.pid = steam[0]
+        self._clock = time.monotonic
+        self._cursor, self._cursor_moved = None, float('-inf')
+
+    def _prototypes(self):
+        w, ctypes = self.w, self.ctypes
+        for name, args, result in (
+                ('EnumWindows', [ctypes.WINFUNCTYPE(w.BOOL, w.HWND, w.LPARAM), w.LPARAM], w.BOOL),
+                ('GetWindowTextW', [w.HWND, w.LPWSTR, ctypes.c_int], ctypes.c_int),
+                ('GetClassNameW', [w.HWND, w.LPWSTR, ctypes.c_int], ctypes.c_int),
+                ('IsWindowVisible', [w.HWND], w.BOOL), ('IsWindow', [w.HWND], w.BOOL), ('IsIconic', [w.HWND], w.BOOL),
+                ('GetWindowThreadProcessId', [w.HWND, ctypes.POINTER(w.DWORD)], w.DWORD),
+                ('GetClientRect', [w.HWND, ctypes.POINTER(w.RECT)], w.BOOL),
+                ('GetWindowRect', [w.HWND, ctypes.POINTER(w.RECT)], w.BOOL),
+                ('ClientToScreen', [w.HWND, ctypes.POINTER(w.POINT)], w.BOOL),
+                ('GetCursorPos', [ctypes.POINTER(w.POINT)], w.BOOL),
+                ('WindowFromPoint', [w.POINT], w.HWND), ('GetAncestor', [w.HWND, w.UINT], w.HWND),
+                ('GetWindowDC', [w.HWND], w.HDC), ('ReleaseDC', [w.HWND, w.HDC], ctypes.c_int),
+                ('PrintWindow', [w.HWND, w.HDC, w.UINT], w.BOOL)):
+            function = getattr(self.user, name); function.argtypes, function.restype = args, result
+        gdi = self.gdi
+        gdi.CreateCompatibleDC.argtypes = [w.HDC]; gdi.CreateCompatibleDC.restype = w.HDC
+        gdi.CreateCompatibleBitmap.argtypes = [w.HDC, ctypes.c_int, ctypes.c_int]; gdi.CreateCompatibleBitmap.restype = w.HBITMAP
+        gdi.SelectObject.argtypes = [w.HDC, w.HGDIOBJ]; gdi.SelectObject.restype = w.HGDIOBJ
+        gdi.DeleteObject.argtypes = [w.HGDIOBJ]; gdi.DeleteDC.argtypes = [w.HDC]
+        gdi.GetDIBits.argtypes = [w.HDC, w.HBITMAP, w.UINT, w.UINT, ctypes.c_void_p, ctypes.c_void_p, w.UINT]
+        gdi.GetDIBits.restype = ctypes.c_int
+
+    def size(self):
+        rect = self.w.RECT()
+        if not self.user.GetClientRect(self.hwnd, self.ctypes.byref(rect)):
+            return (0, 0)
+        return rect.right, rect.bottom
+
+    def problem(self):
+        """Return why input must wait, or None."""
+        if not self.user.IsWindow(self.hwnd):
+            return 'The game window closed.'
+        if self.user.IsIconic(self.hwnd) or not self.user.IsWindowVisible(self.hwnd):
+            return 'The game window is minimized or hidden.'
+        # Only a moving pointer can move the game's cursor between a posted press
+        # and release. A still pointer over the game is fine: players with the
+        # game maximized on one screen have nowhere else to leave it.
+        cursor = self.w.POINT()
+        if not self.user.GetCursorPos(self.ctypes.byref(cursor)):
+            return None
+        now, position = self._clock(), (cursor.x, cursor.y)
+        if self._cursor is not None and position != self._cursor:
+            self._cursor_moved = now
+        self._cursor = position
+        if now-self._cursor_moved >= POINTER_STILL_SECONDS:
+            return None
+        hit = self.user.WindowFromPoint(cursor)
+        if hit and self.user.GetAncestor(hit, 2) == self.hwnd:  # GA_ROOT
+            return ('The pointer is moving over the game window; background input waits until it stays still. '
+                    'Leave it still, or park it on the taskbar.')
+        return None
+
+    def capture(self):
+        from PIL import Image
+        ctypes, w, user, gdi = self.ctypes, self.w, self.user, self.gdi
+        outer, origin = w.RECT(), w.POINT(0, 0)
+        width, height = self.size()
+        if not user.GetWindowRect(self.hwnd, ctypes.byref(outer)) or not user.ClientToScreen(self.hwnd, ctypes.byref(origin)):
+            raise MouseStopped('The game window closed. Background session stopped.')
+        ow, oh = outer.right-outer.left, outer.bottom-outer.top
+        if ow <= 0 or oh <= 0 or width <= 0 or height <= 0:
+            raise MouseStopped('The game window is minimized or hidden. Background session stopped.')
+        window_dc = user.GetWindowDC(self.hwnd)
+        memory_dc = gdi.CreateCompatibleDC(window_dc)
+        bitmap = gdi.CreateCompatibleBitmap(window_dc, ow, oh)
+        previous = gdi.SelectObject(memory_dc, bitmap)
+        selected = True
+        try:
+            printed = user.PrintWindow(self.hwnd, memory_dc, 2)  # PW_RENDERFULLCONTENT
+            # GetDIBits requires the bitmap not to be selected into a DC.
+            gdi.SelectObject(memory_dc, previous); selected = False
+            header = (ctypes.c_uint32*10)(40, ow, (-oh) & 0xffffffff, 1 | (32 << 16), 0, 0, 0, 0, 0, 0)
+            pixels = ctypes.create_string_buffer(ow*oh*4)
+            rows = gdi.GetDIBits(memory_dc, bitmap, 0, oh, pixels, header, 0)
+        finally:
+            if selected:
+                gdi.SelectObject(memory_dc, previous)
+            gdi.DeleteObject(bitmap); gdi.DeleteDC(memory_dc); user.ReleaseDC(self.hwnd, window_dc)
+        if not printed or rows != oh:
+            raise MouseStopped('Windows could not capture the game window. Run this app as administrator. No input sent.')
+        left, top = origin.x-outer.left, origin.y-outer.top
+        image = Image.frombuffer('RGB', (ow, oh), pixels.raw, 'raw', 'BGRX', 0, 1)
+        return image.crop((left, top, left+width, top+height))

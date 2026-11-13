@@ -1,7 +1,10 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string] $BuildPython,
-    [Parameter(Mandatory=$true)][string] $OutputDirectory
+    [Parameter(Mandatory=$true)][string] $OutputDirectory,
+    # Background mode's input helper, built from e7_wine_input.c with MinGW-w64
+    # (build_wine_input.sh). It is a binary, so it is never committed.
+    [Parameter(Mandatory=$true)][string] $InputHelper
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -13,6 +16,9 @@ $status = @(& git -c "safe.directory=$safe" -C $repository status --porcelain=v1
 if ($LASTEXITCODE -ne 0 -or $status.Count -ne 0) { throw 'Use a clean committed checkout.' }
 $version = (Get-Content -Raw -LiteralPath (Join-Path $repository 'VERSION')).Trim()
 $python = (Resolve-Path -LiteralPath $BuildPython).Path
+$helper = (Resolve-Path -LiteralPath $InputHelper).Path
+$helperBytes = [IO.File]::ReadAllBytes($helper)
+if ($helperBytes.Length -lt 2 -or $helperBytes[0] -ne 0x4D -or $helperBytes[1] -ne 0x5A) { throw 'InputHelper is not a Windows EXE.' }
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $output) { throw 'Choose a new output directory.' }
 New-Item -ItemType Directory -Path $output | Out-Null
@@ -34,7 +40,10 @@ $sourceFiles += @('e7_shop_flow.py', 'e7_frame.py', 'test_e7_shared_flow.py')
 $sourceFiles += @('e7_engine_protocol.py', 'e7_timing.py', 'e7_history.py', 'e7_session_control.py', 'e7_links.py', 'test_e7_session_cleanup.py')
 $sourceFiles += @('e7_input_trace.py', 'test_e7_input_trace.py')
 $sourceFiles += @('e7_stop_key.py', 'test_e7_stop_key.py')
+$sourceFiles += @('e7_background.py', 'e7_background_refresh.py', 'test_e7_background.py', 'e7_wine_input.c', 'build_wine_input.sh')
 foreach ($name in $sourceFiles) { Copy-Item -LiteralPath (Join-Path $repository $name) -Destination (Join-Path $staging $name) }
+# The engine finds the helper beside its own EXE.
+Copy-Item -LiteralPath $helper -Destination (Join-Path $staging 'e7_wine_input.exe')
 Copy-Item -LiteralPath (Join-Path $repository 'ENGINE.md') -Destination (Join-Path $staging 'README.md')
 Copy-Item -LiteralPath (Join-Path $repository 'release/SETUP.md') -Destination (Join-Path $staging 'SETUP.md')
 foreach ($name in @('CREDITS.txt', 'UPSTREAM.md')) {
@@ -78,7 +87,7 @@ finally { $zip.Dispose() }
 $manifest = [ordered]@{
     candidate_commit=$commit.Trim(); version=$version; created_utc=[DateTime]::UtcNow.ToString('o')
     python=$environment.version; dependencies=(Get-Content -LiteralPath (Join-Path $output 'environment.txt'))
-    engine_sha256=$files['E7ADBShopRefresh.exe']; files=$files
+    engine_sha256=$files['E7ADBShopRefresh.exe']; input_helper_sha256=$files['e7_wine_input.exe']; files=$files
     archive=[ordered]@{name=[IO.Path]::GetFileName($archive); sha256=(Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant(); bytes=(Get-Item -LiteralPath $archive).Length}
 }
 $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'build-manifest.json') -Encoding utf8

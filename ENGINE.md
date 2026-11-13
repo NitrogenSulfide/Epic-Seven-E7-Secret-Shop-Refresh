@@ -247,8 +247,14 @@ py -3 -m venv .local-state\engine-build-venv
 .\.local-state\engine-build-venv\Scripts\python.exe -m pip install -r engine-build-requirements.txt
 .\.local-state\engine-build-venv\Scripts\python.exe -m unittest test_e7_live_engine -v
 .\.local-state\engine-build-venv\Scripts\python.exe -m unittest test_e7_shop_navigation -v
-.\build_engine_release.ps1 -BuildPython .local-state\engine-build-venv\Scripts\python.exe -OutputDirectory C:\absolute\new\engine-candidate
+.\build_engine_release.ps1 -BuildPython .local-state\engine-build-venv\Scripts\python.exe -OutputDirectory C:\absolute\new\engine-candidate -InputHelper C:\absolute\e7_wine_input.exe
 ```
+
+`-InputHelper` is Background mode's small input helper, compiled from
+`e7_wine_input.c` with MinGW-w64 (`sh build_wine_input.sh` on Linux, or
+`x86_64-w64-mingw32-gcc -O2 -Wall -o e7_wine_input.exe e7_wine_input.c` on
+Windows). It is never committed; the builder copies it beside the engine EXE
+and records its hash. `build_release_assets.ps1` takes the same parameter.
 
 Build from a clean committed checkout. The builder does not run the real engine,
 copy personal state, or modify the installed engine. It records the exact commit,

@@ -17,6 +17,12 @@ if os.name != "nt" and "winsound" not in sys.modules:
 import e7_shop_refresh_gui as gui
 from test_e7_shop_refresh_gui import FAKE, PACKAGED_ASSETS
 
+def os_named(name):
+    """Patch the GUI's os.name so a test takes one platform's branch on any host."""
+    fake = mock.MagicMock(wraps=os); fake.name = name; fake.environ = os.environ
+    return patch.object(gui, 'os', fake)
+
+
 GAME = gui.BackgroundTarget('Epic Seven (Steam)', 'Epic Seven (Steam)', 0xa600005, 0, (0, 0, 3840, 2016))
 
 
@@ -69,8 +75,8 @@ class BackgroundGuiTests(unittest.TestCase):
     def test_start_launches_the_background_engine_without_native_mouse(self):
         self.pump_until(lambda: self.app.mouse_target.get() == 'Epic Seven (Steam)')
         self.app.buy_friendship.set(True)
-        with patch('e7_background.helper_path', return_value=Path('/x/e7_wine_input.exe')), \
-                patch.object(gui, 'launch_engine', side_effect=OSError('test: not launched')) as launch:
+        (self.root/'e7_wine_input.exe').write_bytes(b'MZ')
+        with os_named('posix'), patch.object(gui, 'launch_engine', side_effect=OSError('test: not launched')) as launch:
             self.app.start_button.invoke()
         arguments = launch.call_args.args[0]
         self.assertEqual(arguments[:2], [sys.executable, str(self.fake)])
@@ -84,8 +90,7 @@ class BackgroundGuiTests(unittest.TestCase):
 
     def test_missing_helper_or_game_never_launches(self):
         self.pump_until(lambda: self.app.mouse_target.get() == 'Epic Seven (Steam)')
-        with patch('e7_background.helper_path', side_effect=ValueError('The background input helper is missing')), \
-                patch.object(gui, 'launch_engine') as launch:
+        with os_named('posix'), patch.object(gui, 'launch_engine') as launch:
             self.app.start_button.invoke()
         launch.assert_not_called()
         self.assertIn('helper is missing', self.app.connection_warning)
@@ -95,6 +100,35 @@ class BackgroundGuiTests(unittest.TestCase):
         launch.assert_not_called()
         self.assertIn('Steam', self.app.connection_warning)
 
+    def windows(self, verify='background session v1'):
+        """Run _start_background_refresh down its Windows branch."""
+        self.fake.write_text(f'import sys\nif sys.argv[1:] == ["--verify"]:\n    print("E7 engine: {verify}"); sys.exit(0)\n'+FAKE)
+        (self.root/'e7_wine_input.exe').write_bytes(b'MZ')
+        return os_named('nt')
+
+    def test_windows_elevated_game_offers_the_administrator_restart(self):
+        from e7_native_mouse import MouseElevationRequired
+        self.pump_until(lambda: self.app.mouse_target.get() == 'Epic Seven (Steam)')
+        with self.windows(), patch.object(gui, 'NO_WINDOW', 0), \
+                patch('e7_background.require_background_permissions',
+                      side_effect=MouseElevationRequired('Restart as administrator. No background input sent.')) as check, \
+                patch.object(self.app, '_offer_administrator_restart') as offer, \
+                patch.object(gui, 'launch_engine') as launch:
+            self.app._start_background_refresh()
+        check.assert_called_once_with(GAME.pid)
+        offer.assert_called_once()
+        self.assertIn('administrator', offer.call_args.kwargs['reason'])
+        launch.assert_not_called()
+
+    def test_windows_old_engine_is_refused_before_any_check(self):
+        self.pump_until(lambda: self.app.mouse_target.get() == 'Epic Seven (Steam)')
+        with self.windows(verify='friendship purchases v1'), patch.object(gui, 'NO_WINDOW', 0), \
+                patch('e7_background.require_background_permissions') as check, \
+                patch.object(gui, 'launch_engine') as launch:
+            self.app._start_background_refresh()
+        check.assert_not_called()
+        launch.assert_not_called()
+        self.assertIn('matching new engine', self.app.connection_warning)
 
     def test_scan_recovers_when_the_game_window_vanishes(self):
         class BadWindow(Exception):  # stands in for Xlib.error.BadWindow
@@ -110,15 +144,22 @@ class BackgroundGuiTests(unittest.TestCase):
 
 
 class ListBackgroundGamesTest(unittest.TestCase):
+    def test_windows_reports_the_steam_window(self):
+        window = mock.Mock(hwnd=0x5012e, pid=777); window.size.return_value = (3840, 2019)
+        with os_named('nt'), patch('e7_background.WinGameWindow', return_value=window):
+            games = gui.list_background_games()
+        self.assertEqual(games, [gui.BackgroundTarget('Epic Seven (Steam)', 'Epic Seven (Steam)', 0x5012e, 777, (0, 0, 3840, 2019))])
+
+
     def test_reports_the_game_window_read_only(self):
         window = mock.Mock(); window.size.return_value = (3840, 2016); window.window.id = 42
-        with patch('e7_background.find_proton_session'), patch('e7_background.XGameWindow', return_value=window):
+        with os_named('posix'), patch('e7_background.find_proton_session'), patch('e7_background.XGameWindow', return_value=window):
             games = gui.list_background_games()
         self.assertEqual(games, [gui.BackgroundTarget('Epic Seven (Steam)', 'Epic Seven (Steam)', 42, 0, (0, 0, 3840, 2016))])
         window.display.close.assert_called_once()
 
     def test_game_not_running_is_an_error_for_the_scan(self):
-        with patch('e7_background.find_proton_session', side_effect=ValueError('Epic Seven (Steam) is not running.')):
+        with os_named('posix'), patch('e7_background.find_proton_session', side_effect=ValueError('Epic Seven (Steam) is not running.')):
             with self.assertRaisesRegex(ValueError, 'not running'):
                 gui.list_background_games()
 

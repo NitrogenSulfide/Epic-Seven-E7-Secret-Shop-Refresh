@@ -205,6 +205,99 @@ class WineInputTest(unittest.TestCase):
         self.assertEqual(wine.process.stdin.getvalue(), 'click 1 1\n')
 
 
+class WindowsHelperPipeTest(unittest.TestCase):
+    """The Windows path: helper run directly, replies read by a thread."""
+    SCRIPT = (
+        'import sys, time\n'
+        'for line in sys.stdin:\n'
+        '    word = line.split()[0]\n'
+        '    if word == "slow": time.sleep(5)\n'
+        '    print("ok" if word != "find" else "window 1 3840 2019", flush=True)\n')
+
+    def start(self):
+        import sys
+        def popen(command, **options):
+            if os.name != 'nt':
+                options.pop('creationflags', None)
+            return bg.subprocess.Popen([sys.executable, '-c', self.SCRIPT], **options)
+        wine = bg.WineInput(None, helper='e7_wine_input.exe', timeout=2, popen=popen)
+        wine._use_select = False
+        self.addCleanup(wine.close)
+        return wine
+
+    def test_replies_arrive_through_the_reader_thread(self):
+        wine = self.start()
+        self.assertEqual(wine.request('find'), 'window 1 3840 2019')
+        self.assertEqual(wine.request('click 5 5'), 'ok')
+
+    def test_late_reply_stops_and_kills_the_helper(self):
+        wine = self.start()
+        with self.assertRaisesRegex(MouseStopped, 'did not answer "slow"'):
+            wine.request('slow', timeout=0.3)
+        wine.process.wait(5)
+        with self.assertRaisesRegex(MouseStopped, 'exited'):
+            wine.request('click 1 1')
+
+
+class WindowsPointerTest(unittest.TestCase):
+    """Windows pauses only while the pointer moves over the game, not while it rests there."""
+    GAME, OTHER = 0x100, 0x200
+
+    def window(self):
+        import ctypes
+        from ctypes import wintypes
+        test = self
+        class User:
+            cursor, over = (10, 10), True
+            def IsWindow(self, h): return True
+            def IsIconic(self, h): return False
+            def IsWindowVisible(self, h): return True
+            def GetCursorPos(self, ref):
+                ref._obj.x, ref._obj.y = self.cursor; return True
+            def WindowFromPoint(self, point): return test.GAME if self.over else test.OTHER
+            def GetAncestor(self, h, flag): return h
+        window = object.__new__(bg.WinGameWindow)
+        window.ctypes, window.w, window.user, window.hwnd = ctypes, wintypes, User(), self.GAME
+        window.user.over = True
+        self.now = 100.0
+        window._clock = lambda: self.now
+        window._cursor, window._cursor_moved = None, float('-inf')
+        return window
+
+    def test_still_pointer_over_the_game_does_not_pause(self):
+        window = self.window()
+        self.assertIsNone(window.problem())
+        self.now += 5
+        self.assertIsNone(window.problem())
+
+    def test_moving_pointer_over_the_game_pauses_until_still(self):
+        window = self.window()
+        window.problem()
+        window.user.cursor = (40, 40)
+        self.assertIn('moving over the game', window.problem())
+        self.now += 0.5
+        self.assertIn('moving over the game', window.problem())
+        self.now += 0.6
+        self.assertIsNone(window.problem())
+
+    def test_moving_pointer_over_another_window_does_not_pause(self):
+        window = self.window()
+        window.user.over = False
+        window.problem()
+        window.user.cursor = (40, 40)
+        self.assertIsNone(window.problem())
+
+
+class BackgroundPermissionTest(unittest.TestCase):
+    def test_elevation_message_names_background_input(self):
+        from e7_native_mouse import MouseElevationRequired
+        error = MouseElevationRequired('Run as administrator. No Mouse input sent.')
+        with mock.patch('e7_native_mouse.require_mouse_permissions', side_effect=error) as check:
+            with self.assertRaisesRegex(MouseElevationRequired, 'No background input sent.'):
+                bg.require_background_permissions(4321)
+        self.assertEqual(check.call_args.args[0].pid, 4321)
+
+
 class BackgroundEngineTest(unittest.TestCase):
     def test_engine_uses_background_transport_without_adb(self):
         import E7ADBShopRefresh as adb_engine
