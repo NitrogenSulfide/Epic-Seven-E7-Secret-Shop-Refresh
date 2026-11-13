@@ -22,8 +22,8 @@
   in place to a small always-on-top bar with Covenant, Mystic and Friendship
   buys, Skystones spent, time left and Stop. The full window returns when the
   session stops, finishes or needs attention, from the bar's expand button or
-  its close button (which does not stop the session). Calibration keeps the
-  full window. Turn it off under "Compact tracker while running".
+  its close button (which does not stop the session); the header's Compact
+  button shrinks it again. Calibration keeps the full window. Turn it off under "Compact tracker while running".
 • The About window names the platform it runs on instead of always "Windows".
 • Start and end sounds are 10 dB quieter.
 • Refuses to start when more than one Epic Seven window is open.

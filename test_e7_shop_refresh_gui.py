@@ -1211,6 +1211,22 @@ class GuiTests(unittest.TestCase):
         self.assertFalse(self.app.tracker.active)
         self.assertTrue(self.app.body_frame.winfo_ismapped())
 
+    def test_compact_button_returns_to_tracker_after_expand(self):
+        self.show_full_window()
+        self.start_fake(stall=True)
+        self.pump_until(lambda: self.app.tracker.active)
+        self.app.tracker.expand_button.invoke()
+        self.app.update()
+        self.assertFalse(self.app.tracker.active)
+        self.assertTrue(self.app.compact_button.winfo_ismapped())
+        self.app.compact_button.invoke()
+        self.assertTrue(self.app.tracker.active)
+        self.app.tracker.stop_button.invoke()
+        self.pump_until(lambda: self.app.status.get() == 'Stopped')
+        self.app.update()
+        self.assertFalse(self.app.tracker.active)
+        self.assertFalse(self.app.compact_button.winfo_ismapped())
+
     def test_compact_tracker_shortens_remaining_time(self):
         from e7_tracker import short_remaining
         self.assertEqual(short_remaining('Time remaining: ~12m 05s'), '12m 05s left')

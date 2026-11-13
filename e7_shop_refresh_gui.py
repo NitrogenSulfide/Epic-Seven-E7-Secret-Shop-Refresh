@@ -267,6 +267,7 @@ class RefreshGui(tk.Tk):
         self.scenery = Scenery(self, ASSET_DIR)
         self.tracker = CompactTracker(self, ASSET_DIR, (self.header_frame, self.body_frame))
         self.status.trace_add('write', lambda *_: self.tracker.status_changed())
+        self.status.trace_add('write', lambda *_: self._update_compact_button())
         self._apply_theme()
         self._update_home_ui_hint()
         self._load_icon()
@@ -694,6 +695,10 @@ class RefreshGui(tk.Tk):
             style='Coffee.TButton', padding=(dp(5), dp(6), dp(12), dp(6)),
             command=lambda: webbrowser.open('https://ko-fi.com/bluenatto'), cursor='hand2', takefocus=True)
         self.coffee_button.pack(side='left', padx=(0, dp(8)))
+        # Shown only while a session runs, to return to the compact tracker after expanding.
+        self.compact_button = ttk.Button(header_actions, text='⤡ Compact', padding=(dp(10), dp(6)),
+                                         command=self._enter_compact, cursor='hand2')
+        ThemeHint(self.compact_button, lambda: 'Shrink to the compact tracker bar')
         self.github_button = ttk.Button(header_actions, text='GitHub', padding=dp(6), cursor='hand2',
                                          command=lambda: webbrowser.open(PROFILE))
         self.github_button.pack(side='left', padx=(0, dp(6)))
@@ -1058,6 +1063,18 @@ class RefreshGui(tk.Tk):
         except (OSError, configparser.Error) as exc:
             self.setting_notice.set("Sound changed for this session; preference could not be saved.")
             self._append_log(f"Sound preference save failed: {exc}\n")
+
+    def _enter_compact(self):
+        if self.run_settings is not None and self._session_started:
+            self.tracker.enter(friendship=self.run_settings.buy_friendship)
+
+    def _update_compact_button(self):
+        running = (self._session_started and self.run_settings is not None and not self.run_settings.debug
+                   and self.status.get() in ('Running', 'Paused', 'Waiting for game'))
+        if running and not self.compact_button.winfo_manager():
+            self.compact_button.pack(side='left', padx=(0, self._dp(8)), before=self.coffee_button)
+        elif not running and self.compact_button.winfo_manager():
+            self.compact_button.pack_forget()
 
     def _save_tracker_preference(self):
         try:
