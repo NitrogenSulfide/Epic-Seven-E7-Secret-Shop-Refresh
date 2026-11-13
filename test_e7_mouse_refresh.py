@@ -1,3 +1,4 @@
+import os
 """Fake native input and synthetic shop/dialog tests. Never operate the desktop."""
 import contextlib
 import ctypes
@@ -316,6 +317,8 @@ class TransportTests(unittest.TestCase):
             check.assert_called_once_with(self.target.pid)
         self.sender.assert_not_called()
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows API test')
+
     def test_permission_token_handles_close_on_success_and_failure(self):
         kernel,security=Mock(),Mock();kernel.OpenProcess.return_value=789
         def open_token(process,access,token):
@@ -353,6 +356,8 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(flags,[0xC001,2,4])
         self.assertEqual([call.args[0] for call in sleep.call_args_list],[.05,.08])
         api.SetCursorPos.assert_not_called()
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows API test')
 
     def test_failed_movement_blocks_down_and_confirmation(self):
         api=self.prepare_input_api();position=api.GetCursorPos.side_effect
@@ -1100,7 +1105,11 @@ class NativeEngineTests(unittest.TestCase):
             with Image.open(path) as image:
                 self.assertEqual(image.size,(400,80))
             return Mock(returncode=0,stdout=json.dumps(dict(text='0/1',words=[dict(text='0/1',box=[20,10,100,60])])))
-        with patch('e7_mouse_confirmation.subprocess.run',side_effect=child):
+        # Windows OCR path, pinned so it is also covered when tests run elsewhere.
+        with patch('e7_mouse_confirmation.subprocess.run',side_effect=child),\
+             patch('e7_mouse_confirmation.ocr_backend',return_value='windows'),\
+             patch.dict('os.environ',{'WINDIR':'C:\\Windows'}),\
+             patch('e7_mouse_confirmation.subprocess.CREATE_NO_WINDOW',0x08000000,create=True):
             result=read_ui_text(rgb,(1500,200,1700,240),scale=2,contrast=True)
         self.assertEqual(result['words'][0]['box'],[1510,205,1550,230])
 

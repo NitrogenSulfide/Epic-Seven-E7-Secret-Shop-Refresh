@@ -655,6 +655,9 @@ if __name__ == '__main__':
         matches = confirmation_matches(read_confirmation_text(rgb),args.operation,args.item_name)
         print(json.dumps(dict(read_only=True,text_matches=matches,operation=args.operation)))
         sys.exit(0 if matches else 2)
+    if sys.argv[1:2] == ["--background-session"]:
+        from e7_background_refresh import run_background_session
+        sys.exit(run_background_session(sys.argv[1:]))
     if sys.argv[1:2] == ['--mouse-session']:
         from e7_mouse_refresh import run_mouse_session
         sys.exit(run_mouse_session(sys.argv[1:]))

@@ -137,15 +137,137 @@ class WindowsStopKey:
             self.api.UnregisterHotKey(None,HOTKEY_ID)
             self.registered=False
 
+X11_NAMED_KEYS = {'esc':'Escape','escape':'Escape','space':'space','enter':'Return','return':'Return',
+    'tab':'Tab','backspace':'BackSpace','delete':'Delete','insert':'Insert','home':'Home','end':'End',
+    'page up':'Prior','page down':'Next','up':'Up','down':'Down','left':'Left','right':'Right',
+    'pause':'Pause','caps lock':'Caps_Lock','num lock':'Num_Lock','scroll lock':'Scroll_Lock',
+    'print screen':'Print'}
+X11_CHARACTERS = {'`':'grave','/':'slash','.':'period',',':'comma',"'":'apostrophe',';':'semicolon',
+    '[':'bracketleft',']':'bracketright','-':'minus','=':'equal','\\':'backslash',' ':'space'}
+X11_MODIFIERS = {'ctrl':('Control_L','Control_R'),'control':('Control_L','Control_R'),'alt':('Alt_L','Alt_R'),
+    'shift':('Shift_L','Shift_R'),'win':('Super_L','Super_R'),'windows':('Super_L','Super_R')}
+
+
+def x11_stop_key(key):
+    """Return (key keysym names, [modifier keysym-name groups]) for an X11 keyboard."""
+    parts=key.lower().strip().split('+') if key!='+' else ['+']
+    groups=[]
+    for part in parts[:-1]:
+        if part.strip() not in X11_MODIFIERS:raise ValueError('Choose a supported Stop key.')
+        groups.append(X11_MODIFIERS[part.strip()])
+    name=parts[-1].strip() if parts[-1].strip() else parts[-1]
+    if name in X11_NAMED_KEYS:return X11_NAMED_KEYS[name],groups
+    if re.fullmatch(r'f(?:[1-9]|1\d|2[0-4])',name):return name.upper(),groups
+    if len(name)==1:
+        if name.isalnum() and name.isascii():return name,groups
+        if name in X11_CHARACTERS:return X11_CHARACTERS[name],groups
+    raise ValueError('Choose a supported Stop key.')
+
+
+class X11StopKey:
+    """Global Stop key on an X11 desktop.
+
+    The X RECORD extension reports every key press on the display, including
+    injected (XTEST) ones, without grabbing the key from other apps; the
+    keymap query catches a key that is already held. Nothing is suppressed.
+    On Wayland only keys typed into X (XWayland) apps are seen."""
+
+    backend='X11 RECORD key listener'
+
+    def __init__(self,key,*,display=None):
+        from Xlib import XK, display as xdisplay
+        self.key=key
+        name,groups=x11_stop_key(key)
+        self._open=display or xdisplay.Display
+        try:
+            self.control=self._open()
+        except Exception as error:
+            raise ValueError(f'Could not open the X display for the Stop key ({error}). No refresh input sent.') from error
+        def codes(keysym_name):
+            keysym=XK.string_to_keysym(keysym_name)
+            return {code for code,_ in self.control.keysym_to_keycodes(keysym)} if keysym else set()
+        self.codes=codes(name)
+        if not self.codes:
+            self.control.close()
+            raise ValueError('The Stop key is unavailable on this keyboard layout.')
+        self.modifier_codes=[set().union(*(codes(n) for n in group)) for group in groups]
+        self._down=set();self._detected=False;self.detected_by='';self.injected=False
+        self.record=None;self.context=None;self.thread=None;self._error=None
+
+    def __enter__(self):
+        import threading
+        from Xlib.ext import record
+        if not self.control.has_extension('RECORD'):
+            self.__exit__()
+            raise ValueError('This X server has no RECORD extension, so the global Stop key cannot work. No refresh input sent.')
+        self.record=self._open()
+        self.context=self.control.record_create_context(0,[record.AllClients],[{
+            'core_requests':(0,0),'core_replies':(0,0),'ext_requests':(0,0,0,0),'ext_replies':(0,0,0,0),
+            'delivered_events':(0,0),'device_events':(2,3),'errors':(0,0),
+            'client_started':False,'client_died':False}])
+        self.control.sync()
+        keymap=self.control.query_keymap()
+        self._down={code for group in self.modifier_codes for code in group if keymap[code//8]>>(code%8)&1}
+        ready=threading.Event()
+        def listen():
+            try:
+                ready.set()
+                self.record.record_enable_context(self.context,self._reply)
+            except Exception as error:
+                self._error=error
+            finally:
+                ready.set()
+        self.thread=threading.Thread(target=listen,name='E7 Stop key',daemon=True)
+        self.thread.start();ready.wait(2)
+        return self
+
+    def _reply(self,reply):
+        from Xlib.ext import record
+        from Xlib.protocol import rq
+        if reply.category!=record.FromServer or reply.client_swapped or not len(reply.data):return
+        data=reply.data
+        while len(data):
+            event,data=rq.EventField(None).parse_binary_value(data,self.record.display,None,None)
+            self._event(event.type,event.detail)
+
+    def _event(self,kind,code):
+        down=kind==2
+        if any(code in group for group in self.modifier_codes):
+            (self._down.add if down else self._down.discard)(code)
+        if down and code in self.codes and all(self._down&group for group in self.modifier_codes):
+            self._detected=True;self.detected_by='keyboard event'
+
+    def pressed(self):
+        if self._detected:return True
+        if self._error is not None:
+            raise ValueError(f'The global Stop key listener failed ({self._error}). Session stopped.')
+        keymap=self.control.query_keymap()
+        held=lambda codes:any(keymap[c//8]>>(c%8)&1 for c in codes)
+        if held(self.codes) and all(held(group) for group in self.modifier_codes):
+            self.detected_by='held key state';return True
+        return False
+
+    def __exit__(self,*unused):
+        if self.context is not None:
+            try:
+                self.control.record_disable_context(self.context);self.control.sync()
+            except Exception:
+                pass
+            if self.thread is not None:self.thread.join(2)
+            try:
+                self.control.record_free_context(self.context);self.control.sync()
+            except Exception:
+                pass
+            self.context=None
+        for connection in (self.record,self.control):
+            if connection is not None:
+                try:connection.close()
+                except Exception:pass
+        self.record=self.control=None
+
+
 def stop_key_monitor(key):
     if os.name=='nt':return WindowsStopKey(key)
-    # Keep the upstream hook implementation available on other platforms.
-    from contextlib import contextmanager
-    import keyboard
-    @contextmanager
-    def legacy():
-        class Monitor:
-            backend='keyboard hook'
-            def pressed(self):return keyboard.is_pressed(key)
-        yield Monitor()
-    return legacy()
+    if not os.environ.get('DISPLAY'):
+        raise ValueError('The global Stop key needs an X11 desktop (DISPLAY is not set). No refresh input sent.')
+    return X11StopKey(key)

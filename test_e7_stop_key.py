@@ -1,3 +1,4 @@
+import os
 """Fake Win32 message queues, event callbacks and key state; no desktop input."""
 import ctypes
 import unittest
@@ -21,6 +22,8 @@ class StopKeyTests(unittest.TestCase):
         api.VkKeyScanW.side_effect=lambda key:ord(key.upper()) if key.isalnum() else {'`':192,'/':191,';':186,'+':0x1BB}[key]
         return api
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows API test')
+
     def test_global_message_stops_with_key_released_and_no_focus_query(self):
         api=self.api()
         def message(pointer,*args):
@@ -41,6 +44,8 @@ class StopKeyTests(unittest.TestCase):
             with WindowsStopKey('esc',api=api,last_error=lambda:1409):pass
         api.UnregisterHotKey.assert_not_called()
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows API test')
+
     def test_only_high_down_bit_is_used_and_chord_requires_modifiers(self):
         api=self.api()
         with WindowsStopKey('ctrl+q',api=api) as monitor:
@@ -59,6 +64,8 @@ class StopKeyTests(unittest.TestCase):
         for key in ('f12','invalid-key','unknown+x'):
             with self.assertRaises(ValueError):virtual_stop_key(key,api.VkKeyScanW)
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows API test')
+
     def test_hotkey_is_released_on_session_error(self):
         api=self.api()
         with self.assertRaises(RuntimeError):
@@ -70,6 +77,8 @@ class StopKeyTests(unittest.TestCase):
         data=KeyboardEvent(vk,0,flags,0,0)
         return monitor._hook_callback(code,message,ctypes.addressof(data))
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows API test')
+
     def test_brief_injected_streamed_key_is_latched_after_release_without_hotkey_or_down_state(self):
         api=self.api()
         with WindowsStopKey('esc',api=api) as monitor:
@@ -79,6 +88,8 @@ class StopKeyTests(unittest.TestCase):
             self.assertTrue(monitor.injected)
         self.assertEqual(api.CallNextHookEx.call_count,2)
         api.GetForegroundWindow.assert_not_called()
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows API test')
 
     def test_hook_pumps_messages_and_does_not_log_or_stop_for_other_keys(self):
         api=self.api()
@@ -91,6 +102,8 @@ class StopKeyTests(unittest.TestCase):
                 return False
             api.PeekMessageW.side_effect=pump
             self.assertTrue(monitor.pressed());self.assertEqual(monitor.detected_by,'keyboard event')
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows API test')
 
     def test_injected_chords_track_right_modifiers_and_releases_without_async_state(self):
         api=self.api()

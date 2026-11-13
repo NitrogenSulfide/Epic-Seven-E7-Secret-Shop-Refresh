@@ -5,6 +5,10 @@ import json
 import tempfile
 import sys
 from unittest.mock import patch
+import os
+import unittest
+if os.name != 'nt':
+    raise unittest.SkipTest('Windows icon API test')
 import e7_shop_refresh_gui as gui
 from e7_windows_icon import WindowIcons
 

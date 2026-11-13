@@ -17,6 +17,10 @@ import wave
 from types import SimpleNamespace
 from unittest.mock import patch, Mock
 
+if os.name != "nt" and "winsound" not in sys.modules:
+    # Lets patch("winsound.PlaySound") work off Windows; the GUI imports this stub.
+    import e7_sound
+    sys.modules["winsound"] = e7_sound
 import e7_shop_refresh_gui as gui
 from e7_setup import REFERENCE_NAMES
 from e7_window_preview import GameWindow
@@ -238,7 +242,7 @@ class GuiTests(unittest.TestCase):
         self.assertIn('Unavailable during calibration', self.app.remaining_time.get())
 
     def test_open_logs_uses_current_session_and_handles_missing_folder(self):
-        with patch.object(gui.os, 'startfile') as open_folder:
+        with patch.object(gui.os, 'startfile', create=True) as open_folder:
             self.app.control_mode.set('Mouse')
             self.app._open_logs_folder()
             self.assertEqual(open_folder.call_args.args[0], str((self.root/'mouse-session-logs').resolve()))
@@ -253,7 +257,7 @@ class GuiTests(unittest.TestCase):
     def test_open_logs_disabled_during_mouse_run_but_available_for_adb(self):
         self.app.process = Mock()
         self.app.process.poll.return_value = None
-        with patch.object(gui.os, 'startfile') as open_folder:
+        with patch.object(gui.os, 'startfile', create=True) as open_folder:
             self.app.control_mode.set('Mouse')
             self.app._set_controls(True)
             self.assertTrue(self.app.open_logs_button.instate(['disabled']))
@@ -267,7 +271,7 @@ class GuiTests(unittest.TestCase):
         self.app.process = None
 
     def test_open_logs_failure_is_reported_without_starting_an_engine(self):
-        with patch.object(gui.os, 'startfile', side_effect=OSError('Fixture failure')), patch.object(gui.messagebox, 'showerror') as error:
+        with patch.object(gui.os, 'startfile', create=True, side_effect=OSError('Fixture failure')), patch.object(gui.messagebox, 'showerror') as error:
             self.app._open_logs_folder()
         self.assertIn('Fixture failure', error.call_args.args[1])
         self.assertIsNone(self.app.process)
@@ -719,6 +723,8 @@ class GuiTests(unittest.TestCase):
         self.app._apply_mouse_windows([], '')
         self.assertIn('No game window found', self.app.connection_warning)
         self.assertTrue(self.app.start_button.instate(['disabled']))
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows Mouse mode')
 
     def test_mouse_background_scan_keeps_preparation_guidance(self):
         target = self.choose_mouse_fixture()
@@ -1190,6 +1196,8 @@ class GuiTests(unittest.TestCase):
         current.kill.assert_not_called()
         self.app.process = None
 
+    @unittest.skipUnless(os.name == 'nt', 'needs a window manager that honours resizes')
+
     def test_layout_moves_history_and_restores_it_after_resize(self):
         self.app.deiconify()
         scale = self.app.ui_scale
@@ -1235,6 +1243,8 @@ time.sleep(30)
         self.assertEqual(self.app.elapsed.get(), elapsed)
         self.assertEqual(str(self.app.start_button.cget('state')), 'normal')
         self.assertIsNone(self.app.started_at)
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows API test')
 
     def test_shutdown_kills_child_holding_output_pipe(self):
         child_pid = self.root / 'child.pid'
@@ -1327,6 +1337,8 @@ time.sleep(30)
         self.assertEqual(self.app.mystic.get(), '1')
         events = [self.app.activity.item(item)['values'][1] for item in self.app.activity.get_children()]
         self.assertFalse(any('Friendship' in str(event) for event in events))
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows API test')
 
     def test_owned_engine_runs_below_normal_priority(self):
         self.start_fake(stall=True)

@@ -82,6 +82,8 @@ def resolve_engine_directory(override=None, *, environ=None, location_file=None)
     selected = selected.strip()
     if not selected:
         raise ValueError("The selected engine folder is empty. Set directory to the installed engine folder.")
+    # %VAR% is the Windows form; accept it everywhere so one saved setting works on both.
+    selected = re.sub(r"%([A-Za-z_][A-Za-z0-9_]*)%", lambda m: os.environ.get(m.group(1), m.group(0)), selected)
     directory = Path(os.path.expandvars(selected)).expanduser()
     if not directory.is_absolute():
         directory = location_file.parent / directory
@@ -567,16 +569,16 @@ class RefreshGui(tk.Tk):
         if not self.sound_enabled.get():
             return
         try:
-            if os.name == "nt":
+            try:
                 import winsound
-                sound = ASSET_DIR / ("start.wav" if outcome == "started" else "end.wav")
-                if sound.is_file():
-                    winsound.PlaySound(str(sound), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
-                else:
-                    alias = "SystemAsterisk" if outcome == "started" else "SystemExclamation"
-                    winsound.PlaySound(alias, winsound.SND_ALIAS | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+            except ImportError:
+                import e7_sound as winsound
+            sound = ASSET_DIR / ("start.wav" if outcome == "started" else "end.wav")
+            if sound.is_file():
+                winsound.PlaySound(str(sound), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
             else:
-                self.bell()
+                alias = "SystemAsterisk" if outcome == "started" else "SystemExclamation"
+                winsound.PlaySound(alias, winsound.SND_ALIAS | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
         except (OSError, RuntimeError):
             self._append_log("\nThe session sound could not be played.\n")
 
@@ -1914,7 +1916,11 @@ class RefreshGui(tk.Tk):
             'mouse-session-logs' if self.control_mode.get() == 'Mouse' else 'input-session-logs')
         try:
             folder.mkdir(parents=True, exist_ok=True)
-            os.startfile(str(folder.resolve()), 'open')
+            if hasattr(os, 'startfile'):
+                os.startfile(str(folder.resolve()), 'open')
+            else:
+                subprocess.Popen(['xdg-open', str(folder.resolve())], stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         except OSError as error:
             messagebox.showerror('Could not open logs folder', str(error), parent=self)
 

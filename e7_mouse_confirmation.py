@@ -31,13 +31,59 @@ def level_box(box, angle, size):
     return [x-half_width, y-half_height, x+half_width, y+half_height]
 
 
-def read_ui_text(rgb, region, *, scale=1, contrast=False):
+def _windows_ocr(path):
+    """Built-in Windows OCR through the bundled PowerShell helper."""
     helper = Path('mouse_confirmation_ocr.ps1')
     if not helper.is_file():
         raise ValueError('The Mouse confirmation helper is missing. Use the complete player folder.')
     script = helper.read_text(encoding='utf-8-sig')
     encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
     powershell = Path(os.environ['WINDIR'])/'System32/WindowsPowerShell/v1.0/powershell.exe'
+    environment = dict(os.environ); environment['E7_MOUSE_OCR_FRAME'] = str(path)
+    child = subprocess.run([str(powershell),'-NoProfile','-NonInteractive','-EncodedCommand',encoded],
+                           env=environment,capture_output=True,text=True,
+                           encoding='utf-8',timeout=10,creationflags=subprocess.CREATE_NO_WINDOW)
+    if child.returncode:
+        raise ValueError('Windows could not read the confirmation. No confirmation click sent.')
+    return json.loads(child.stdout)
+
+
+# Tesseract reads small game UI text best upscaled, in sparse-text mode
+# (measured on Steam/Proton frames: names, "1/1 Buy", prices and stock lines).
+TESSERACT_SCALE = 2
+
+
+def _tesseract_ocr(path, *, upscale=TESSERACT_SCALE):
+    """Tesseract with the same result shape as Windows OCR (words in crop pixels)."""
+    import csv, io, shutil
+    program = shutil.which('tesseract')
+    if program is None:
+        raise ValueError('Tesseract OCR is not installed (Debian/Ubuntu/Mint: tesseract-ocr). No confirmation click sent.')
+    with Image.open(path) as image:
+        gray = image.convert('L')
+        if upscale != 1:
+            gray = gray.resize((gray.width*upscale,gray.height*upscale),Image.Resampling.BICUBIC)
+        gray.save(path)
+    child = subprocess.run([program,str(path),'stdout','--psm','11','-l','eng','tsv'],
+                           capture_output=True,text=True,encoding='utf-8',timeout=20)
+    if child.returncode:
+        raise ValueError('Tesseract could not read the frame. No confirmation click sent.')
+    lines, words = {}, []
+    for row in csv.DictReader(io.StringIO(child.stdout),delimiter='\t',quoting=csv.QUOTE_NONE):
+        text = (row.get('text') or '').strip()
+        if row.get('level') != '5' or not text:
+            continue
+        x,y,w,h = (int(row[key])/upscale for key in ('left','top','width','height'))
+        words.append(dict(text=text,box=[x,y,x+w,y+h]))
+        lines.setdefault((row['block_num'],row['par_num'],row['line_num']),[]).append(text)
+    return dict(text='\n'.join(' '.join(line) for line in lines.values()),angle=None,words=words)
+
+
+def ocr_backend():
+    return 'windows' if os.name == 'nt' and os.environ.get('E7_OCR','').lower() != 'tesseract' else 'tesseract'
+
+
+def read_ui_text(rgb, region, *, scale=1, contrast=False):
     # Only this temporary crop is removed on exit; no runtime captures/settings
     # are read, moved or deleted. The text is kept in memory and not logged.
     with tempfile.TemporaryDirectory(prefix='e7-confirm-') as temp:
@@ -49,14 +95,13 @@ def read_ui_text(rgb, region, *, scale=1, contrast=False):
         if scale != 1:
             crop = crop.resize((crop.width*scale,crop.height*scale),Image.Resampling.BICUBIC)
         crop.save(path)
-        environment = dict(os.environ); environment['E7_MOUSE_OCR_FRAME'] = str(path)
-        child = subprocess.run([str(powershell),'-NoProfile','-NonInteractive','-EncodedCommand',encoded],
-                               env=environment,capture_output=True,text=True,
-                               encoding='utf-8',timeout=10,creationflags=subprocess.CREATE_NO_WINDOW)
-    if child.returncode:
-        raise ValueError('Windows could not read the confirmation. No confirmation click sent.')
+        try:
+            result = _windows_ocr(path) if ocr_backend() == 'windows' else _tesseract_ocr(path)
+        except subprocess.TimeoutExpired:
+            raise ValueError('Text recognition timed out. No confirmation click sent.') from None
+        except json.JSONDecodeError:
+            raise ValueError('The confirmation text was unreadable. No confirmation click sent.') from None
     try:
-        result = json.loads(child.stdout)
         result['text'] = str(result['text']).lower()
         size = (crop.width,crop.height)
         result['words'] = [dict(text=str(word['text']).lower(),
