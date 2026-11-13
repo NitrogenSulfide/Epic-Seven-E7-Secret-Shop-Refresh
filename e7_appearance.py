@@ -188,6 +188,9 @@ class Scenery:
     def schedule(self, event=None):
         if Image is None or not getattr(self,'sources',{}):
             return
+        tracker = getattr(self.root, 'tracker', None)
+        if tracker is not None and tracker.active:
+            return  # The full window is hidden; render once it returns.
         # Root moves do not change the relative artwork coordinates.
         if event is not None and event.widget is self.root and self.cache_key == (
                 self.root.winfo_width(), self.root.winfo_height(), self.root.dark_mode.get()):

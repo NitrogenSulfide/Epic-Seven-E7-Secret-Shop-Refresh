@@ -3,6 +3,7 @@ import configparser
 import hashlib
 import json
 import math
+import re
 import os
 from pathlib import Path
 import subprocess
@@ -34,6 +35,21 @@ if not BUILTIN_ASSETS.is_dir():
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_release_builder_stages_every_gui_module(self):
+        # build_release.ps1 copies an explicit file list; a module missing
+        # from it breaks the packaged GUI at startup.
+        repo = Path(__file__).resolve().parent
+        staged = set(re.findall(r"'(e7_[a-z_]+)\.py'", (repo/'build_release.ps1').read_text(encoding='utf-8')))
+        seen, todo = set(), ['e7_shop_refresh_gui']
+        while todo:
+            name = todo.pop()
+            if name in seen or not (repo/f'{name}.py').is_file():
+                continue
+            seen.add(name)
+            todo += re.findall(r'^\s*(?:from|import)\s+(e7_[a-z_]+)', (repo/f'{name}.py').read_text(encoding='utf-8'), re.M)
+        # e7_sound is the Linux sound fallback; Windows uses winsound.
+        self.assertEqual(seen - staged - {'e7_sound'}, set())
+
     def test_navigation_evidence_is_shown_without_starting_a_gui(self):
         details, events = [], []
         app = SimpleNamespace(detail=SimpleNamespace(set=details.append), _event=events.append,
@@ -1142,6 +1158,70 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(self.history.read_bytes(), original)
         self.start_fake()
         self.pump_until(lambda: self.app.status.get() == "Finished")
+
+    def show_full_window(self):
+        self.app.deiconify()
+        self.app.geometry('1200x800+40+30')
+        self.pump_until(lambda: self.app.winfo_viewable() and self.app.winfo_width() > 1000)
+        return self.app.geometry()
+
+    def test_compact_tracker_shrinks_on_start_and_restores_on_stop(self):
+        full = self.show_full_window()
+        self.start_fake(stall=True)
+        self.pump_until(lambda: self.app.tracker.active)
+        self.app.update_idletasks()
+        self.assertEqual(self.app.status.get(), 'Running')
+        self.assertFalse(self.app.body_frame.winfo_ismapped())
+        self.assertTrue(self.app.tracker.frame.winfo_ismapped())
+        self.assertLess(self.app.winfo_height(), 200)
+        self.assertTrue(self.app.attributes('-topmost'))
+        self.app.tracker.stop_button.invoke()
+        self.pump_until(lambda: self.app.status.get() == 'Stopped')
+        self.assertFalse(self.app.tracker.active)
+        self.assertFalse(self.app.attributes('-topmost'))
+        self.app.update_idletasks()
+        self.assertTrue(self.app.body_frame.winfo_ismapped())
+        self.assertEqual(self.app.geometry().split('+')[0], full.split('+')[0])
+
+    def test_compact_tracker_restores_when_session_finishes(self):
+        self.show_full_window()
+        self.start_fake()
+        self.pump_until(lambda: self.app.status.get() == 'Finished')
+        self.assertFalse(self.app.tracker.active)
+        self.assertTrue(self.app.body_frame.winfo_ismapped())
+        self.assertEqual(self.app.covenant.get(), '1')
+
+    def test_compact_tracker_close_button_restores_without_stopping(self):
+        self.show_full_window()
+        self.start_fake(stall=True)
+        self.pump_until(lambda: self.app.tracker.active)
+        self.app._close()
+        self.assertFalse(self.app.tracker.active)
+        self.assertIsNone(self.app.process.poll())
+        self.assertEqual(self.app.status.get(), 'Running')
+
+    def test_compact_tracker_preference_off_keeps_full_window(self):
+        self.show_full_window()
+        self.app.tracker_button.invoke()
+        self.assertFalse(self.app.compact_tracker.get())
+        self.assertIn('compact_tracker = False', self.gui_config.read_text(encoding='utf-8'))
+        self.start_fake(stall=True)
+        self.pump_until(lambda: self.app.status.get() == 'Running')
+        self.app.update()
+        self.assertFalse(self.app.tracker.active)
+        self.assertTrue(self.app.body_frame.winfo_ismapped())
+
+    def test_compact_tracker_shortens_remaining_time(self):
+        from e7_tracker import short_remaining
+        self.assertEqual(short_remaining('Time remaining: ~12m 05s'), '12m 05s left')
+        self.assertEqual(short_remaining('Time remaining: Estimating…'), 'Estimating…')
+        self.assertEqual(short_remaining('Time remaining: Paused · ~3m 00s'), 'Paused · ~3m 00s')
+
+    def test_compact_tracker_leaves_hidden_window_alone(self):
+        self.start_fake(stall=True)
+        self.pump_until(lambda: self.app.status.get() == 'Running')
+        self.app.update()
+        self.assertFalse(self.app.tracker.active)
 
     def test_invalid_settings_do_not_launch(self):
         self.app.budget.set("nan")

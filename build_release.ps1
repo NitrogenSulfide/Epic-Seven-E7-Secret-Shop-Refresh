@@ -40,6 +40,7 @@ $mapping = [ordered]@{
     'e7_links.py' = 'e7_links.py'
     'e7_appearance.py' = 'e7_appearance.py'
     'e7_about.py' = 'e7_about.py'
+    'e7_tracker.py' = 'e7_tracker.py'
     'e7_setup.py' = 'e7_setup.py'
     'e7_connection.py' = 'e7_connection.py'
     'e7_windows_capture.py' = 'e7_windows_capture.py'

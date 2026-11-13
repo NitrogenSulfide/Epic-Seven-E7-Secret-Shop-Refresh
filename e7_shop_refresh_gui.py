@@ -26,6 +26,7 @@ from e7_session_estimate import SessionEstimate
 from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon, avatar_icon, coffee_icon, github_icon, bug_icon
 from e7_links import PROFILE, release_url, bug_report_url
 from e7_about import AboutDialog
+from e7_tracker import CompactTracker
 from e7_setup import missing_references, has_builtin_references, RecognitionSetup, verify_setup_engine
 from e7_native_mouse import activate_native_target, release_native_button, MouseElevationRequired
 from e7_elevation import restart_as_administrator, ElevationCancelled
@@ -189,6 +190,7 @@ class RefreshGui(tk.Tk):
         self._finalized_run_id = None
         self.stop_key_pressed = False
         self.sound_enabled = tk.BooleanVar(value=True)
+        self.compact_tracker = tk.BooleanVar(value=True)
         self.dark_mode = tk.BooleanVar(value=False)
         self.credits_seen = tk.BooleanVar(value=False)
         self.credits_on_startup = tk.BooleanVar(value=False)
@@ -263,6 +265,8 @@ class RefreshGui(tk.Tk):
         self._load_config()
         self._build_ui()
         self.scenery = Scenery(self, ASSET_DIR)
+        self.tracker = CompactTracker(self, ASSET_DIR, (self.header_frame, self.body_frame))
+        self.status.trace_add('write', lambda *_: self.tracker.status_changed())
         self._apply_theme()
         self._update_home_ui_hint()
         self._load_icon()
@@ -556,6 +560,8 @@ class RefreshGui(tk.Tk):
         self._schedule_layout()
 
     def _schedule_layout(self, _event=None):
+        if getattr(self, 'tracker', None) is not None and self.tracker.active:
+            return  # Hidden widgets report 1-pixel sizes; lay out after restore.
         if self._layout_job is not None:
             self.after_cancel(self._layout_job)
         self._layout_job = self.after(35, self._layout_dashboard)
@@ -669,7 +675,7 @@ class RefreshGui(tk.Tk):
         self.configure(bg="#f3f5f8")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
-        header = ttk.Frame(self, padding=(dp(24), dp(16), dp(24), dp(12)))
+        self.header_frame = header = ttk.Frame(self, padding=(dp(24), dp(16), dp(24), dp(12)))
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(0, weight=1)
         ttk.Label(header, text="Secret Shop", style="Title.TLabel").grid(row=0, column=0, sticky="w")
@@ -705,7 +711,7 @@ class RefreshGui(tk.Tk):
         self.theme_button = ttk.Button(header_actions, command=self._toggle_dark_mode, width=3, padding=dp(8), cursor='hand2', takefocus=True)
         self.theme_button.pack(side='left')
         self.theme_hint = ThemeHint(self.theme_button, lambda: 'Switch to light mode' if self.dark_mode.get() else 'Switch to dark mode')
-        body = ttk.Frame(self, padding=(dp(24), 0, dp(24), dp(20)))
+        self.body_frame = body = ttk.Frame(self, padding=(dp(24), 0, dp(24), dp(20)))
         body.grid(row=1, column=0, sticky="nsew")
         body.columnconfigure(1, weight=1)
         body.rowconfigure(0, weight=1)
@@ -798,7 +804,10 @@ class RefreshGui(tk.Tk):
         self.settings_widgets.append(self.save_button)
         self.sound_button = ttk.Checkbutton(action_dock, text="Sounds on start and end", variable=self.sound_enabled, style="Large.TCheckbutton", command=self._save_sound_preference)
         self.sound_button.grid(row=2, column=0, columnspan=2, sticky="w", pady=(dp(6), 0))
-        ttk.Label(action_dock, textvariable=self.setting_notice, style="Muted.TLabel", wraplength=dp(350)).grid(row=3, column=0, columnspan=2, sticky="w", pady=(dp(4), 0))
+        self.tracker_button = ttk.Checkbutton(action_dock, text="Compact tracker while running", variable=self.compact_tracker, style="Large.TCheckbutton", command=self._save_tracker_preference)
+        self.tracker_button.grid(row=3, column=0, columnspan=2, sticky="w", pady=(dp(6), 0))
+        ThemeHint(self.tracker_button, lambda: 'Shrink to a small always-on-top bar once the engine starts; returns when the session ends')
+        ttk.Label(action_dock, textvariable=self.setting_notice, style="Muted.TLabel", wraplength=dp(350)).grid(row=4, column=0, columnspan=2, sticky="w", pady=(dp(4), 0))
         estimate = ttk.LabelFrame(self.settings_details, text="Budget estimate", padding=dp(8))
         estimate.grid(row=1, column=0, sticky="ew")
         ttk.Label(estimate, textvariable=self.ev, wraplength=dp(320), justify=tk.LEFT).grid(sticky="w")
@@ -1004,6 +1013,7 @@ class RefreshGui(tk.Tk):
             parser.read(GUI_CONFIG_FILE)
             self.sound_enabled.set(parser.getboolean("GUI", "sound_enabled", fallback=True))
             self.trace_input.set(parser.getboolean('GUI', 'trace_input', fallback=False))
+            self.compact_tracker.set(parser.getboolean('GUI', 'compact_tracker', fallback=True))
             self.buy_friendship.set(parser.getboolean('GUI', 'buy_friendship', fallback=False))
             self.dark_mode.set(parser.getboolean("GUI", "dark_mode", fallback=False))
             self.credits_seen.set(parser.getboolean("GUI", "credits_seen", fallback=False))
@@ -1027,6 +1037,7 @@ class RefreshGui(tk.Tk):
             parser.add_section("GUI")
         parser["GUI"]["sound_enabled"] = str(self.sound_enabled.get())
         parser['GUI']['trace_input'] = str(self.trace_input.get())
+        parser['GUI']['compact_tracker'] = str(self.compact_tracker.get())
         parser['GUI']['buy_friendship'] = str(self.buy_friendship.get())
         parser["GUI"]["dark_mode"] = str(self.dark_mode.get())
         parser["GUI"]["credits_seen"] = str(self.credits_seen.get())
@@ -1047,6 +1058,14 @@ class RefreshGui(tk.Tk):
         except (OSError, configparser.Error) as exc:
             self.setting_notice.set("Sound changed for this session; preference could not be saved.")
             self._append_log(f"Sound preference save failed: {exc}\n")
+
+    def _save_tracker_preference(self):
+        try:
+            self._write_sound_preference()
+            self.setting_notice.set("Compact tracker on." if self.compact_tracker.get() else "Compact tracker off.")
+        except (OSError, configparser.Error) as exc:
+            self.setting_notice.set("Tracker changed for this session; preference could not be saved.")
+            self._append_log(f"Tracker preference save failed: {exc}\n")
 
     def _save_trace_preference(self):
         try:
@@ -1591,6 +1610,9 @@ class RefreshGui(tk.Tk):
         self.progress_text.set("Calibration in progress · engine uses 100 skystone" if self.run_settings.debug else "Waiting for the engine’s first progress update…")
         self._event("Calibration started. Check the image window." if self.run_settings.debug else "Engine ready. Checking Secret Shop.")
         self._play_session_sound("started")
+        # Calibration needs the full window beside its image windows.
+        if self.compact_tracker.get() and not self.run_settings.debug:
+            self.tracker.enter(friendship=self.run_settings.buy_friendship)
 
     def _freeze_elapsed(self):
         if self.started_at is not None:
@@ -2173,6 +2195,9 @@ class RefreshGui(tk.Tk):
         self._update_spent_display()
 
     def _close(self):
+        if self.tracker.active:
+            self.tracker.restore()  # Closing the bar shows the full window; it does not stop the session.
+            return
         self._connection_check_id += 1
         self._checking_connection = False
         if self.process and self.process.poll() is None:

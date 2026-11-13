@@ -1,5 +1,6 @@
 """Local welcome, attribution and licence view; links open only on user clicks."""
 from pathlib import Path
+import os
 import tkinter as tk
 from tkinter import ttk
 import webbrowser
@@ -63,7 +64,7 @@ class AboutDialog(tk.Toplevel):
             self.colored.append(avatar)
         for row, (text, font) in enumerate((('E7 Secret Shop Refresh', ('Segoe UI',18,'bold')),
                            ('by NitrogenSulfide (Blue Natto)', app.heading_font),
-                           (f'{read_document(project / "VERSION").strip()} · Windows', app.ui_font))):
+                           (f'{read_document(project / "VERSION").strip()} · {"Windows" if os.name == "nt" else "Linux"}', app.ui_font))):
             label = tk.Label(header, text=text, font=font, anchor='w')
             label.grid(row=row,column=text_column,sticky='ew',pady=(0,dp(3)))
             self.colored.append(label)

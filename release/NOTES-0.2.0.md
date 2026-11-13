@@ -22,6 +22,11 @@ it, just before the click. Windows text recognition keeps one reader running
 instead of starting one per read. Measured on Windows Steam at 2560 × 1440, a
 refresh takes about 5–6.5 seconds, down from about 8.5. ADB keeps its fixed waits.
 
+**Compact tracker.** Once the engine starts, the window shrinks in place to a small
+always-on-top bar showing purchases, Skystones spent, time left and a Stop button.
+The full window comes back when the session stops, finishes or needs attention, or
+from the bar's expand button. Turn it off with "Compact tracker while running".
+
 Start and end sounds are 10 dB quieter. 0.2.0 also includes every 0.1.4 trial
 change (rc1–rc9): remaining-time estimates, the global Stop key, optional
 Friendship Points purchases, BlueStacks fixes, pre-purchased row recognition and
