@@ -391,8 +391,105 @@ def recheck_mouse_action(action):
     return checked
 
 
+# Shop item list (normalized 1920x1080), compared at 1/8 size.
+LIST_REGION = (760,110,1880,1080)
+LIST_STILL = 1.5   # mean grey change between frames of a list at rest
+LIST_MOVED = 4.0   # mean grey change once the list shows something new
+LIST_REST_SECONDS = .2  # how long the list must stay unchanged to count as settled
+
+
+def list_view(rgb):
+    left,top,right,bottom = LIST_REGION
+    grey = cv2.cvtColor(rgb[top:bottom,left:right],cv2.COLOR_RGB2GRAY)
+    return cv2.resize(grey,((right-left)//8,(bottom-top)//8),interpolation=cv2.INTER_AREA).astype(np.int16)
+
+
 class ObservedShopFlow:
+    # Mouse and Background capture the game cheaply, so their waits end as soon
+    # as the screen shows the expected state, with the old fixed time as the
+    # upper bound, and the tap delay becomes the minimum gap between clicks.
+    # ADB keeps its fixed waits.
+    fast_waits = False
+    POLL_SECONDS = .1
+
+    def _pace_tap(self, action):
+        last = getattr(self, '_last_tap', None)
+        if not self.fast_waits or last is None:
+            return
+        delay = self.generateTapDelay()
+        remaining = delay-(time.monotonic()-last)
+        if remaining > 0:
+            self._wait_observed(remaining, action+' pacing', baseline=self.tap_sleep)
+        # The caller paced before its final check; the click itself must not wait again.
+        self._paced = True
+
+    def _poll_wait(self, action):
+        """Fixed tap delay for ADB; a short poll interval for fast transports."""
+        if self.fast_waits:
+            self.wait(self.POLL_SECONDS)
+        else:
+            self._wait_tap_delay(action)
+
+    def _settled_screenshot(self, seconds, action, *, changed_from=None):
+        """Capture the shop once its item list has come to rest.
+
+        ADB waits `seconds` and captures. Fast transports poll: when
+        `changed_from` (an earlier frame) is given, the list must first differ
+        from it; then it must stay unchanged for LIST_REST_SECONDS and show at
+        least three Buy buttons. `seconds` stays the upper bound, and the poll
+        count is capped too so a stalled clock cannot loop forever.
+        """
+        if not self.fast_waits:
+            self._wait_observed(seconds, action)
+            return self.takeScreenshot() if self.loop_active else None
+        started = time.monotonic()
+        deadline = started+seconds
+        before = None if changed_from is None else list_view(changed_from)
+        changed, previous, previous_at, still_since, settled, polls = before is None, None, None, None, False, 0
+        still_steps = 0  # consecutive unchanged frames; each poll waits POLL_SECONDS, so 2 steps >= LIST_REST_SECONDS
+        max_polls = math.ceil(seconds/self.POLL_SECONDS)+2
+        readings = []  # (moved from changed_from, change from previous frame) per poll, for the trace
+        frame = None
+        while self.loop_active and polls < max_polls and time.monotonic() < deadline:
+            frame = self.takeScreenshot(); polls += 1
+            captured_at = time.monotonic()
+            current = list_view(self._rgb)
+            moved = None if before is None else float(np.mean(np.abs(current-before)))
+            step = None if previous is None else float(np.mean(np.abs(current-previous)))
+            readings.append([None if moved is None else round(moved,2), None if step is None else round(step,2)])
+            if not changed and moved >= LIST_MOVED:
+                changed = True
+            if step is not None and step < LIST_STILL:
+                still_since = previous_at if still_since is None else still_since
+                still_steps += 1
+            else:
+                still_since, still_steps = None, 0
+            previous, previous_at = current, captured_at
+            if (changed and still_since is not None
+                    and (captured_at-still_since >= LIST_REST_SECONDS or still_steps >= 2)
+                    and len(green_buttons(self._rgb,(1480,110,1880,1080))) >= 3):
+                settled = True
+                break
+            self.wait(max(0, min(self.POLL_SECONDS, deadline-time.monotonic())))
+        if self.loop_active and not settled:
+            frame = self.takeScreenshot()
+        trace = getattr(self, 'input_trace', None)
+        if trace is not None and trace.enabled:
+            trace.emit('delay', action=action, baseline_ms=None, requested_ms=seconds*1000,
+                       elapsed_ms=(time.monotonic()-started)*1000, interrupted=not self.loop_active,
+                       settled=settled, polls=polls, readings=readings)
+        return frame if self.loop_active else None
+
     def _tap_observed(self, x, y, *, anchor=None, action='navigation'):
+        if not getattr(self, '_paced', False):
+            self._pace_tap(action)
+        self._paced = False
+        try:
+            return self._tap_traced(x, y, anchor=anchor, action=action)
+        finally:
+            self._last_tap = time.monotonic()
+
+    def _tap_traced(self, x, y, *, anchor=None, action='navigation'):
         trace = getattr(self, 'input_trace', None)
         if trace is None or not trace.enabled:
             return self.tap(x, y)
@@ -659,7 +756,7 @@ class ObservedShopFlow:
         text_rejected = False
         visibility_rechecks = 0
         while self.loop_active and time.monotonic()<deadline:
-            self._wait_tap_delay(operation+' dialog')
+            self._poll_wait(operation+' dialog')
             if not self.loop_active:
                 return False
             self.takeScreenshot()
@@ -675,6 +772,11 @@ class ObservedShopFlow:
                     text_rejected = True
                     self._trace_retry()
                     continue
+                if not self.loop_active:
+                    return False
+                # Wait out the tap delay first, so the fresh capture below is
+                # the last check before the click.
+                self._pace_tap(operation+' confirm')
                 if not self.loop_active:
                     return False
                 # Revalidate the intended action on a fresh capture. Artwork
@@ -717,7 +819,7 @@ class ObservedShopFlow:
             raise MouseStopped(f'The {operation} confirmation was not recognized. No confirmation click sent.'+detail)
         deadline = time.monotonic()+5
         while self.loop_active and time.monotonic()<deadline:
-            self._wait_tap_delay(operation+' shop return')
+            self._poll_wait(operation+' shop return')
             if not self.loop_active:
                 return False
             frame = self.takeScreenshot()
@@ -778,6 +880,8 @@ class ObservedShopFlow:
         if not points or any(abs(x-points[0][0])>8 or abs(y-points[0][1])>8 for x,y in points):
             raise MouseStopped('The Refresh target was not recognized. No click sent.')
         before = self._rgb.copy()
+        # The next list settle waits for the new items, not this page.
+        self._list_before = before
         x,y = points[0]
         anchor = (x,y)
         # Limit the vertical search to the recognized label: native background

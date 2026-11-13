@@ -1,12 +1,16 @@
 """Read confirmation text locally; never move the pointer or contact the game."""
-import json
+import atexit
 import base64
+import copy
+import json
 import math
 import os
 from pathlib import Path
+import queue
 import re
 import subprocess
 import tempfile
+import threading
 from PIL import Image, ImageOps
 import numpy as np
 
@@ -31,17 +35,85 @@ def level_box(box, angle, size):
     return [x-half_width, y-half_height, x+half_width, y+half_height]
 
 
-def _windows_ocr(path):
-    """Built-in Windows OCR through the bundled PowerShell helper."""
+def _powershell_command():
     helper = Path('mouse_confirmation_ocr.ps1')
     if not helper.is_file():
         raise ValueError('The Mouse confirmation helper is missing. Use the complete player folder.')
     script = helper.read_text(encoding='utf-8-sig')
     encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
     powershell = Path(os.environ['WINDIR'])/'System32/WindowsPowerShell/v1.0/powershell.exe'
+    return [str(powershell),'-NoProfile','-NonInteractive','-EncodedCommand',encoded]
+
+
+class _OcrServer:
+    """One persistent Windows OCR process: PowerShell and WinRT start once,
+    not on every read. Any failure closes it; callers then use a one-shot read."""
+
+    def __init__(self, command, *, popen=subprocess.Popen):
+        environment = dict(os.environ); environment['E7_MOUSE_OCR_SERVE'] = '1'
+        self.process = popen(command,env=environment,stdin=subprocess.PIPE,stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL,text=True,encoding='utf-8',bufsize=1,
+                             creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        self.replies = queue.Queue()
+        def pump(stream=self.process.stdout, replies=self.replies):
+            for line in stream:
+                replies.put(line)
+            replies.put(None)
+        threading.Thread(target=pump,name='E7 OCR',daemon=True).start()
+
+    def read(self, path, timeout=10):
+        self.process.stdin.write(str(path)+'\n'); self.process.stdin.flush()
+        try:
+            line = self.replies.get(timeout=timeout)
+        except queue.Empty:
+            line = None
+        if line is None:
+            raise OSError('The OCR process stopped answering.')
+        result = json.loads(line)
+        if isinstance(result,dict) and 'error' in result:
+            raise ValueError(str(result['error']))
+        return result
+
+    def close(self):
+        try:
+            self.process.stdin.close()
+            self.process.wait(timeout=2)
+        except Exception:
+            self.process.kill()
+
+
+_ocr_server = None
+_ocr_server_lock = threading.Lock()
+
+
+def close_ocr_server():
+    global _ocr_server
+    with _ocr_server_lock:
+        server, _ocr_server = _ocr_server, None
+    if server:
+        server.close()
+
+
+atexit.register(close_ocr_server)
+
+
+def _windows_ocr(path):
+    """Built-in Windows OCR through the bundled PowerShell helper."""
+    global _ocr_server
+    command = _powershell_command()
+    with _ocr_server_lock:
+        try:
+            if _ocr_server is None and os.environ.get('E7_OCR_SERVER','1') != '0':
+                _ocr_server = _OcrServer(command)
+            if _ocr_server:
+                return _ocr_server.read(path)
+        except (OSError, ValueError):
+            # Fall back to the one-shot read below and keep using it.
+            if _ocr_server:
+                _ocr_server.close()
+            _ocr_server = False
     environment = dict(os.environ); environment['E7_MOUSE_OCR_FRAME'] = str(path)
-    child = subprocess.run([str(powershell),'-NoProfile','-NonInteractive','-EncodedCommand',encoded],
-                           env=environment,capture_output=True,text=True,
+    child = subprocess.run(command,env=environment,capture_output=True,text=True,
                            encoding='utf-8',timeout=10,creationflags=subprocess.CREATE_NO_WINDOW)
     if child.returncode:
         raise ValueError('Windows could not read the confirmation. No confirmation click sent.')
@@ -83,7 +155,23 @@ def ocr_backend():
     return 'windows' if os.name == 'nt' and os.environ.get('E7_OCR','').lower() != 'tesseract' else 'tesseract'
 
 
+# Reads of the most recent frame. Recognition reads the same dialog region
+# more than once per capture; a new frame (a new array) clears it.
+_frame_reads = {'rgb': None, 'results': {}}
+
+
 def read_ui_text(rgb, region, *, scale=1, contrast=False):
+    key = (tuple(region), scale, bool(contrast))
+    if _frame_reads['rgb'] is not rgb:
+        _frame_reads['rgb'], _frame_reads['results'] = rgb, {}
+    elif key in _frame_reads['results']:
+        return copy.deepcopy(_frame_reads['results'][key])
+    result = _read_ui_text(rgb, region, scale=scale, contrast=contrast)
+    _frame_reads['results'][key] = copy.deepcopy(result)
+    return result
+
+
+def _read_ui_text(rgb, region, *, scale=1, contrast=False):
     # Only this temporary crop is removed on exit; no runtime captures/settings
     # are read, moved or deleted. The text is kept in memory and not logged.
     with tempfile.TemporaryDirectory(prefix='e7-confirm-') as temp:

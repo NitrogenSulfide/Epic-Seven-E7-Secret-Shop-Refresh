@@ -277,13 +277,13 @@ class E7ADBShopRefresh(ObservedShopFlow):
         #refresh loop
         while self.loop_active:
 
-            self._wait_observed(sliding_time, 'inventory settle')
+            changed_from, self._list_before = getattr(self, '_list_before', None), None
+            screenshot = self._settled_screenshot(sliding_time, 'inventory settle', changed_from=changed_from)
             brought = set()
 
             if not self.loop_active: break
             #look at shop (page 1)
             self._scan_page = 1
-            screenshot = self.takeScreenshot()
             self.navigation.require_shop(screenshot)
             #print(len(self.storage.inventory.items()))
             for key, value in self.storage.inventory.items():
@@ -302,14 +302,15 @@ class E7ADBShopRefresh(ObservedShopFlow):
                 self.showOffsetArea(x1, y1, "Please check if red rectangle is in a scrollable area", "start scroll area")    
 
             xoff, yoff = self.generateSwipeOffset()
+            page_one = getattr(self, '_rgb', None)
+            page_one = page_one.copy() if self.fast_waits and page_one is not None else None
             self.swipe(x1+xoff,y1+yoff,x1+xoff,y2+yoff)
             #wait for action to complete
-            self._wait_observed(1, 'scroll settle')
+            screenshot = self._settled_screenshot(1, 'scroll settle', changed_from=page_one)
 
             if not self.loop_active: break
             #look at shop (page 2)
             self._scan_page = 2
-            screenshot = self.takeScreenshot()
             self.navigation.require_shop(screenshot)
             for key, value in self.storage.inventory.items():
                 if key in brought:

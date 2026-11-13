@@ -17,25 +17,41 @@ function Await-Ocr($Operation, $ResultType) {
     $task.Wait()
     $task.Result
 }
-$file = Await-Ocr ([Windows.Storage.StorageFile]::GetFileFromPathAsync($env:E7_MOUSE_OCR_FRAME)) ([Windows.Storage.StorageFile])
-$stream = Await-Ocr ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
-try {
-    $decoder = Await-Ocr ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
-    $bitmap = Await-Ocr ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new('en-US'))
+if ($null -eq $engine) { throw 'English Windows OCR is unavailable.' }
+function Read-Frame($Path) {
+    $file = Await-Ocr ([Windows.Storage.StorageFile]::GetFileFromPathAsync($Path)) ([Windows.Storage.StorageFile])
+    $stream = Await-Ocr ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
     try {
-        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new('en-US'))
-        if ($null -eq $engine) { throw 'English Windows OCR is unavailable.' }
-        $result = Await-Ocr ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
-        $words = @($result.Lines | ForEach-Object {
-            $_.Words | ForEach-Object {
-                @{ text = $_.Text; box = @($_.BoundingRect.X, $_.BoundingRect.Y,
-                    ($_.BoundingRect.X + $_.BoundingRect.Width), ($_.BoundingRect.Y + $_.BoundingRect.Height)) }
-            }
-        })
-        # Word bounds follow the detected text angle; report it so callers can
-        # map them back to image coordinates.
-        @{ text = $result.Text; angle = $result.TextAngle; words = $words } | ConvertTo-Json -Compress -Depth 5
+        $decoder = Await-Ocr ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+        $bitmap = Await-Ocr ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+        try {
+            $result = Await-Ocr ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
+            $words = @($result.Lines | ForEach-Object {
+                $_.Words | ForEach-Object {
+                    @{ text = $_.Text; box = @($_.BoundingRect.X, $_.BoundingRect.Y,
+                        ($_.BoundingRect.X + $_.BoundingRect.Width), ($_.BoundingRect.Y + $_.BoundingRect.Height)) }
+                }
+            })
+            # Word bounds follow the detected text angle; report it so callers can
+            # map them back to image coordinates.
+            @{ text = $result.Text; angle = $result.TextAngle; words = $words } | ConvertTo-Json -Compress -Depth 5
+        }
+        finally { $bitmap.Dispose() }
     }
-    finally { $bitmap.Dispose() }
+    finally { $stream.Dispose() }
 }
-finally { $stream.Dispose() }
+if ($env:E7_MOUSE_OCR_SERVE -eq '1') {
+    # Persistent mode: one image path per stdin line, one JSON line back, until
+    # stdin closes. Saves PowerShell and WinRT start-up on every read.
+    [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
+    while ($null -ne ($line = [Console]::In.ReadLine())) {
+        try { $reply = Read-Frame $line }
+        catch { $reply = @{ error = "$_" } | ConvertTo-Json -Compress }
+        [Console]::Out.WriteLine($reply)
+        [Console]::Out.Flush()
+    }
+}
+else {
+    Read-Frame $env:E7_MOUSE_OCR_FRAME
+}

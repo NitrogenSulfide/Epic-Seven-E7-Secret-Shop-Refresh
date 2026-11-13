@@ -319,8 +319,12 @@ class SharedFlowTests(unittest.TestCase):
                 with self.subTest(mode=mode,text=text):
                     app,state=self.make_app(mode);state['screen']='shop'
                     app.read_confirmation_text=Mock(return_value=text)
-                    with patch('e7_shop_flow.time.sleep'),patch('e7_shop_flow.time.monotonic',side_effect=[0,0,6]),self.assertRaises(MouseStopped):
+                    # A clock that keeps advancing: the 5 s deadline expires after real reads.
+                    clock=itertools.count()
+                    with patch('e7_shop_flow.time.sleep'),patch('e7_shop_flow.time.monotonic',side_effect=lambda:next(clock)),self.assertRaises(MouseStopped):
                         app.clickRefresh()
+                    # The dialog was read and rejected; the deadline did not expire first.
+                    self.assertTrue(app.read_confirmation_text.called)
                     self.assertEqual([event[0] for event in state['events']],['shop'])
                     self.assertEqual(state['refreshes'],0)
             app,state=self.make_app(mode);state['screen']='shop'

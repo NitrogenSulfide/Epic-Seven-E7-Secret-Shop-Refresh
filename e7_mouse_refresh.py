@@ -27,6 +27,8 @@ from e7_shop_flow import (home_menu_target,home_icon_target,native_home_control_
 
 
 class E7MouseShopRefresh(E7ADBShopRefresh):
+    fast_waits = True
+
     def __init__(self, target, *, transport=None, **settings):
         if settings.get('debug'):
             raise ValueError('Mouse mode uses normal settings. Debug/calibration remains available in ADB mode.')

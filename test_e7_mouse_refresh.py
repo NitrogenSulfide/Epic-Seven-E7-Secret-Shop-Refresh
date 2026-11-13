@@ -3,6 +3,7 @@ import os
 import contextlib
 import ctypes
 import io
+import itertools
 import json
 import math
 from pathlib import Path
@@ -961,22 +962,30 @@ class NativeEngineTests(unittest.TestCase):
         app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (shop(),dialog(),dialog(),shop())]
         with patch('e7_mouse_refresh.time.sleep') as sleep:
             self.assertTrue(app.clickRefresh())
-        self.assertEqual([call.args[0] for call in sleep.call_args_list],[.67,.67])
+        self.assert_paced(sleep,app,.67)
 
     def test_mouse_confirmation_resamples_delay_for_each_tap(self):
         app=self.make_engine();app.random_offset=True
         app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (shop(),dialog(),dialog(),shop())]
         with patch.object(adb_engine.random, 'uniform', side_effect=[-.03,.03]), patch('e7_mouse_refresh.time.sleep') as sleep:
             self.assertTrue(app.clickRefresh())
-        self.assertEqual([round(call.args[0],2) for call in sleep.call_args_list],[.27,.33])
+        self.assert_paced(sleep,app,.27)
         self.assertEqual(app.tap_sleep,.3)
+
+    def assert_paced(self,sleep,app,delay):
+        waits=[call.args[0] for call in sleep.call_args_list]
+        self.assertEqual(len(waits),3,waits)
+        self.assertEqual((waits[0],waits[2]),(app.POLL_SECONDS,app.POLL_SECONDS))
+        self.assertTrue(delay-.05<waits[1]<=delay,waits)
 
     def test_adjustable_mouse_timing_samples_full_selected_range(self):
         app=self.make_engine();app.random_offset=True;app.tap_jitter=.1
         app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (shop(),dialog(),dialog(),shop())]
         with patch.object(adb_engine.random,'uniform',side_effect=[-.1,.1]),patch('e7_mouse_refresh.time.sleep') as sleep:
             self.assertTrue(app.clickRefresh())
-        self.assertEqual([round(call.args[0],2) for call in sleep.call_args_list],[.2,.4])
+        # Dialog and shop-return waits poll; the confirm click is paced by one
+        # draw from the full jitter range, measured from the Refresh click.
+        self.assert_paced(sleep,app,.2)
 
     def test_mouse_cli_rejects_fractional_budget_and_invalid_jitter_before_input(self):
         from e7_mouse_refresh import run_mouse_session
@@ -1297,7 +1306,8 @@ class NativeEngineTests(unittest.TestCase):
                 app=self.make_engine();state=['shop'];attempts=[]
                 app.mouse.screenshot.side_effect=lambda:Image.fromarray(shop() if state[0]=='shop' else dialog())
                 valid='Use Skystone to refresh? Cancel Confirm'
-                app.read_confirmation_text=Mock(side_effect=[valid,valid]+(['Cancel Buy Covenant Bookmarks 184,000']*8 if changed else [valid,valid]))
+                texts=iter([valid,valid]+([] if changed else [valid,valid]))
+                app.read_confirmation_text=Mock(side_effect=lambda rgb:next(texts,'Cancel Buy Covenant Bookmarks 184,000'))
                 def click(x,y):
                     attempts.append(y)
                     if len(attempts)==2:raise MouseRecheckRequired('temporary coverage')
@@ -1305,7 +1315,9 @@ class NativeEngineTests(unittest.TestCase):
                 app.mouse.click.side_effect=click
                 with patch('e7_mouse_refresh.time.sleep'):
                     if changed:
-                        with patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,1,1,2,3,7]),self.assertRaises(MouseStopped):
+                        # A clock that keeps advancing, so the 5 s confirmation deadline always expires.
+                        clock=itertools.count()
+                        with patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)),self.assertRaises(MouseStopped):
                             app.clickRefresh()
                     else:self.assertTrue(app.clickRefresh())
                 self.assertEqual(sum(y>900 for y in attempts),1)

@@ -252,7 +252,7 @@ py -3 -m venv .local-state\engine-build-venv
 
 `-InputHelper` is Background mode's small input helper, compiled from
 `e7_wine_input.c` with MinGW-w64 (`sh build_wine_input.sh` on Linux, or
-`x86_64-w64-mingw32-gcc -O2 -Wall -o e7_wine_input.exe e7_wine_input.c` on
+`x86_64-w64-mingw32-gcc -O2 -Wall -o e7_wine_input.exe e7_wine_input.c -lwinmm` on
 Windows). It is never committed; the builder copies it beside the engine EXE
 and records its hash. `build_release_assets.ps1` takes the same parameter.
 

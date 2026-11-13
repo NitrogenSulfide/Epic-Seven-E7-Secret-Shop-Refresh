@@ -16,6 +16,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
+#include <mmsystem.h>
 
 static HWND game;
 static LONG game_w, game_h;
@@ -64,6 +65,8 @@ static void dpi_aware(void) {
 int main(void) {
     char line[256];
     dpi_aware();
+    /* Windows rounds Sleep up to the 15.6 ms timer tick by default, doubling drag times. */
+    timeBeginPeriod(1);
     setvbuf(stdout, NULL, _IONBF, 0);
     while (fgets(line, sizeof line, stdin)) {
         int x, y, x2, y2, ms;
