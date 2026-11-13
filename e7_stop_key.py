@@ -208,22 +208,28 @@ class X11StopKey:
         self.control.sync()
         keymap=self.control.query_keymap()
         self._down={code for group in self.modifier_codes for code in group if keymap[code//8]>>(code%8)&1}
-        ready=threading.Event()
+        # Armed only once the server acknowledges with StartOfData.
+        self._armed=threading.Event()
         def listen():
             try:
-                ready.set()
                 self.record.record_enable_context(self.context,self._reply)
             except Exception as error:
                 self._error=error
             finally:
-                ready.set()
+                self._armed.set()
         self.thread=threading.Thread(target=listen,name='E7 Stop key',daemon=True)
-        self.thread.start();ready.wait(2)
+        self.thread.start()
+        if not self._armed.wait(5) or self._error is not None or not self.thread.is_alive():
+            error=self._error or 'it did not start'
+            self.__exit__()
+            raise ValueError(f'The global Stop key listener failed ({error}). No refresh input sent.')
         return self
 
     def _reply(self,reply):
         from Xlib.ext import record
         from Xlib.protocol import rq
+        if reply.category==record.StartOfData:
+            self._armed.set();return
         if reply.category!=record.FromServer or reply.client_swapped or not len(reply.data):return
         data=reply.data
         while len(data):
@@ -268,6 +274,10 @@ class X11StopKey:
 
 def stop_key_monitor(key):
     if os.name=='nt':return WindowsStopKey(key)
+    if os.environ.get('WAYLAND_DISPLAY') or os.environ.get('XDG_SESSION_TYPE','').lower()=='wayland':
+        # Under XWayland, RECORD only sees keys typed into X applications.
+        raise ValueError('The global Stop key needs an X11 session; Wayland is not supported yet. '
+                         'Log in to an X11 session. No refresh input sent.')
     if not os.environ.get('DISPLAY'):
         raise ValueError('The global Stop key needs an X11 desktop (DISPLAY is not set). No refresh input sent.')
     return X11StopKey(key)

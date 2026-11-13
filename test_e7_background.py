@@ -165,6 +165,26 @@ class ProtonSessionTest(unittest.TestCase):
                 bg.find_proton_session(proc=Path(tmp))
 
 
+class XGameWindowFindTest(unittest.TestCase):
+    def tree(self, *names):
+        def node(cls=(), name=None, children=()):
+            w = mock.Mock(); w.get_wm_class.return_value = cls; w.get_wm_name.return_value = name
+            w.query_tree.return_value.children = list(children); return w
+        games = [node(('steam_app_5019180',), n) for n in names]
+        finder = object.__new__(bg.XGameWindow)
+        finder.app_class, finder.root = 'steam_app_5019180', node(children=[node(children=[g]) for g in games])
+        return finder, games
+
+    def test_single_game_window_is_found(self):
+        finder, games = self.tree('Epic Seven', 'Steam')
+        self.assertIs(finder._find(), games[0])
+
+    def test_two_game_windows_are_refused(self):
+        finder, _ = self.tree('Epic Seven', 'Epic Seven')
+        with self.assertRaisesRegex(ValueError, 'More than one'):
+            finder._find()
+
+
 class WineInputTest(unittest.TestCase):
     def test_error_replies_become_mouse_stopped(self):
         class Proc:

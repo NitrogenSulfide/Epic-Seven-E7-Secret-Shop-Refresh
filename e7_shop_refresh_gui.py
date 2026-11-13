@@ -60,13 +60,15 @@ try:
 except OSError:
     APP_VERSION = 'unknown'
 STOP_KEY_CHARACTERS = "0123456789abcdefghijklmnopqrstuvwxyz/.,';[]`"
+# Tk event.state bits that mean Control or Alt. Windows Tk: Control=0x4,
+# Alt=0x10 (also ALT_MASK=0x20000); Mod1=0x8 is Num Lock there. X11: Control=0x4,
+# Alt=Mod1=0x8; Mod2=0x10 is Num Lock. Lock states must not reject input.
+STOP_KEY_REJECT_MASK = 0x4 | 0x10 | 0x20000 if os.name == "nt" else 0x4 | 0x8
 
 
 def captured_stop_key(keysym, character, state=0):
     # Control/Alt combinations are not supported by the engine's single-key setting.
-    # Windows Tk: Control=0x4, Alt/Mod2=0x10 (also ALT_MASK=0x20000).
-    # Mod1=0x8 is Num Lock, not Alt; lock states must not reject input.
-    if state & (0x4 | 0x10 | 0x20000):
+    if state & STOP_KEY_REJECT_MASK:
         return None
     if keysym == "Escape":
         return "esc"
@@ -1254,8 +1256,8 @@ class RefreshGui(tk.Tk):
             try:
                 windows, error = (list_background_games() if background
                                   else WindowsCapture().list_windows()), ''
-            except (OSError,ValueError,RuntimeError) as exc:
-                windows, error = [], str(exc)
+            except Exception as exc:  # e.g. Xlib BadWindow when the game closes mid-scan
+                windows, error = [], str(exc) or type(exc).__name__
             self.log_queue.put((None,'windows',(token,windows,error)))
         threading.Thread(target=scan,daemon=True).start()
 
@@ -1803,7 +1805,10 @@ class RefreshGui(tk.Tk):
     def _kill_if_needed(self, process):
         if process is self.process and process.poll() is None:
             try:
-                self.process_tree.close() if self.process_tree else process.kill()
+                if self.process_tree and self.process_tree.handle:
+                    self.process_tree.close()  # Windows: KILL_ON_JOB_CLOSE ends the whole job
+                else:
+                    process.kill()
                 if self._native_mouse_run:
                     release_native_button()
             except OSError as exc:

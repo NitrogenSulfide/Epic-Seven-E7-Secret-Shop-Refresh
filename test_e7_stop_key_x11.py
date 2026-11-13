@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import time
 import unittest
+from unittest.mock import patch
 
 from e7_stop_key import x11_stop_key, stop_key_monitor
 
@@ -23,13 +24,18 @@ class X11KeyNameTests(unittest.TestCase):
 
     @unittest.skipIf(os.name == 'nt', 'Linux only')
     def test_no_display_is_refused(self):
-        saved = os.environ.pop('DISPLAY', None)
-        try:
+        env = {k: v for k, v in os.environ.items() if k not in ('DISPLAY', 'WAYLAND_DISPLAY', 'XDG_SESSION_TYPE')}
+        with patch.dict(os.environ, env, clear=True):
             with self.assertRaisesRegex(ValueError, 'DISPLAY'):
                 stop_key_monitor('`')
-        finally:
-            if saved is not None:
-                os.environ['DISPLAY'] = saved
+
+
+    @unittest.skipIf(os.name == 'nt', 'Linux only')
+    def test_wayland_session_is_refused(self):
+        for env in ({'WAYLAND_DISPLAY': 'wayland-0'}, {'XDG_SESSION_TYPE': 'wayland'}):
+            with self.subTest(env=env), patch.dict(os.environ, {'DISPLAY': ':0', **env}):
+                with self.assertRaisesRegex(ValueError, 'Wayland'):
+                    stop_key_monitor('`')
 
 
 @unittest.skipUnless(os.name != 'nt' and shutil.which('Xvfb'), 'needs Xvfb')

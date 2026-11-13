@@ -135,17 +135,23 @@ class XGameWindow:
         self.frame = self._top_level(self.window)
 
     def _find(self):
-        stack = [self.root]
+        stack, found = [self.root], []
         while stack:
             window = stack.pop()
             try:
                 cls = window.get_wm_class() or ()
                 if self.app_class in cls and window.get_wm_name() == GAME_TITLE:
-                    return window
+                    found.append(window)
+                    continue
                 stack.extend(window.query_tree().children)
             except Exception:
                 continue
-        raise ValueError('The Epic Seven game window was not found on this X display.')
+        if not found:
+            raise ValueError('The Epic Seven game window was not found on this X display.')
+        if len(found) > 1:
+            # Capture and input must reach the same game; refuse to guess.
+            raise ValueError('More than one Epic Seven game window is open. Close the extra one, then try again.')
+        return found[0]
 
     def _top_level(self, window):
         while True:

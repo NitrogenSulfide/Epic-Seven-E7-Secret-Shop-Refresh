@@ -43,6 +43,7 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(details, ['Secret Shop screen verified.'])
         self.assertEqual(events, ['Navigation: Secret Shop screen verified.'])
 
+    @patch.object(gui, 'STOP_KEY_REJECT_MASK', 0x4 | 0x10 | 0x20000)
     def test_physical_stop_key_mapping(self):
         self.assertEqual(gui.captured_stop_key("Escape", "\x1b"), "esc")
         self.assertEqual(gui.captured_stop_key("A", "A", 1), "a")
@@ -54,6 +55,7 @@ class ProtocolTests(unittest.TestCase):
             with self.subTest(keysym=keysym):
                 self.assertIsNone(gui.captured_stop_key(keysym, char, state))
 
+    @patch.object(gui, 'STOP_KEY_REJECT_MASK', 0x4 | 0x10 | 0x20000)
     def test_windows_lock_flags_do_not_reject_stop_keys(self):
         for state in (0x8, 0x2, 0x20, 0x8 | 0x2 | 0x20):
             with self.subTest(state=state):
@@ -891,6 +893,23 @@ class GuiTests(unittest.TestCase):
             self.app.stop_refresh();self.pump_until(lambda:self.app.process.poll() is not None)
         terminate.assert_not_called()
 
+    @patch.object(gui, 'STOP_KEY_REJECT_MASK', 0x4 | 0x8)
+    def test_x11_num_lock_does_not_reject_stop_keys_but_alt_does(self):
+        for state in (0x10, 0x2, 0x10 | 0x2):  # Num Lock (Mod2), Caps Lock
+            self.assertEqual(gui.captured_stop_key("Escape", "\x1b", state), "esc")
+            self.assertEqual(gui.captured_stop_key("a", "a", state), "a")
+        self.assertIsNone(gui.captured_stop_key("Escape", "\x1b", 0x8))  # Alt (Mod1)
+        self.assertIsNone(gui.captured_stop_key("a", "\x01", 0x4))
+
+    def test_forced_stop_without_a_job_kills_the_engine(self):
+        from unittest.mock import Mock
+        process=Mock();process.poll.return_value=None
+        self.app.process=process;self.app.process_tree=Mock(handle=None);self.app._native_mouse_run=False
+        self.app._kill_if_needed(process)
+        process.kill.assert_called_once()
+        self.app.process_tree.close.assert_not_called()
+        process.poll.return_value=0
+
     def test_forced_native_stop_releases_button_after_killing_owned_job(self):
         from unittest.mock import Mock
         process=Mock();process.poll.return_value=None
@@ -1034,11 +1053,12 @@ class GuiTests(unittest.TestCase):
         entry.event_generate('<ButtonRelease-1>', x=10, y=10)
         self.app.update()
         self.assertEqual(self.app.focus_get(), entry)
+        num_lock = 0x8 if os.name == 'nt' else 0x10  # Windows Tk Mod1; X11 Mod2
         for keysym, expected in (('q', 'q'), ('Escape', 'esc'), ('a', 'a')):
-            entry.event_generate('<KeyPress>', keysym=keysym, state=0x8)
+            entry.event_generate('<KeyPress>', keysym=keysym, state=num_lock)
             self.app.update()
             self.assertEqual(self.app.stop_key.get(), expected)
-        entry.event_generate('<KeyPress>', keysym='F1', state=0x8)
+        entry.event_generate('<KeyPress>', keysym='F1', state=num_lock)
         self.app.update()
         self.assertEqual(self.app.stop_key.get(), 'a')
 

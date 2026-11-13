@@ -96,6 +96,19 @@ class BackgroundGuiTests(unittest.TestCase):
         self.assertIn('Steam', self.app.connection_warning)
 
 
+    def test_scan_recovers_when_the_game_window_vanishes(self):
+        class BadWindow(Exception):  # stands in for Xlib.error.BadWindow
+            pass
+        self.app._mouse_scan_busy = False
+        with patch.object(gui, 'list_background_games', side_effect=BadWindow('gone')):
+            self.app._scan_game_windows()
+            self.pump_until(lambda: not self.app._mouse_scan_busy)
+        with patch.object(gui, 'list_background_games', return_value=[GAME]) as scan:
+            self.app._scan_game_windows()
+            self.pump_until(lambda: not self.app._mouse_scan_busy)
+        scan.assert_called_once()
+
+
 class ListBackgroundGamesTest(unittest.TestCase):
     def test_reports_the_game_window_read_only(self):
         window = mock.Mock(); window.size.return_value = (3840, 2016); window.window.id = 42
