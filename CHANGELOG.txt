@@ -1,3 +1,33 @@
+0.2.0 · Background mode for Steam, Linux support and faster refreshes
+
+• New Background control mode for Epic Seven on Steam, on Windows 11 and
+  Linux (Proton). It never uses your pointer or keyboard focus: the game may
+  be unfocused or covered by other windows. Input pauses while the pointer is
+  over the game and resumes once it has been still for a second. Steam E7 runs
+  as administrator on Windows, so starting offers the administrator restart.
+• Linux: the GUI runs from source and offers Background mode only.
+  e7-shop-refresh-linux.sh checks system packages (it prints the install
+  command and never runs sudo), sets up Python, builds the input helper,
+  starts the GUI and can add an app-menu entry. The global Stop key works on
+  X11; Wayland sessions are refused.
+• Faster Background and Mouse refreshes: waits now end as soon as the screen
+  shows the expected state, with the old fixed times kept as upper limits.
+  Measured on Windows Steam at 2560 × 1440: about 5–6.5 seconds per refresh,
+  down from about 8.5. ADB keeps its fixed waits.
+• The tap delay is now the minimum gap between clicks, and the final dialog
+  check happens after it, just before the click.
+• Windows text recognition keeps one reader running instead of starting one
+  per read (about 0.04 seconds per read instead of 0.44).
+• Start and end sounds are 10 dB quieter.
+• Refuses to start when more than one Epic Seven window is open.
+• Tested on Windows 11 with Steam E7: live sessions at 3840 × 2019 and
+  2560 × 1440 (also over Moonlight), with Friendship purchases at 2560 × 1440;
+  dry runs at 1920 × 1080 and 1280 × 720. On Linux Mint 22 a live session
+  bought a Covenant bookmark and Friendship points. Other display scaling settings, ultrawide windows and
+  other Linux desktops are untested.
+• Includes all 0.1.4 trial changes below (rc1–rc9), which had no stable
+  release.
+
 0.1.4-rc9 · Display tints, menu changes and a real-frame test corpus
 
 • Finds the native STOVE Secret Shop icon under a warm display tint such as
