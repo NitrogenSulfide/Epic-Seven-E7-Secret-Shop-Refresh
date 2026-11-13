@@ -1,7 +1,7 @@
 # E7 Secret Shop Refresh
 
 Automatically open Epic Seven's Secret Shop, buy Covenant Bookmarks and Mystic
-Medals, and refresh within your Skystone budget. Windows app by
+Medals, and refresh within your Skystone budget. Windows app (Linux from source) by
 **NitrogenSulfide (Blue Natto)**, based on Solunium's GPL-3.0 engine.
 
 Hi, I'm Blue Natto. This is a small, unofficial hobby project for fellow Epic Seven
@@ -10,13 +10,13 @@ need fixes. Feedback and bug reports are welcome—I'll do my best to help when 
 
 ## EZ Mode · download, extract, start
 
-**[Download the Windows app — v0.1.3](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.3/E7ShopRefresh-0.1.3.zip)**
+**[Download the Windows app — v0.2.0](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.2.0/E7ShopRefresh-0.2.0.zip)**
 
 > **Ban risk:** This is unofficial automation. [Smilegate's terms](https://common.game.onstove.com/terms/index?gameType=MOBILE&langCode=en&termsType=1) prohibit unauthorized scripts and macros. Account penalties, including bans, are possible; use at your own risk.
 
 1. Extract the **whole ZIP**, then open **E7 Secret Shop Refresh.exe**. Python is included.
 2. Open **English Epic Seven** at home or in Secret Shop. Close any popups; hidden idle home controls are handled automatically.
-3. Leave **Mouse** selected and choose your **game window**. Use **Scan** if needed.
+3. Leave **Mouse** selected (or choose **Background** for Epic Seven on Steam) and choose your **game window**. Use **Scan** if needed.
 4. Set your **Skystone budget** and check the **Stop key**, then press **Start Refresh**.
 
 If the app offers to **restart as administrator**, accept the restart and Windows
@@ -29,7 +29,7 @@ backtick key, usually below Esc) or click **Stop Session**. Start with a small b
 for your first run.
 
 **[Detailed setup / troubleshooting](release/SETUP.md)** ·
-**[What's new in v0.1.3](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.1.3)**
+**[What's new in v0.2.0](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.2.0)**
 
 ## Session history and diagnostics
 
@@ -55,7 +55,7 @@ This real-time clip ends just after the purchase; account details are covered.
 | Epic Seven on **Steam** (Windows 11) | Not yet tested | Unavailable | Tested |
 | Epic Seven on **Steam** (Linux, Proton) | Unavailable | Unavailable | Tested |
 
-Testing is limited to these two clients. Other emulators and methods have not been
+Testing is limited to these clients. Other emulators and methods have not been
 tested. Use English game text and a readable landscape 16:9 game view of at least
 640 × 360. Native STOVE Mouse mode also supports its wider maximized client area.
 ADB calibration requires a 1920 × 1080 Android display.

@@ -1,19 +1,13 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Private trial **0.1.4-rc9** handles warm display tints (f.lux, Night light) and
-the new home menu entry on STOVE. It also fixes a false stop on a pre-purchased Friendship row at
-the bottom of the shop. It recognizes pre-purchased rows by their 0/1 stock inset
-beside Buy, accepts brief/injected streamed Stop events, and uses the supplied
-game's green heart.
-Includes a global Stop key, the Friendship buys
-counter beside Mystic buys, and corresponding diagnostics and Excel columns.
-It retains the BlueStacks instance, Event home-menu and Mouse input-host fixes.
-Extract this trial into a fresh folder and use its bundled runtime.
-The stable release information follows.
-
-Version **0.1.3** adds optional click/timing diagnostics, full-history Excel export,
-richer session records and cooperative Stop for the matching Mouse/ADB engine.
-Players need only **E7ShopRefresh-0.1.3.zip**.
+Version **0.2.0** adds **Background mode** for Epic Seven on Steam: clicks go to
+the game window directly and frames are read from the window, so your pointer is
+never moved and other windows may cover the game. Background and Mouse refreshes
+are faster (about 5–6.5 seconds per refresh on Steam at 2560 × 1440, down from about
+8.5). It also includes the 0.1.4 trial changes: the global Stop key, optional
+Friendship Points purchases, remaining-time estimates, BlueStacks fixes and warm
+display tint handling. See CHANGELOG.txt or About & Credits → Release notes.
+Players need only **E7ShopRefresh-0.2.0.zip**; extract it into a fresh folder.
 New settings start in Mouse mode; your existing saved mode is preserved.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
@@ -36,6 +30,13 @@ emulator, and the Google Play Games window must be open. Its background VM can
 stay connected after closing the window. Other PC apps can retain focus.
 Normal fresh settings are 12 skystones, 0.3-second
 delay, backtick stop key and randomized offsets; saved settings take precedence.
+
+For Epic Seven on **Steam**, choose **Control mode → Background**, select the game
+and press **Start Refresh**. Steam's E7 runs as administrator, so Start offers the
+administrator restart the first time; accept it and press Start again. You can keep
+using the PC: input waits while the pointer moves over the game and resumes once it
+has been still for a second. Don't minimize or resize the game during a run. Only
+one Epic Seven window may be open.
 
 For STOVE or Google Play Games Developer Emulator, choose **Control mode → Mouse**, select Epic Seven and press
 **Start Refresh**. The app brings that game forward and uses your actual pointer
@@ -76,9 +77,10 @@ About & Credits contains Quickstart and bundled Release notes tabs. The main
 screen’s Buy me a coffee button opens https://ko-fi.com/bluenatto only when clicked.
 
 Testing has been limited to Google Play
-Games on PC Developer Emulator and the official STOVE client of Epic Seven.
+Games on PC Developer Emulator, the official STOVE client and Epic Seven on Steam
+(Background mode, Windows 11 and Linux).
 Other emulators and methods have not been tested. Both modes buy Covenant
 Bookmarks and Mystic Medals by default. Optionally enable **Also buy Friendship
 Points** for the current heart item (50 points for 18,000 gold per buy), using
-this trial's matching engine. Calibration excludes Friendship. Friendship has
-offline recognition and fake-engine verification; live purchase remains unverified.
+this trial's matching engine. Calibration excludes Friendship. Friendship
+purchases have been verified live in Background mode on Steam.
