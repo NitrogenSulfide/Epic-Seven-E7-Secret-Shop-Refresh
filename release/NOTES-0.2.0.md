@@ -29,7 +29,7 @@ warm display tint handling. See CHANGELOG.txt for the full list.
 
 **Testing.** On Windows 11 with Steam E7, live Background sessions ran at
 3840 × 2019 and 2560 × 1440 (including over Moonlight streaming) and bought
-Friendship Points; dry runs passed at 1920 × 1080 and 1280 × 720. On Linux Mint 22
+Friendship Points and, at 2560 × 1440 over Moonlight, two Covenant Bookmarks; dry runs passed at 1920 × 1080 and 1280 × 720. On Linux Mint 22
 (Cinnamon, X11, Proton Experimental) a live session bought a Covenant Bookmark and
 Friendship Points. A Mystic Medal purchase in Background mode, other display
 scaling settings, ultrawide windows, other Linux desktops and Wayland are untested.

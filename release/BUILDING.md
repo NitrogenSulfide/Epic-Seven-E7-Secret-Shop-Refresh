@@ -28,7 +28,8 @@ needs its own review. Engine build instructions are in [ENGINE.md](ENGINE.md).
 
 The full source checkout has `build_release_assets.ps1`, `build_release.ps1`,
 `build_engine_release.ps1` and fixture tests. These require a clean committed
-checkout and an explicit private BuildPython environment. They build matching
+checkout, PowerShell 7 (`pwsh`; Windows PowerShell 5.1 fails) and an explicit
+private BuildPython environment. They build matching
 GUI/engine components, then assemble the player ZIP and optional source archive
 with checksums and private build manifests. No installed runtime or private
 screenshots/settings are packaged.

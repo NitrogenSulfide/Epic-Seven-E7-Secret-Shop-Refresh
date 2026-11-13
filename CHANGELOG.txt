@@ -21,7 +21,8 @@
 • Start and end sounds are 10 dB quieter.
 • Refuses to start when more than one Epic Seven window is open.
 • Tested on Windows 11 with Steam E7: live sessions at 3840 × 2019 and
-  2560 × 1440 (also over Moonlight), with Friendship purchases at 2560 × 1440;
+  2560 × 1440 (also over Moonlight), with Friendship and Covenant purchases at
+  2560 × 1440;
   dry runs at 1920 × 1080 and 1280 × 720. On Linux Mint 22 a live session
   bought a Covenant bookmark and Friendship points. Other display scaling settings, ultrawide windows and
   other Linux desktops are untested.

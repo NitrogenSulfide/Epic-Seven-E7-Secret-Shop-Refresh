@@ -256,6 +256,7 @@ py -3 -m venv .local-state\engine-build-venv
 Windows). It is never committed; the builder copies it beside the engine EXE
 and records its hash. `build_release_assets.ps1` takes the same parameter.
 
+Run the `.ps1` builders in PowerShell 7 (`pwsh`); Windows PowerShell 5.1 fails.
 Build from a clean committed checkout. The builder does not run the real engine,
 copy personal state, or modify the installed engine. It records the exact commit,
 Python/dependency versions and binary/package hashes beside the ZIP. Third-party

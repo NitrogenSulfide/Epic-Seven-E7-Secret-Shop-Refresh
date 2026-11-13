@@ -111,7 +111,7 @@ Preserve original history, licence/credits, installed runtimes and private data.
 ## Build and automated checks
 
 Build only from a clean exact commit with an explicit private Python environment
-using engine-build-requirements.txt. Preserve earlier outputs:
+using engine-build-requirements.txt, in PowerShell 7 (`pwsh`; 5.1 fails). Preserve earlier outputs:
 
 ```powershell
 .\.local-state\engine-build-venv\Scripts\python.exe -m unittest test_e7_window_preview test_e7_connection test_e7_shop_refresh_gui.ProtocolTests test_e7_engine_location test_e7_live_engine test_e7_shop_navigation test_e7_setup -v
