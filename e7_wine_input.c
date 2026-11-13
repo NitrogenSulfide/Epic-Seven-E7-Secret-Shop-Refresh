@@ -51,8 +51,19 @@ static void up(void) {
     if (button_down) { post(WM_LBUTTONUP, 0, last_x, last_y); button_down = 0; }
 }
 
+/* Report and target real client pixels under Windows display scaling
+ * (otherwise a 3840 x 2019 client reads as 1920 x 1009 at 200%). */
+static void dpi_aware(void) {
+    typedef BOOL (WINAPI *context_fn)(HANDLE);
+    HMODULE user = GetModuleHandleA("user32.dll");
+    context_fn set_context = user ? (context_fn)(void *)GetProcAddress(user, "SetProcessDpiAwarenessContext") : NULL;
+    if (!set_context || !set_context((HANDLE)(LONG_PTR)-4))  /* PER_MONITOR_AWARE_V2 */
+        SetProcessDPIAware();
+}
+
 int main(void) {
     char line[256];
+    dpi_aware();
     setvbuf(stdout, NULL, _IONBF, 0);
     while (fgets(line, sizeof line, stdin)) {
         int x, y, x2, y2, ms;

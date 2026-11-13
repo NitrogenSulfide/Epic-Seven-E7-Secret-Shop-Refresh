@@ -134,6 +134,7 @@ class BackgroundGameTest(unittest.TestCase):
         self.assertEqual(wine.sent, ['click 40 0'])
 
 
+@unittest.skipIf(os.name == 'nt', 'Linux/Proton only')
 class ProtonSessionTest(unittest.TestCase):
     def make_proc(self, root, pid, exe, env):
         (root/str(pid)).mkdir()
@@ -185,6 +186,7 @@ class XGameWindowFindTest(unittest.TestCase):
             finder._find()
 
 
+@unittest.skipIf(os.name == 'nt', 'Linux/Proton only')
 class WineInputTest(unittest.TestCase):
     def test_error_replies_become_mouse_stopped(self):
         class Proc:
