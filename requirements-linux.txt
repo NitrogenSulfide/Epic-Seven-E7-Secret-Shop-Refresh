@@ -1,0 +1,7 @@
+# Python packages for the GUI and engine on Linux (Background mode, Steam/Proton).
+# Installed into .venv by ./e7-shop-refresh-linux.sh setup. Tkinter and
+# Tesseract come from the system package manager, not pip.
+numpy>=1.26,<3
+opencv-python-headless>=4.9,<5
+Pillow>=10.3
+python-xlib>=0.33

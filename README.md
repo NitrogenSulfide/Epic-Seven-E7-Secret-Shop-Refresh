@@ -58,6 +58,31 @@ tested. Use English game text and a readable landscape 16:9 game view of at leas
 640 × 360. Native STOVE Mouse mode also supports its wider maximized client area.
 ADB calibration requires a 1920 × 1080 Android display.
 
+## Linux · Steam on Proton (Background mode, preview)
+
+On Linux the app drives **Epic Seven on Steam** (Proton) in the background. Clicks are
+posted to the game window from inside its Wine session and frames are read from the
+game's own X window. Your mouse pointer and keyboard focus are never used, and other
+windows may cover the game. Only tested on Linux Mint 22 (Cinnamon, X11) with
+Proton Experimental. Wayland is not supported yet: log in to an X11 session.
+
+```bash
+git clone https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh.git
+cd Epic-Seven-E7-Secret-Shop-Refresh
+./e7-shop-refresh-linux.sh setup    # prints a sudo apt/dnf/pacman command if packages are missing
+./e7-shop-refresh-linux.sh          # start the app
+./e7-shop-refresh-linux.sh menu     # optional: add it to your app menu (menu-remove undoes it)
+```
+
+Setup needs Python 3 with venv and Tk, Tesseract OCR, and (once, to build the small
+input helper) the MinGW-w64 cross compiler. On Debian, Ubuntu or Mint:
+`sudo apt install python3-venv python3-tk tesseract-ocr gcc-mingw-w64-x86-64`.
+Python packages go into `.venv` inside the folder; nothing is installed system-wide.
+
+Start the game, open it at home or in Secret Shop, then press **Start Refresh**.
+Keep the pointer off the game window: input pauses while it is over the game.
+Don't minimize or resize the game during a run. The Stop key works from any window.
+
 ## ADB mode · optional
 
 ADB lets you use your PC pointer normally while the app runs through the emulator.
