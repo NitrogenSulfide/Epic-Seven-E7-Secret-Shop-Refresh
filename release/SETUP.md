@@ -312,9 +312,8 @@ About & Credits contains Quickstart and bundled Release notes tabs. The main
 screen’s Buy me a coffee button opens https://ko-fi.com/bluenatto only when clicked.
 
 Testing has been limited to Epic Seven on Steam (Background mode, Windows 11 and
-Linux), the official STOVE client (Background since 0.2.1: a live refresh is tested,
-a STOVE purchase not yet seen; and Mouse) and Google Play Games on PC Developer
-Emulator (Mouse and ADB).
+Linux), the official STOVE client (Background since 0.2.1, and Mouse) and Google
+Play Games on PC Developer Emulator (Mouse and ADB).
 Other emulators and methods have not been tested. Both modes buy Covenant
 Bookmarks and Mystic Medals by default. Optionally enable **Also buy Friendship
 Points** for the current heart item (50 points for 18,000 gold per buy), using
