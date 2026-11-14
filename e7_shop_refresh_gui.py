@@ -27,6 +27,7 @@ from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon, avatar
 from e7_links import PROFILE, release_url, bug_report_url
 from e7_about import AboutDialog
 from e7_tracker import CompactTracker
+from e7_report import build_report, anonymize, latest_failure, system_name
 from e7_setup import missing_references, has_builtin_references, RecognitionSetup, verify_setup_engine
 from e7_native_mouse import activate_native_target, release_native_button, MouseElevationRequired
 from e7_elevation import restart_as_administrator, ElevationCancelled
@@ -47,7 +48,7 @@ DEFAULT_CONTROL_MODE = 'Background'
 # stops the session if it has not cleared after this many seconds.
 POINTER_PAUSE_LIMIT = 10
 POINTER_PAUSE_REASONS = ('The pointer is moving over the game window',  # Windows: moving only
-                         'Move your mouse off the game window')         # Linux: any pointer over it
+                         'Move your mouse off the game window')         # Linux, or a windowed game on Windows: any pointer over it
 
 
 def pointer_pause_text(reason, seconds_left):
@@ -64,6 +65,9 @@ NAVIGATION_HINTS = (
     ('The Secret Shop did not open', 'Shop didn’t open (click missed) · retrying. Keep the mouse off the game.'),
     ('The pointer passed over the game and the same confirmation',
      'Confirm click was missed · confirming once more. Keep the mouse off the game.'),
+    ('The game did not take the Confirm click', 'Game missed the Confirm click · confirming once more.'),
+    ('The game did not open the Buy dialog', 'Game missed the Buy click · clicking Buy once more.'),
+    ('The game did not open the Refresh dialog', 'Game missed the Refresh click · clicking Refresh once more.'),
     ('Looking for the home Secret Shop menu', 'Finding the shop · leave the game on the home screen or shop.'),
     ('Visibility restored', 'Resumed · checking the screen again before the next click.'),
 )
@@ -993,6 +997,16 @@ class RefreshGui(tk.Tk):
         self.status.trace_add('write', self._update_home_ui_hint)
         self.detail_label = ttk.Label(self.session_messages, textvariable=self.detail, style="Muted.TLabel", wraplength=dp(620))
         self.detail_label.grid(row=1, column=0, sticky="w")
+        # After a run stops with a problem: one click copies everything a helper needs.
+        self.report_actions = ttk.Frame(self.session_messages)
+        self.report_actions.grid(row=2, column=0, sticky='w', pady=(dp(6), 0))
+        self.copy_report_button = ttk.Button(self.report_actions, text='Copy report', command=self._copy_report, cursor='hand2')
+        self.copy_report_button.pack(side='left')
+        ThemeHint(self.copy_report_button, lambda: 'Copy a short report (setup, stop reason, last log lines) to paste on Reddit or GitHub')
+        self.open_failure_button = ttk.Button(self.report_actions, text='Open pictures', command=self._open_failure_folder, cursor='hand2')
+        ThemeHint(self.open_failure_button, lambda: 'Open the folder with the screenshots saved when the run stopped; attach them to your report')
+        self.report_actions.grid_remove()
+        self.status.trace_add('write', lambda *_: self._show_report_actions())
         self.metrics = metrics = ttk.Frame(right)
         metrics.bind("<Configure>", self._schedule_layout)
         metrics.grid(row=2, column=0, sticky="ew")
@@ -1661,6 +1675,8 @@ class RefreshGui(tk.Tk):
         run_id = self.run_id
         self.stopping = self.finished = False
         self._mouse_failure = None
+        self._report_since = time.time()-1
+        self._show_report_actions()
         background = self.control_mode.get() == 'Background' and mouse_target is not None
         self._background_run = background
         self._clear_pointer_alert()
@@ -2264,9 +2280,50 @@ class RefreshGui(tk.Tk):
         settings=self.run_settings
         enabled=settings.buy_friendship if settings else self.buy_friendship.get()
         stop_status=getattr(self,'_stop_key_status','No active session')
-        self.clipboard_append(f"App: v{APP_VERSION}\nControl: {self.control_mode.get()}\nEngine: {ENGINE_EXE}\nState: {self.status.get()}\n"
+        self.clipboard_append(anonymize(f"App: v{APP_VERSION}\nSystem: {system_name()}\nControl: {self.control_mode.get()}\nEngine: {ENGINE_EXE}\nState: {self.status.get()}\n"
             f"Stop key: {stop_status}\nFriendship Points buying: {'on' if enabled else 'off'}\n"
-            f"Purchases: Covenant {self.covenant.get()} · Mystic {self.mystic.get()} · Friendship {self.friendship.get()}\n\n{self.raw_output}")
+            f"Purchases: Covenant {self.covenant.get()} · Mystic {self.mystic.get()} · Friendship {self.friendship.get()}\n\n{self.raw_output}"))
+
+    def _report_text(self):
+        target = '' if self.control_mode.get() == 'ADB' else self.mouse_target.get()
+        reason = self._mouse_failure or (self.detail.get() if self.status.get() in ('Needs attention', 'Failed') else '')
+        return build_report(version=APP_VERSION, mode=self.control_mode.get(), target=target, state=self.status.get(),
+                            reason=reason, log=self.raw_output, app_dir=APP_DIR, since=getattr(self, '_report_since', None))
+
+    def _failure_folder(self):
+        since = getattr(self, '_report_since', None)
+        return None if since is None else latest_failure(APP_DIR, since)
+
+    def _show_report_actions(self):
+        if not hasattr(self, 'report_actions'):
+            return
+        if self.status.get() in ('Needs attention', 'Failed') and self.raw_output:
+            if self._failure_folder() is not None:
+                self.open_failure_button.pack(side='left', padx=(self._dp(8), 0))
+            else:
+                self.open_failure_button.pack_forget()
+            self.report_actions.grid()
+        else:
+            self.report_actions.grid_remove()
+
+    def _copy_report(self):
+        self.clipboard_clear()
+        self.clipboard_append(self._report_text())
+        self.copy_report_button.configure(text='Copied ✓')
+        self.after(2500, lambda: self.copy_report_button.winfo_exists() and self.copy_report_button.configure(text='Copy report'))
+
+    def _open_failure_folder(self):
+        folder = self._failure_folder()
+        if folder is None:
+            return
+        try:
+            if hasattr(os, 'startfile'):
+                os.startfile(str(folder.resolve()), 'open')
+            else:
+                subprocess.Popen(['xdg-open', str(folder.resolve())], stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError as error:
+            messagebox.showerror('Could not open the pictures folder', str(error), parent=self)
 
     def _open_logs_folder(self):
         if self.control_mode.get() != 'ADB' and (self._checking_connection or (self.process and self.process.poll() is None)):

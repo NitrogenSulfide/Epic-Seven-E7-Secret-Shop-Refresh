@@ -319,6 +319,9 @@ class E7ADBShopRefresh(ObservedShopFlow):
                 if pos is not None:
                     if self.clickBuy(pos):
                         value.count += 1
+                        # The game can ignore the next Confirm right after a
+                        # purchase from the scrolled list; let it settle first.
+                        self._bought_scrolled = True
                         self.reportLiveStats()
 
             #print every 10% progress

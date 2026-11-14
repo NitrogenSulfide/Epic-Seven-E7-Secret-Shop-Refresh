@@ -254,6 +254,10 @@ class BackgroundGame:
             raise ValueError(f'Wine reports a {width} x {height} game client but X reports '
                              f'{self.window.size()[0]} x {self.window.size()[1]}. Display scaling is not supported yet.')
         self.client = (width, height)
+        # One plain line for reports: problems often depend on the window setup.
+        describe = getattr(self.window, 'describe', None)
+        extra = describe() if describe else ''
+        print(f'Game window: {width} x {height}'+(f', {extra}' if extra else ''), flush=True)
         self.view = None
         self._view_bounds = None
         self.session_active = False
@@ -405,6 +409,8 @@ class WinGameWindow:
                 ('GetCursorPos', [ctypes.POINTER(w.POINT)], w.BOOL),
                 ('WindowFromPoint', [w.POINT], w.HWND), ('GetAncestor', [w.HWND, w.UINT], w.HWND),
                 ('GetWindowDC', [w.HWND], w.HDC), ('ReleaseDC', [w.HWND, w.HDC], ctypes.c_int),
+                ('MonitorFromWindow', [w.HWND, w.DWORD], w.HMONITOR),
+                ('GetMonitorInfoW', [w.HMONITOR, ctypes.c_void_p], w.BOOL),
                 ('PrintWindow', [w.HWND, w.HDC, w.UINT], w.BOOL)):
             function = getattr(self.user, name); function.argtypes, function.restype = args, result
         gdi = self.gdi
@@ -427,9 +433,12 @@ class WinGameWindow:
             return 'The game window closed.'
         if self.user.IsIconic(self.hwnd) or not self.user.IsWindowVisible(self.hwnd):
             return 'The game window is minimized or hidden.'
-        # Only a moving pointer can move the game's cursor between a posted press
-        # and release. A still pointer over the game is fine: players with the
-        # game maximized on one screen have nowhere else to leave it.
+        # Fullscreen: only a moving pointer can move the game's cursor between a
+        # posted press and release; a still one is fine, and players on one screen
+        # have nowhere else to leave it. Windowed: the game cancels a posted click
+        # while the real pointer rests anywhere on its window except the target
+        # (reproduced on Windows 11 STOVE at 1920 x 1009, 2026-11-14), so any
+        # pointer over it pauses, as on Linux.
         cursor = self.w.POINT()
         if not self.user.GetCursorPos(self.ctypes.byref(cursor)):
             return None
@@ -437,13 +446,48 @@ class WinGameWindow:
         if self._cursor is not None and position != self._cursor:
             self._cursor_moved = now
         self._cursor = position
-        if now-self._cursor_moved >= POINTER_STILL_SECONDS:
+        windowed = self._windowed()
+        if not windowed and now-self._cursor_moved >= POINTER_STILL_SECONDS:
             return None
         hit = self.user.WindowFromPoint(cursor)
-        if hit and self.user.GetAncestor(hit, 2) == self.hwnd:  # GA_ROOT
-            return ('The pointer is moving over the game window; background input waits until it stays still. '
-                    'Leave it still, or park it on the taskbar.')
-        return None
+        if not hit or self.user.GetAncestor(hit, 2) != self.hwnd:  # GA_ROOT
+            return None
+        if windowed:
+            return ('Move your mouse off the game window; in windowed mode the game cancels '
+                    'background clicks while the pointer rests on it.')
+        return ('The pointer is moving over the game window; background input waits until it stays still. '
+                'Leave it still, or park it on the taskbar.')
+
+    def describe(self):
+        """'windowed' or 'fullscreen', plus display scaling, for reports."""
+        try:
+            parts = ['windowed' if self._windowed() else 'fullscreen']
+            dpi = self.user.GetDpiForWindow(self.hwnd) if hasattr(self.user, 'GetDpiForWindow') else 0
+            if dpi:
+                parts.append(f'display scale {round(dpi*100/96)}%')
+            return ', '.join(parts)
+        except Exception:
+            return ''
+
+    def _windowed(self):
+        """True unless the game's client area covers its whole monitor. The
+        client area, not the outer frame: a maximized window's frame overhangs
+        the screen, but its title bar keeps the client below the top edge.
+        If Windows cannot say, keep the fullscreen rule so single-screen
+        players can run."""
+        ctypes, w = self.ctypes, self.w
+        class MONITORINFO(ctypes.Structure):
+            _fields_ = [('cbSize', w.DWORD), ('rcMonitor', w.RECT), ('rcWork', w.RECT), ('dwFlags', w.DWORD)]
+        client, origin, info = w.RECT(), w.POINT(0, 0), MONITORINFO()
+        info.cbSize = ctypes.sizeof(MONITORINFO)
+        monitor = self.user.MonitorFromWindow(self.hwnd, 2)  # MONITOR_DEFAULTTONEAREST
+        if (not monitor or not self.user.GetMonitorInfoW(monitor, ctypes.byref(info))
+                or not self.user.GetClientRect(self.hwnd, ctypes.byref(client))
+                or not self.user.ClientToScreen(self.hwnd, ctypes.byref(origin))):
+            return False
+        screen = info.rcMonitor
+        return not (origin.x <= screen.left and origin.y <= screen.top
+                    and origin.x+client.right >= screen.right and origin.y+client.bottom >= screen.bottom)
 
     def capture(self):
         from PIL import Image

@@ -16,7 +16,7 @@ players, based on Solunium's GPL-3.0 engine. Feedback and bug reports are welcom
 
 ## EZ Mode · download, extract, start
 
-**[Download the Windows app — v0.2.3](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.2.3/E7ShopRefresh-0.2.3.zip)**
+**[Download the Windows app — v0.2.4](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.2.4/E7ShopRefresh-0.2.4.zip)**
 
 > **Ban risk:** This is unofficial automation. [Smilegate's terms](https://common.game.onstove.com/terms/index?gameType=MOBILE&langCode=en&termsType=1) prohibit unauthorized scripts and macros. Account penalties, including bans, are possible; use at your own risk.
 
@@ -35,7 +35,7 @@ players, based on Solunium's GPL-3.0 engine. Feedback and bug reports are welcom
 window, or click **Stop Session**.
 
 **[Detailed setup / troubleshooting](release/SETUP.md)** ·
-**[What's new in v0.2.3](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.2.3)**
+**[What's new in v0.2.4](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.2.4)**
 
 **Tips for a smooth run**
 
@@ -43,7 +43,9 @@ window, or click **Stop Session**.
 - **One monitor:** leave the game open behind your other windows. Covering it is
   fine, but **never minimize it**; a minimized game stops drawing and the run stops.
 - Keep your pointer off the game window. A pointer moving over the game pauses
-  input; if it keeps moving for 10 seconds, the run stops.
+  input; if it keeps moving for 10 seconds, the run stops. In **windowed** mode
+  any pointer resting on the game pauses too, so park it on the taskbar or
+  another screen.
 - Start from the home screen or the Secret Shop, with no Refresh or Buy dialog open.
 - Don't resize the game, toggle fullscreen, or open a second Epic Seven window
   during a run.
@@ -129,7 +131,7 @@ history) into the new extracted release.
 
 ## Source and credits
 
-**E7Source-0.2.3.zip** on the release page has the source and rebuild steps. See
+**E7Source-0.2.4.zip** on the release page has the source and rebuild steps. See
 [build instructions](release/BUILDING.md) and [engine notes](ENGINE.md).
 
 Software is GPL-3.0; see [LICENSE](LICENSE), [CREDITS.txt](CREDITS.txt) and

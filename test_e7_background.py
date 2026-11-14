@@ -240,7 +240,8 @@ class WindowsHelperPipeTest(unittest.TestCase):
 
 
 class WindowsPointerTest(unittest.TestCase):
-    """Windows pauses only while the pointer moves over the game, not while it rests there."""
+    """Fullscreen: Windows pauses only while the pointer moves over the game.
+    Windowed: any pointer over the game pauses, because the game cancels the click."""
     GAME, OTHER = 0x100, 0x200
 
     def window(self):
@@ -256,6 +257,18 @@ class WindowsPointerTest(unittest.TestCase):
                 ref._obj.x, ref._obj.y = self.cursor; return True
             def WindowFromPoint(self, point): return test.GAME if self.over else test.OTHER
             def GetAncestor(self, h, flag): return h
+            # window_rect is the client area in screen coordinates.
+            monitor, window_rect = (0, 0, 1920, 1080), (0, 0, 1920, 1080)
+            def MonitorFromWindow(self, h, flag): return 1
+            def GetMonitorInfoW(self, monitor, ref):
+                info = ref._obj
+                info.rcMonitor.left, info.rcMonitor.top, info.rcMonitor.right, info.rcMonitor.bottom = self.monitor
+                return True
+            def GetClientRect(self, h, ref):
+                left, top, right, bottom = self.window_rect
+                ref._obj.left, ref._obj.top, ref._obj.right, ref._obj.bottom = 0, 0, right-left, bottom-top; return True
+            def ClientToScreen(self, h, ref):
+                ref._obj.x, ref._obj.y = self.window_rect[:2]; return True
         window = object.__new__(bg.WinGameWindow)
         window.ctypes, window.w, window.user, window.hwnd = ctypes, wintypes, User(), self.GAME
         window.user.over = True
@@ -286,6 +299,37 @@ class WindowsPointerTest(unittest.TestCase):
         window.problem()
         window.user.cursor = (40, 40)
         self.assertIsNone(window.problem())
+
+    def test_still_pointer_over_a_windowed_game_pauses(self):
+        # Maximized: the client sits below the title bar (taskbar shown or auto-hidden).
+        for rect in ((0, 23, 1920, 1032), (0, 23, 1920, 1080), (200, 100, 1160, 640)):
+            with self.subTest(rect=rect):
+                window = self.window()
+                window.user.window_rect = rect
+                self.assertTrue(window.problem().startswith('Move your mouse off the game window'))
+                self.now += 5
+                self.assertTrue(window.problem().startswith('Move your mouse off the game window'))
+                window.user.over = False
+                self.assertIsNone(window.problem())
+
+    def test_borderless_fullscreen_on_a_second_monitor_keeps_the_still_rule(self):
+        window = self.window()
+        window.user.monitor = window.user.window_rect = (1920, 0, 5760, 2160)
+        self.assertIsNone(window.problem())
+
+    def test_unknown_monitor_keeps_the_still_rule(self):
+        window = self.window()
+        window.user.MonitorFromWindow = lambda h, flag: 0
+        window.user.window_rect = (200, 100, 1160, 640)
+        self.assertIsNone(window.problem())
+
+    def test_windowed_pause_shows_the_move_off_hint(self):
+        import e7_shop_refresh_gui as gui
+        window = self.window()
+        window.user.window_rect = (200, 100, 1160, 640)
+        reason = window.problem()
+        self.assertEqual(gui.pointer_pause_text(reason, 7), 'Mouse over the game · paused · stops in 7 s')
+        self.assertIn('Move the mouse off the game', gui.pause_hint(reason))
 
 
 class BackgroundPermissionTest(unittest.TestCase):

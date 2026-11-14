@@ -230,6 +230,10 @@ class IncompleteCurrencyRow(MouseStopped):
     pass
 
 
+class ConfirmationNotShown(MouseStopped):
+    """No confirmation dialog appeared at all after the click."""
+
+
 class UnclearShopRow(MouseStopped):
     """Row text could not be verified on this capture; a fresh one may differ."""
 
@@ -410,6 +414,7 @@ SHOP_RETRY_AFTER_PAUSE = 2  # seconds after a pointer pause before re-selecting 
 SHOP_OPEN_ATTEMPTS = 3  # menu selections before 'did not open' stops the run (opening spends nothing)
 REFRESH_FIND_SECONDS = 2.5  # how long to keep re-reading a covered Refresh label before stopping
 LIST_REST_SECONDS = .2  # how long the list must stay unchanged to count as settled
+SCROLLED_PURCHASE_SETTLE = .6  # extra wait before Refresh after buying from the scrolled list
 
 
 def list_view(rgb):
@@ -866,7 +871,7 @@ class ObservedShopFlow:
                                    'No confirmation click sent.'+detail)
             if text_rejected:
                 raise MouseStopped('The confirmation does not match the intended shop action. No confirmation click sent.'+detail)
-            raise MouseStopped(f'The {operation} confirmation was not recognized. No confirmation click sent.'+detail)
+            raise ConfirmationNotShown(f'The {operation} confirmation was not recognized. No confirmation click sent.'+detail)
         clicked, click_revision, retried = current, self._pause_revision(), False
         while True:
             deadline = time.monotonic()+5
@@ -882,20 +887,26 @@ class ObservedShopFlow:
                 self._trace_retry()
             if not self.loop_active:
                 return False
-            # A pointer passing over the game can swallow the Confirm click and
-            # leave the dialog open. Confirm once more only if that happened
-            # (a pause since the click) and the very same validated dialog is
-            # still open: a delivered click closes it, so this cannot charge
-            # twice. Anything else stops as before.
-            if retried or click_revision is None or self._pause_revision() == click_revision:
+            # The Confirm click can be lost: a pointer passing over the game
+            # swallows it, or the game ignores it while still busy (seen right
+            # after buying the bottom row of the scrolled list). Confirm once
+            # more only if the very same validated dialog is still open and
+            # settled 5 s later: one dialog is one refresh or one purchase, and
+            # a delivered click closes it, so this cannot charge twice.
+            # Anything else, or a second miss, stops as before.
+            if retried:
                 raise MouseStopped('The shop did not return after confirmation. Stopped before another action.')
             retried = True
+            paused = click_revision is not None and self._pause_revision() != click_revision
             box = self._same_confirmation_open(operation,before,clicked)
             if not self.loop_active:
                 return False
             if box is None:
                 raise MouseStopped('The shop did not return after confirmation. Stopped before another action.')
-            print('Navigation: The pointer passed over the game and the same confirmation is still open; confirming once more.',flush=True)
+            if paused:
+                print('Navigation: The pointer passed over the game and the same confirmation is still open; confirming once more.',flush=True)
+            else:
+                print('Navigation: The game did not take the Confirm click and the same confirmation is still open; confirming once more.',flush=True)
             click_revision = self._pause_revision()
             try:
                 self._click_button(box, action=operation+' confirm retry')
@@ -964,6 +975,28 @@ class ObservedShopFlow:
         # Name/price recognition uses the observed Buy label to keep random
         # clicks away from the native button's separate stock-count inset.
         self._click_button(self._item_button)
+        try:
+            return self._confirm('buy',before)
+        except ConfirmationNotShown:
+            # The game can ignore a Buy click (seen on the bottom row of the
+            # scrolled list). Buy only opens a dialog and spends nothing, so
+            # click it once more, but only on the fully visible shop (no
+            # dimming dialog) with the same item and Buy button still there.
+            if not self.loop_active:
+                return False
+            frame = self.takeScreenshot()
+            if not self.loop_active:
+                return False
+            if not self.navigation.shop_visible(frame):
+                raise
+            again = self.findItemPosition(frame,self._item)
+            if again is None or abs(again[1]-pos[1]) > 20 or not any(
+                    box[0] < again[0] < box[2] and box[1] < again[1] < box[3]
+                    for box in green_buttons(self._rgb,(1480,110,1880,1080))):
+                raise
+        print('Navigation: The game did not open the Buy dialog; clicking Buy once more.',flush=True)
+        before = self._rgb.copy()
+        self._click_button(self._item_button)
         return self._confirm('buy',before)
 
 
@@ -972,6 +1005,11 @@ class ObservedShopFlow:
         if not self.loop_active:
             return False
         self._item=self._item_name=None
+        if getattr(self,'_bought_scrolled',False):
+            self._bought_scrolled = False
+            self._wait_observed(SCROLLED_PURCHASE_SETTLE,'scrolled purchase settle')
+            if not self.loop_active:
+                return False
         # After a purchase the shop can return while a toast or the sold-out
         # animation still covers the Refresh label (reported on STOVE). Full
         # shop recognition needs that label, so while it is covered only the
@@ -1022,6 +1060,28 @@ class ObservedShopFlow:
             x += max(-margin_x,min(margin_x,dx*.2))
             y += max(-margin_y,min(margin_y,dy*.28))
         self._tap_observed(x,y, anchor=anchor, action='refresh')
+        try:
+            return self._confirm('refresh',before)
+        except ConfirmationNotShown:
+            # The game can ignore a Refresh click. Refresh only opens the
+            # "Use Skystone to refresh?" dialog and spends nothing, so click it
+            # once more, but only on the fully visible shop with the Refresh
+            # label still where it was.
+            if not self.loop_active:
+                return False
+            frame = self.takeScreenshot()
+            if not self.loop_active:
+                return False
+            if not self.navigation.shop_visible(frame):
+                raise
+            again = [match['point'] for _,nav in self.navigation.navigators
+                     if nav.shop_visible(frame) and (match:=nav.match(frame,'refresh-label.png'))]
+            if not again or any(abs(px-anchor[0])>8 or abs(py-anchor[1])>8 for px,py in again):
+                raise
+        print('Navigation: The game did not open the Refresh dialog; clicking Refresh once more.',flush=True)
+        before = self._rgb.copy()
+        self._list_before = before
+        self._tap_observed(x,y, anchor=anchor, action='refresh retry')
         return self._confirm('refresh',before)
 
 

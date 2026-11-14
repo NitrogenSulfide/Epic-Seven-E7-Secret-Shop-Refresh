@@ -982,6 +982,44 @@ class NativeEngineTests(unittest.TestCase):
         self.assertEqual(app.mouse.click.call_args_list[1].args,(1165,695))
         self.assertEqual(app.refresh_count,0)  # Only the shared loop increments.
 
+    def _ignored_refresh_app(self,ignored):
+        """The first `ignored` Refresh clicks open no dialog."""
+        import itertools
+        app=self.make_engine()
+        app.read_confirmation_text=lambda rgb:'Use Skystone to refresh? Cancel Confirm' if rgb[700,1100,1]==110 else ''
+        app.mouse.screenshot.side_effect=lambda:Image.fromarray(dialog() if app.mouse.click.call_count==ignored+1 else shop())
+        return app,itertools.count(0,.25)
+
+    def test_refresh_ignored_by_the_game_is_clicked_once_more(self):
+        # Reported on Steam 1920x1080: a few refreshes, then 'refresh confirmation was not recognized'.
+        app,clock=self._ignored_refresh_app(1)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                patch('builtins.print') as printed:
+            self.assertTrue(app.clickRefresh())
+        self.assertEqual([c.args for c in app.mouse.click.call_args_list],[(436,994),(436,994),(1165,695)])
+        self.assertTrue(any('did not open the Refresh dialog' in str(c.args[0]) for c in printed.call_args_list))
+
+    def test_refresh_ignored_twice_stops_after_two_refresh_clicks(self):
+        app,clock=self._ignored_refresh_app(2)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                self.assertRaisesRegex(MouseStopped,'refresh confirmation was not recognized'):
+            app.clickRefresh()
+        self.assertEqual([c.args for c in app.mouse.click.call_args_list],[(436,994)]*2)
+
+    def test_refresh_is_not_clicked_again_if_its_label_moved_or_shop_is_dimmed(self):
+        for case in ('moved','dimmed'):
+            with self.subTest(case=case):
+                app,clock=self._ignored_refresh_app(1)
+                marker=app.navigation.navigators[0][1]
+                if case=='moved':
+                    marker.match.side_effect=lambda *_:dict(point=(436,994) if app.mouse.click.call_count==0 else (436,960))
+                else:
+                    app.navigation.shop_visible.side_effect=lambda _:app.mouse.click.call_count==0
+                with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                        self.assertRaisesRegex(MouseStopped,'refresh confirmation was not recognized'):
+                    app.clickRefresh()
+                self.assertEqual([c.args for c in app.mouse.click.call_args_list],[(436,994)])
+
     def test_covered_refresh_label_is_read_again_before_one_click(self):
         # STOVE: after a purchase a toast can still cover Refresh when the shop returns.
         app=self.make_engine();marker=app.navigation.navigators[0][1]
@@ -1140,12 +1178,33 @@ class NativeEngineTests(unittest.TestCase):
             self.assertTrue(app._confirm('refresh',shop()))
         self.assertEqual([c.args for c in app.mouse.click.call_args_list],[(1165,695)]*2)
 
-    def test_open_dialog_without_pointer_pause_is_never_confirmed_twice(self):
-        app,clock=self._paused_confirm_app([dialog()]*40,pause_at=0)
+    def test_confirm_ignored_by_busy_game_is_repeated_once_on_same_dialog(self):
+        # Reported on 0.2.3: after buying the bottom row of the scrolled list
+        # the game ignored Confirm with no pointer pause; the dialog stayed.
+        frames=[dialog()]*2+[dialog()]*12+[dialog(),dialog(),shop()]
+        app,clock=self._paused_confirm_app(frames+[shop()]*5,pause_at=0)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                patch('builtins.print') as printed:
+            self.assertTrue(app._confirm('refresh',shop()))
+        self.assertEqual([c.args for c in app.mouse.click.call_args_list],[(1165,695)]*2)
+        self.assertTrue(any('did not take the Confirm click' in str(c.args[0]) for c in printed.call_args_list))
+
+    def test_open_dialog_without_pointer_pause_is_confirmed_at_most_twice(self):
+        app,clock=self._paused_confirm_app([dialog()]*60,pause_at=0)
         with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
                 self.assertRaisesRegex(MouseStopped,'shop did not return after confirmation'):
             app._confirm('refresh',shop())
-        app.mouse.click.assert_called_once()
+        self.assertEqual(app.mouse.click.call_count,2)
+
+    def test_refresh_waits_once_after_a_scrolled_purchase(self):
+        app=self.make_engine();app._bought_scrolled=True
+        waits=[]
+        def wait(seconds,action,**_):
+            waits.append(action);app.loop_active=False  # Stop right after the settle wait.
+        app._wait_observed=wait
+        self.assertFalse(app.clickRefresh())
+        self.assertEqual(waits,['scrolled purchase settle'])
+        self.assertFalse(app._bought_scrolled)
 
     def test_confirm_retry_happens_at_most_once(self):
         app,clock=self._paused_confirm_app([dialog()]*60,pause_at=3)
@@ -1329,6 +1388,48 @@ class NativeEngineTests(unittest.TestCase):
             self.assertTrue(app.clickBuy(pos))
         adb.assert_not_called()
         self.assertEqual(app.mouse.click.call_args_list[0].args,pos)
+
+    def _ignored_buy_app(self,ignored):
+        """A bookmark row whose first `ignored` Buy clicks open no dialog."""
+        import itertools
+        app = self.make_engine()
+        template = np.random.default_rng(7).integers(20,240,(40,40),dtype=np.uint8)
+        app.storage.inventory['Covenant bookmark'] = adb_engine.E7Item(template,184000)
+        frame = shop(); frame[200:240,800:840] = template[:,:,None]
+        frame[220:300,1550:1810] = (20,110,40)
+        app._rgb = frame
+        pos = app.findItemPosition(cv_gray(frame),template)
+        app.read_confirmation_text = lambda rgb:'Cancel Buy Covenant Bookmarks 184,000' if rgb[760,1100,1]==110 else ''
+        def capture():
+            clicks = app.mouse.click.call_count
+            return Image.fromarray(dialog('buy') if clicks == ignored+1 else frame)
+        app.mouse.screenshot.side_effect = capture
+        return app,pos,itertools.count(0,.25)
+
+    def test_buy_ignored_by_the_game_is_clicked_once_more_on_the_same_row(self):
+        app,pos,clock = self._ignored_buy_app(1)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                patch('builtins.print') as printed:
+            self.assertTrue(app.clickBuy(pos))
+        clicks = [c.args for c in app.mouse.click.call_args_list]
+        self.assertEqual(clicks[:2],[pos,pos])  # Buy, Buy again
+        self.assertEqual(len(clicks),3)  # then one Confirm
+        self.assertTrue(any('did not open the Buy dialog' in str(c.args[0]) for c in printed.call_args_list))
+
+    def test_buy_ignored_twice_stops_after_two_buy_clicks(self):
+        app,pos,clock = self._ignored_buy_app(2)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                self.assertRaisesRegex(MouseStopped,'buy confirmation was not recognized'):
+            app.clickBuy(pos)
+        self.assertEqual([c.args for c in app.mouse.click.call_args_list],[pos,pos])
+
+    def test_buy_is_not_clicked_again_unless_the_shop_is_fully_visible(self):
+        app,pos,clock = self._ignored_buy_app(1)
+        app.navigation.shop_visible.return_value = False  # e.g. dimmed behind an unrecognized dialog
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                self.assertRaisesRegex(MouseStopped,'buy confirmation was not recognized'):
+            app.clickBuy(pos)
+        self.assertEqual([c.args for c in app.mouse.click.call_args_list],[pos])
 
     def test_icon_match_checks_stock_before_buy_for_covenant_and_mystic(self):
         for name,price in (('Covenant bookmark',184000),('Mystic medal',280000)):

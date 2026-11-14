@@ -290,6 +290,50 @@ class BackgroundGuiTests(unittest.TestCase):
         self.app._handle_line('E7GUI_MOUSE_RESUMED')
         self.app._handle_line('Navigation: The pointer passed over the game and the same confirmation is still open; confirming once more.')
         self.assertTrue(self.app.compact_hint.get().startswith('Confirm click was missed'))
+        self.app._handle_line('Navigation: The game did not take the Confirm click and the same confirmation is still open; confirming once more.')
+        self.assertTrue(self.app.compact_hint.get().startswith('Game missed the Confirm click'))
+        self.app._handle_line('Navigation: The game did not open the Refresh dialog; clicking Refresh once more.')
+        self.assertTrue(self.app.compact_hint.get().startswith('Game missed the Refresh click'))
+
+    def test_copy_report_after_a_stop_has_setup_reason_failure_and_tail(self):
+        self.assertEqual(self.app.report_actions.winfo_manager(), '')
+        self.app.mouse_target.set('Epic Seven (Steam)')
+        self.app._report_since = time.time()-1
+        failure = self.root/'mouse-failures'/'abc123'
+        failure.mkdir(parents=True)
+        (failure/'failure.json').write_text('{"operation": "refresh", "confirmation_clicked": false}')
+        (failure/'before.png').write_bytes(b'')
+        home = str(Path.home())
+        self.app.raw_output = ('Game window: 1920 x 1009, windowed, display scale 100%\n'
+                               + ''.join(f'Navigation: step {i}\n' for i in range(100))
+                               + f'Engine: {home}/E7/engine.exe\n')
+        self.app._handle_line('E7GUI_MOUSE_STOPPED {"reason": "The Secret Shop did not open after selecting its menu."}')
+        self.assertEqual(self.app.report_actions.winfo_manager(), 'grid')
+        self.assertEqual(self.app.open_failure_button.winfo_manager(), 'pack')
+        with patch.object(self.app, 'clipboard_clear'), patch.object(self.app, 'clipboard_append') as copy:
+            self.app._copy_report()
+        report = copy.call_args.args[0]
+        self.assertIn(f'v{gui.APP_VERSION} report', report)
+        self.assertIn('- Mode: Background · Epic Seven (Steam)', report)
+        self.assertIn('- Game window: 1920 x 1009, windowed, display scale 100%', report)
+        self.assertIn('- Result: Needs attention · The Secret Shop did not open', report)
+        self.assertIn('mouse-failures/abc123 {"operation": "refresh"', report)
+        self.assertIn('Pictures to attach from that folder: before.png', report)
+        self.assertIn('Last 60 log lines:', report)
+        self.assertIn('    Navigation: step 99', report)
+        self.assertNotIn('step 39\n', report)
+        self.assertNotIn(home, report)
+        self.assertEqual(self.app.copy_report_button.cget('text'), 'Copied ✓')
+
+    def test_copy_report_ignores_failure_records_from_earlier_sessions(self):
+        old = self.root/'mouse-failures'/'old'
+        old.mkdir(parents=True)
+        os.utime(old, (time.time()-3600,)*2)
+        self.app._report_since = time.time()-1
+        self.app.raw_output = 'Navigation: x\n'
+        self.app._handle_line('E7GUI_MOUSE_STOPPED {"reason": "Stopped."}')
+        self.assertEqual(self.app.open_failure_button.winfo_manager(), '')
+        self.assertNotIn('Failure record', self.app._report_text())
 
     def test_compact_hint_expires_unless_still_paused_and_clears_on_stop(self):
         self.app._background_run = True

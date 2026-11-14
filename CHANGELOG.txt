@@ -1,3 +1,31 @@
+0.2.4 · Windowed games no longer miss clicks; recovers from ignored clicks
+
+• Windowed games on Windows: the game cancels a Background click while your
+  mouse rests anywhere on its window, so the shop icon was pressed but the shop
+  never opened ("The Secret Shop did not open after selecting its menu").
+  Background now pauses while the mouse is over a windowed game, still or
+  moving, and resumes when you move it off (taskbar or another screen).
+  Fullscreen is unchanged: a still mouse over the game is fine there.
+• Copy report: when a run stops with a problem, one click copies a short report
+  to paste on Reddit or GitHub: version, system, mode, game window size,
+  windowed or fullscreen, display scaling, the stop reason, the newest failure
+  record and the last 60 log lines. Your Windows user name is replaced with
+  <user>. Open pictures opens the screenshots saved when the run stopped.
+
+• Reported on STOVE: buying an item in the last row of the scrolled shop stopped
+  the run. Right after that purchase the game can ignore a click, leaving a
+  dialog open ("The shop did not return after confirmation") or opening none.
+• If the very same Confirm dialog is still open and settled 5 seconds after the
+  click, the app confirms once more. One dialog is one purchase or one refresh,
+  so this cannot charge twice. Before, this retry needed a pointer pause.
+• If a Buy click opens no dialog, the app clicks Buy once more, only on the fully
+  visible shop with the same item and Buy button. Buy spends nothing on its own.
+• If a Refresh click opens no dialog ("The refresh confirmation was not
+  recognized"), the app clicks Refresh once more, only on the fully visible shop
+  with the Refresh button where it was. Refresh spends nothing on its own.
+• Waits 0.6 seconds after a purchase from the scrolled list before Refresh.
+• Each retry happens at most once; a second miss stops the run as before.
+
 0.2.3 · A refresh dialog the game ignored no longer stops the run
 
 • If the game ignored a Confirm click (for example right after a purchase that
