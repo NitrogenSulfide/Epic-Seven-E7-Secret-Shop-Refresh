@@ -45,10 +45,15 @@ window, or click **Stop Session**.
 - Keep the PC awake: don't let it sleep or lock during a run.
 - Try a small budget first.
 
-## Compact tracker
+## What it looks like
+
+The main window, here paused because the pointer moved over the game (it resumes
+once the pointer is still, or stops after 10 seconds):
+
+<img src="docs/media/v0.2.1-full-window.png" alt="Main window in Background mode with live counters and a pause warning" width="800">
 
 While it runs, the app can shrink to a small always-on-top bar with purchases,
-Skystones spent, time left and a Stop button.
+Skystones spent, time left and a Stop button:
 
 <img src="docs/media/v0.2.1-linux-compact-tracker.png" alt="Compact tracker bar during a run" width="600">
 
