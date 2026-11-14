@@ -284,7 +284,7 @@ class BackgroundGuiTests(unittest.TestCase):
     def test_compact_hint_for_linux_pointer_minimized_game_and_missed_confirm(self):
         self.app._background_run = True
         self.pause('Move your mouse off the game window; background input pauses while the pointer is over it.')
-        self.assertTrue(self.app.compact_hint.get().startswith('Move the mouse off the game'))
+        self.assertTrue(self.app.compact_hint.get().startswith('Move the mouse onto the compact bar'))
         self.pause('The game window is minimized or hidden.')
         self.assertEqual(self.app.compact_hint.get(), 'Restore the game window. It resumes by itself.')
         self.app._handle_line('E7GUI_MOUSE_RESUMED')
@@ -369,8 +369,9 @@ class BackgroundGuiTests(unittest.TestCase):
         import e7_background
         self.assertEqual(gui.POINTER_PAUSE_LIMIT, e7_background.PAUSE_LIMIT)
         source = Path(e7_background.__file__).read_text(encoding='utf-8')
-        for prefix in gui.POINTER_PAUSE_REASONS:
-            self.assertIn(prefix, source)
+        # [0] is only sent by engines before 0.2.4; the current engine sends [1].
+        self.assertIn(gui.POINTER_PAUSE_REASONS[1], source)
+        self.assertNotIn(gui.POINTER_PAUSE_REASONS[0], source)
 
 
 class SuggestedModeTest(unittest.TestCase):

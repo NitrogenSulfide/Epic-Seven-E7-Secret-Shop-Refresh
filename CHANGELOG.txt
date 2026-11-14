@@ -1,11 +1,11 @@
-0.2.4 · Windowed games no longer miss clicks; recovers from ignored clicks
+0.2.4 · A mouse resting on the game no longer cancels clicks; recovers from ignored clicks
 
-• Windowed games on Windows: the game cancels a Background click while your
-  mouse rests anywhere on its window, so the shop icon was pressed but the shop
+• Windows: the game cancels a Background click while your mouse rests
+  anywhere on it, so the shop icon was pressed but the shop
   never opened ("The Secret Shop did not open after selecting its menu").
-  Background now pauses while the mouse is over a windowed game, still or
-  moving, and resumes when you move it off (taskbar or another screen).
-  Fullscreen is unchanged: a still mouse over the game is fine there.
+  The same happens in fullscreen. Background now pauses while the mouse is
+  over the game, still or moving, windowed or fullscreen, and resumes when you
+  move it off: onto the compact tracker bar, the taskbar or another screen.
 • Copy report: when a run stops with a problem, one click copies a short report
   to paste on Reddit or GitHub: version, system, mode, game window size,
   windowed or fullscreen, display scaling, the stop reason, the newest failure

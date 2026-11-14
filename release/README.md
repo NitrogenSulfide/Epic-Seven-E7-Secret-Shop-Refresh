@@ -39,8 +39,9 @@ one Epic Seven window may be open.
 - **Two monitors work best:** game on one, everything else on the other.
 - **One monitor:** leave the game open behind your other windows. Covering it is
   fine, but **never minimize it**; a minimized game stops drawing and the run stops.
-- Keep your pointer off the game window (park it on the other monitor or the
-  taskbar). A pointer moving over the game pauses input.
+- Keep your pointer off the game window, still or moving (park it on the compact
+  tracker bar, the taskbar or another monitor). Any pointer over the game pauses
+  input, because the game cancels the app's clicks while it rests there.
 - Start from the home screen or an open Secret Shop, with no Refresh or Buy dialog
   left open.
 - Don't resize the game, switch it to or from fullscreen, or open a second Epic

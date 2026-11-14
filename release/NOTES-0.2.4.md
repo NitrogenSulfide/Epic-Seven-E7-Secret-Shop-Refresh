@@ -1,4 +1,4 @@
-# v0.2.4 — Windowed games no longer miss clicks; recovers from ignored clicks
+# v0.2.4 — A mouse resting on the game no longer cancels clicks; recovers from ignored clicks
 
 > ⚠️ **Only tested on my own PCs.** Steam (Windows 11 and Linux), the STOVE client and
 > Google Play Games Developer Emulator work for me. Other PCs, emulators and settings
@@ -6,12 +6,12 @@
 > something breaks, report it on [GitHub Issues](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/issues)
 > or Reddit with the log line the app shows.
 
-**Fix for windowed games on Windows failing at the start.** In windowed mode the game
-cancels a Background click while your mouse rests anywhere on its window: the shop
-icon was pressed but the shop never opened ("The Secret Shop did not open after
-selecting its menu"). Background now pauses while the mouse is over a windowed game
-and resumes as soon as you move it off, onto the taskbar or another screen.
-Fullscreen is unchanged; a still mouse over a fullscreen game is fine.
+**Fix for runs failing at the start on Windows.** The game cancels a Background click
+while your mouse rests anywhere on it, windowed or fullscreen: the shop icon was
+pressed but the shop never opened ("The Secret Shop did not open after selecting its
+menu"). Background now pauses while the mouse is over the game and resumes as soon
+as you move it off, onto the compact tracker bar, the taskbar or another screen. With
+one fullscreen monitor, park the mouse on the compact bar.
 
 **Copy report.** When a run stops with a problem, press **Copy report** under the
 message and paste it into your Reddit comment or GitHub issue. It has everything

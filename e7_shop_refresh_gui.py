@@ -48,8 +48,8 @@ DEFAULT_CONTROL_MODE = 'Background'
 # A Background pause that the pointer causes; the engine (e7_background.PAUSE_LIMIT)
 # stops the session if it has not cleared after this many seconds.
 POINTER_PAUSE_LIMIT = 10
-POINTER_PAUSE_REASONS = ('The pointer is moving over the game window',  # Windows: moving only
-                         'Move your mouse off the game window')         # Linux, or a windowed game on Windows: any pointer over it
+POINTER_PAUSE_REASONS = ('The pointer is moving over the game window',  # engines before 0.2.4 (Windows, moving only)
+                         'Move your mouse off the game window')         # any pointer over the game (Linux and Windows)
 
 
 def pointer_pause_text(reason, seconds_left):
@@ -80,7 +80,7 @@ def pause_hint(reason):
     if reason.startswith(POINTER_PAUSE_REASONS[0]):
         return 'Leave the mouse still, or park it on the taskbar. It resumes by itself.'
     if reason.startswith(POINTER_PAUSE_REASONS):
-        return 'Move the mouse off the game (taskbar or another screen). It resumes by itself.'
+        return 'Move the mouse onto the compact bar, the taskbar or another screen. It resumes by itself.'
     if 'minimized or hidden' in reason:
         return 'Restore the game window. It resumes by itself.'
     return ''

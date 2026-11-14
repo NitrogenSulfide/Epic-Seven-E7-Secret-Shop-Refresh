@@ -29,8 +29,6 @@ HELPER_NAME = 'e7_wine_input.exe'
 # Windows game processes Background accepts, by client. Both draw the same
 # GLFW 'Epic Seven' window (checked with STOVE on 2026-11-13).
 WINDOWS_GAME_EXES = {'epicseven_steam.exe': 'Steam', 'epicseven.exe': 'STOVE'}
-# Windows: a pointer over the game counts as in use until it has been still this long.
-POINTER_STILL_SECONDS = 1.0
 PAUSE_LIMIT = 10
 
 
@@ -392,8 +390,6 @@ class WinGameWindow:
         if len(games) > 1:
             raise ValueError('More than one Epic Seven game window is open. Close the extra one, then try again.')
         self.hwnd, self.pid, self.game_client = games[0]
-        self._clock = time.monotonic
-        self._cursor, self._cursor_moved = None, float('-inf')
 
     def _prototypes(self):
         w, ctypes = self.w, self.ctypes
@@ -433,30 +429,19 @@ class WinGameWindow:
             return 'The game window closed.'
         if self.user.IsIconic(self.hwnd) or not self.user.IsWindowVisible(self.hwnd):
             return 'The game window is minimized or hidden.'
-        # Fullscreen: only a moving pointer can move the game's cursor between a
-        # posted press and release; a still one is fine, and players on one screen
-        # have nowhere else to leave it. Windowed: the game cancels a posted click
-        # while the real pointer rests anywhere on its window except the target
-        # (reproduced on Windows 11 STOVE at 1920 x 1009, 2026-11-14), so any
-        # pointer over it pauses, as on Linux.
+        # The game cancels a posted click while the real pointer rests anywhere
+        # on it except the target, windowed and fullscreen alike (reproduced on
+        # Windows 11 STOVE at 1920 x 1009 windowed and 1920 x 1080 fullscreen,
+        # 2026-11-14). Any pointer over the game pauses, as on Linux; on one
+        # screen the compact tracker bar is a safe place to leave it.
         cursor = self.w.POINT()
         if not self.user.GetCursorPos(self.ctypes.byref(cursor)):
-            return None
-        now, position = self._clock(), (cursor.x, cursor.y)
-        if self._cursor is not None and position != self._cursor:
-            self._cursor_moved = now
-        self._cursor = position
-        windowed = self._windowed()
-        if not windowed and now-self._cursor_moved >= POINTER_STILL_SECONDS:
             return None
         hit = self.user.WindowFromPoint(cursor)
         if not hit or self.user.GetAncestor(hit, 2) != self.hwnd:  # GA_ROOT
             return None
-        if windowed:
-            return ('Move your mouse off the game window; in windowed mode the game cancels '
-                    'background clicks while the pointer rests on it.')
-        return ('The pointer is moving over the game window; background input waits until it stays still. '
-                'Leave it still, or park it on the taskbar.')
+        return ('Move your mouse off the game window; the game cancels background clicks while the '
+                'pointer rests on it. Park it on the compact tracker bar, the taskbar or another screen.')
 
     def describe(self):
         """'windowed' or 'fullscreen', plus display scaling, for reports."""

@@ -42,10 +42,11 @@ window, or click **Stop Session**.
 - **Two monitors work best:** game on one, everything else on the other.
 - **One monitor:** leave the game open behind your other windows. Covering it is
   fine, but **never minimize it**; a minimized game stops drawing and the run stops.
-- Keep your pointer off the game window. A pointer moving over the game pauses
-  input; if it keeps moving for 10 seconds, the run stops. In **windowed** mode
-  any pointer resting on the game pauses too, so park it on the taskbar or
-  another screen.
+- Keep your pointer off the game window, still or moving: the game cancels the
+  app's clicks while the pointer rests on it, so the app pauses until you move it
+  off, and stops after 10 seconds. Park it on the compact tracker bar, the
+  taskbar or another screen. With one fullscreen monitor, the compact bar is the
+  place.
 - Start from the home screen or the Secret Shop, with no Refresh or Buy dialog open.
 - Don't resize the game, toggle fullscreen, or open a second Epic Seven window
   during a run.
