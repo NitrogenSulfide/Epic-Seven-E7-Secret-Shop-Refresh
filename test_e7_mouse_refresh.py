@@ -1596,11 +1596,13 @@ class NativeEngineTests(unittest.TestCase):
         animating=[0];events=[]
         page=shop();page[220:300,1550:1810]=(20,110,40);page[650:730,1550:1810]=(20,110,40)
         moving=shop();moving[220:300,1550:1810]=(20,110,40);moving[590:670,1550:1810]=(20,110,40)
+        dragged=[False]
         def capture():
             if animating[0]:
                 animating[0]-=1;return Image.fromarray(moving)
-            return Image.fromarray(page)
+            return Image.fromarray(scrolled(page) if dragged[0] else page)
         app.mouse.screenshot.side_effect=capture
+        app.mouse.drag.side_effect=lambda *args,**kw:dragged.__setitem__(0,True)
         def words(rgb,region,**kwargs):
             offset=370 if tuple(app._rgb[700,1600])!=(20,110,40) else 430
             return dict(words=currency_words('Covenant bookmark')+currency_words('Mystic medal',offset))
@@ -1631,6 +1633,35 @@ class NativeEngineTests(unittest.TestCase):
             app.refreshShop()
         self.assertEqual(events,['drag','drag','buy Mystic medal','refresh'])
         self.assertIn('The list did not scroll; dragging once more.',output.getvalue())
+
+    def test_ignored_drags_stop_before_refresh(self):
+        app=self.make_engine();self.add_real_currencies(app);app.budget=3
+        app.mouse.screenshot.side_effect=lambda:Image.fromarray(shop())
+        app.clickRefresh=Mock(return_value=True)
+        with patch('e7_mouse_refresh.time.sleep'),self.assertRaisesRegex(MouseStopped,'did not move after three drags'):
+            app.refreshShop()
+        self.assertEqual(app.mouse.drag.call_count,3)
+        down,up=app.mouse.drag.call_args_list[0].args,app.mouse.drag.call_args_list[2].args
+        self.assertLess(down[3],down[1]);self.assertGreater(up[3],up[1])
+        app.clickRefresh.assert_not_called()
+
+    def test_shop_left_scrolled_to_the_bottom_checks_the_top_rows(self):
+        # Session started on a shop already scrolled down: drags down do
+        # nothing, a drag up reveals the top rows and their item is bought.
+        app=self.make_engine();self.add_real_currencies(app);app.budget=3
+        at_top=[False];events=[]
+        top=scrolled();top[220:300,1550:1810]=(20,110,40)
+        app.mouse.screenshot.side_effect=lambda:Image.fromarray(top if at_top[0] else shop())
+        self.ui_ocr.side_effect=lambda rgb,region,**kwargs:dict(words=currency_words('Covenant bookmark') if at_top[0] else [])
+        def drag(x1,y1,x2,y2,**kw):
+            events.append('up' if y2>y1 else 'down')
+            if y2>y1:at_top[0]=True
+        def buy(pos):events.append('buy '+app._item_name);return True
+        def refresh():events.append('refresh');app.loop_active=False;return True
+        app.mouse.drag.side_effect=drag;app.clickBuy=Mock(side_effect=buy);app.clickRefresh=Mock(side_effect=refresh)
+        with patch('e7_mouse_refresh.time.sleep'):
+            app.refreshShop()
+        self.assertEqual(events,['down','down','up','buy Covenant bookmark','refresh'])
 
     def test_shared_loop_enforces_four_refreshes_for_twelve_skystones(self):
         app = self.make_engine()
@@ -1794,15 +1825,16 @@ class NativeEngineTests(unittest.TestCase):
 
     def test_consecutive_refreshes_accept_animated_background_and_small_button_jitter(self):
         app=self.make_engine();app.budget=6
-        state=['shop'];reads=[0]
+        state=['shop'];reads=[0];dragged=[False]
         def screenshot():
-            image=shop() if state[0]=='shop' else dialog()
+            image=(scrolled() if dragged[0] else shop()) if state[0]=='shop' else dialog()
             if state[0]=='confirm':
                 reads[0]+=1
                 image[300:500,550:1450]=40 if reads[0]%2 else 100
             return Image.fromarray(image)
-        def click(x,y):state[0]='confirm' if y>900 else 'shop'
+        def click(x,y):state[0]='confirm' if y>900 else 'shop';dragged[0]=False
         app.mouse.screenshot.side_effect=screenshot;app.mouse.click.side_effect=click
+        app.mouse.drag.side_effect=lambda *args,**kw:dragged.__setitem__(0,True)
         original=confirmation_button
         observed=[]
         def button(rgb,operation,before):

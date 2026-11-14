@@ -10,6 +10,16 @@ class ReportTest(unittest.TestCase):
         text = anonymize(r'C:\Users\Natto\E7\engine.exe and natto again', home=r'C:\Users\Natto', user='Natto')
         self.assertEqual(text, r'~\E7\engine.exe and <user> again')
 
+    def test_short_user_names_are_hidden_in_escaped_and_plain_profile_paths(self):
+        text = anonymize("missing 'C:\\\\Users\\\\Al\\\\E7\\\\engine.exe' or C:\\Users\\Al\\x, All good",
+                         home=r'C:\Users\Al', user='Al')
+        self.assertNotIn('Al\\', text)
+        self.assertIn("'~\\\\E7\\\\engine.exe'", text)
+        self.assertIn('~\\x', text)
+        self.assertIn('All good', text)
+        moved = anonymize('C:\\Users\\Al\\Desktop', home=r'D:\Profiles\Al', user='Al')
+        self.assertEqual(moved, 'C:\\Users\\<user>\\Desktop')
+
     def test_long_logs_are_trimmed_to_fit_a_reddit_comment(self):
         log = ''.join(f'Navigation: a long line number {i} '+'x'*200+'\n' for i in range(60))
         with tempfile.TemporaryDirectory() as folder:

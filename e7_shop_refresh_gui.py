@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from tkinter import font as tkfont, messagebox, ttk, filedialog
 from e7_process import launch_engine
+from e7_timing import MIN_TAP_DELAY
 from e7_engine_protocol import RunSettings, validate_settings, EngineProtocol
 from e7_history import history_mode, read_sessions, export_sessions
 from e7_input_trace import BoundedSessionLog, format_trace_line
@@ -877,7 +878,7 @@ class RefreshGui(tk.Tk):
             entry.grid(row=1, column=column, sticky='ew', pady=(dp(3), 0), padx=(0 if column==0 else dp(8), 0))
             self.settings_widgets.append(entry)
             if var is self.tap_sleep:
-                self.delay_hint = ThemeHint(entry, lambda: 'Greater than 0, up to 2.00 seconds · randomized delay also stays within this cap')
+                self.delay_hint = ThemeHint(entry, lambda: f'{MIN_TAP_DELAY:.2f} to 2.00 seconds · lower values are raised to {MIN_TAP_DELAY:.2f} because the game ignores faster clicks')
         ttk.Label(controls, text='Stop key · click the box, then press a key').grid(row=5, column=0, sticky='w')
         self.stop_key_entry = ttk.Entry(controls, textvariable=self.stop_key, font=self.ui_font)
         self.stop_key_entry.state(['readonly'])
@@ -1144,6 +1145,7 @@ class RefreshGui(tk.Tk):
                 for key, var in (("tap_sleep", self.tap_sleep), ("budget", self.budget), ("stop_refresh_key", self.stop_key)):
                     var.set(settings.get(key, var.get()))
                 # Migrate whole-valued budgets written by older float-based releases.
+                self._raise_tap_delay_floor()
                 legacy_budget = float(self.budget.get())
                 if math.isfinite(legacy_budget) and legacy_budget.is_integer():
                     self.budget.set(str(int(legacy_budget)))
@@ -1247,7 +1249,17 @@ class RefreshGui(tk.Tk):
         if self.control_mode.get() == 'ADB' and not self.device.get().strip():
             raise ValueError('Choose the emulator from the device list, or enter its ADB endpoint. Use Scan to discover BlueStacks.')
         device = self._device_address() or ('native-mouse' if self.control_mode.get() != 'ADB' else '')
+        self._raise_tap_delay_floor()
         return validate_settings(device, self.budget.get(), self.tap_sleep.get(), self.stop_key.get(), self.random_offset.get(), self.debug_mode.get(), round(self.tap_jitter.get(), 2), self.trace_input.get(), self.buy_friendship.get())
+
+    def _raise_tap_delay_floor(self):
+        """Show the raised value in the box; validation applies the same floor."""
+        try:
+            delay = float(self.tap_sleep.get())
+        except (TypeError, ValueError):
+            return
+        if math.isfinite(delay) and 0 < delay < MIN_TAP_DELAY:
+            self.tap_sleep.set(f'{MIN_TAP_DELAY:g}')
 
     def _device_address(self):
         value = self.device.get().strip()
@@ -2242,7 +2254,11 @@ class RefreshGui(tk.Tk):
                     writer.append(text)
             except OSError:
                 self._session_log_path = None
+        had_output = bool(self.raw_output)
         self.raw_output = (self.raw_output + text)[-150000:]
+        if not had_output:
+            # A launch failure sets Failed before its error reaches the log.
+            self._show_report_actions()
         at_bottom = self.log.yview()[1] >= 0.99
         self.log.configure(state=tk.NORMAL)
         # Normalize carriage-return progress updates for readable diagnostics.

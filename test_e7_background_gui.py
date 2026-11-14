@@ -325,6 +325,19 @@ class BackgroundGuiTests(unittest.TestCase):
         self.assertNotIn(home, report)
         self.assertEqual(self.app.copy_report_button.cget('text'), 'Copied ✓')
 
+    def test_tap_delay_below_the_floor_is_raised_in_the_box(self):
+        self.app.tap_sleep.set('0.05')
+        self.assertEqual(self.app._settings().tap_sleep, .3)
+        self.assertEqual(self.app.tap_sleep.get(), '0.3')
+
+    def test_copy_report_appears_after_a_launch_failure_logs_its_error(self):
+        # The launch-error handler sets Failed before the error reaches the log.
+        self.app.raw_output = ''
+        self.app.status.set('Failed')
+        self.assertEqual(self.app.report_actions.winfo_manager(), '')
+        self.app._append_log('Engine could not start: file not found\n')
+        self.assertEqual(self.app.report_actions.winfo_manager(), 'grid')
+
     def test_copy_report_ignores_failure_records_from_earlier_sessions(self):
         old = self.root/'mouse-failures'/'old'
         old.mkdir(parents=True)

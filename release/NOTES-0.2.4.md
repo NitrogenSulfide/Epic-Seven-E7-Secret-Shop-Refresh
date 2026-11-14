@@ -43,7 +43,12 @@ rest after each purchase before looking for the next item.
 **Fix for skipped items in windowed mode.** A mouse crossing the game during the
 app's scroll could cancel it, so the second half of the shop was never checked and a
 wanted item there was skipped. The app now checks that the list actually moved and
-drags once more if it did not. A drag spends nothing.
+drags once more if it did not. If it still did not, it drags the other way (a shop
+left scrolled to the bottom then shows its top rows), and if the list never moves the
+run stops before Refresh. A drag spends nothing.
+
+**Tap delay is now at least 0.3 seconds**, the default. Lower values, including ones
+saved by older versions, are raised to 0.3, because the game ignores faster clicks.
 
 Settings and history carry over: extract **E7ShopRefresh-0.2.4.zip** into a fresh
 folder and copy `runtime/ShopRefreshGUI.ini`, `runtime/ADBconfig.ini` and

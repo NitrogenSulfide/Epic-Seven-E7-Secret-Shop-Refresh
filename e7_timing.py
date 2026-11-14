@@ -2,6 +2,9 @@
 import math
 
 MAX_TAP_DELAY = 2.0
+# Faster clicking makes the game ignore clicks (the 0.2.3 reports); lower
+# settings, including ones saved by older versions, are raised to this.
+MIN_TAP_DELAY = 0.3
 MAX_TAP_JITTER = 0.10
 
 
@@ -9,6 +12,7 @@ def validate_timing(delay, jitter=None):
     delay = float(delay)
     if not math.isfinite(delay) or not 0 < delay <= MAX_TAP_DELAY:
         raise ValueError('Tap delay must be greater than 0 and at most 2.00 seconds.')
+    delay = max(delay, MIN_TAP_DELAY)
     if jitter is not None:
         jitter = float(jitter)
         if not math.isfinite(jitter) or not 0 <= jitter <= MAX_TAP_JITTER:

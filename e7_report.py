@@ -37,9 +37,15 @@ def anonymize(text, *, home=None, user=None):
         except Exception:
             user = ''
     if home and len(home) > 3:
-        text = text.replace(home, '~').replace(home.replace('\\', '/'), '~')
-    if user and len(user) >= 3:
-        text = re.sub(re.escape(user), '<user>', text, flags=re.IGNORECASE)
+        # Plain, forward-slash and escaped (repr/JSON) spellings of the home path.
+        for form in (home, home.replace('\\', '/'), home.replace('\\', '\\\\')):
+            text = text.replace(form, '~')
+    if user:
+        # Any profile path, whatever the name length; escaped backslashes too.
+        text = re.sub(r'(?i)(users(?:\\{1,2}|/))' + re.escape(user) + r'(?=\\|/|$|[\s\'"])',
+                      lambda m: m.group(1) + '<user>', text)
+        if len(user) >= 3:
+            text = re.sub(re.escape(user), '<user>', text, flags=re.IGNORECASE)
     return text
 
 

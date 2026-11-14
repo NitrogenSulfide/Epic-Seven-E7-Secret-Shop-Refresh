@@ -73,6 +73,9 @@ class SharedFlowTests(unittest.TestCase):
             screen=state['screen']
             names=offered[state['page']-1] if offered is not None else None
             rgb=wallpaper if screen=='hidden' else home_image(wallpaper,home_control) if screen=='home' else shop_image(items,names) if screen=='shop' else dialog_image(screen)
+            if screen=='shop' and state['page']==2:
+                # The scrolled list shows other rows; keep item and Buy areas.
+                rgb=rgb.copy();rgb[110:1080,1330:1480]=np.clip(rgb[110:1080,1330:1480].astype(np.int16)+60,0,255).astype(np.uint8)
             if screen=='shop' and items:
                 for name,_,_,y in ITEM_ROWS:
                     if name in state['bought'] and not state.get('keep_purchased_controls'):

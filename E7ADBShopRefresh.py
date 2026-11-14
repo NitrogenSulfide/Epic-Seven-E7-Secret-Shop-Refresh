@@ -334,6 +334,18 @@ class E7ADBShopRefresh(ObservedShopFlow):
                 xoff, yoff = self.generateSwipeOffset()
                 self.swipe(x1+xoff,y1+yoff,x1+xoff,y2+yoff)
                 screenshot = self._settled_screenshot(1, 'scroll retry settle', changed_from=page_one)
+                if self._scroll_missed(page_one):
+                    # Still unmoved: either the list already sat at the bottom
+                    # (shop left scrolled) or the game ignores drags. Dragging
+                    # up tells them apart; from the bottom it reveals the top
+                    # rows, which page two then checks.
+                    print('Navigation: The list still did not move; dragging the other way.', flush=True)
+                    xoff, yoff = self.generateSwipeOffset()
+                    self.swipe(x1+xoff,y2+yoff,x1+xoff,y1+yoff)
+                    screenshot = self._settled_screenshot(1, 'scroll reverse settle', changed_from=page_one)
+                    if self._scroll_missed(page_one):
+                        raise MouseStopped('The shop list did not move after three drags, so not every item '
+                                           'could be checked. Stopped before Refresh; nothing was spent on this page.')
 
             if not self.loop_active: break
             #look at shop (page 2)

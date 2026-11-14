@@ -62,6 +62,13 @@ class SessionCleanupTests(unittest.TestCase):
             self.assertEqual(rows[1]['Friendship bookmark'],'')
             self.assertEqual(rows[1]['Mode'],'Normal')
 
+    def test_delays_below_the_floor_are_raised_everywhere(self):
+        for delay in (.01, .1, .29):
+            with self.subTest(delay=delay):
+                self.assertEqual(validate_timing(delay, .1)[0], .3)
+                self.assertEqual(validate_settings('fake', '12', str(delay), 'esc', True, False).tap_sleep, .3)
+        self.assertEqual(validate_timing(.5, .1)[0], .5)
+
     def test_all_entry_points_reject_invalid_delays_before_capture(self):
         for delay in (0, -.1, 2.01, 86400, float('nan'), float('inf')):
             with self.subTest(delay=delay), self.assertRaises(ValueError):
