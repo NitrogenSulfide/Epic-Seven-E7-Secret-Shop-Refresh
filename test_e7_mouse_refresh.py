@@ -1435,6 +1435,36 @@ class NativeEngineTests(unittest.TestCase):
             app.clickBuy(pos)
         app.mouse.click.assert_not_called()
 
+    def _unclear_then(self,app,clear_after):
+        """findItemPosition raises an unclear-row stop for the first `clear_after` looks."""
+        real, looks = app.findItemPosition, []
+        def look(*args,**kwargs):
+            looks.append(1)
+            if len(looks) <= clear_after:
+                from e7_shop_flow import UnclearShopRow; raise UnclearShopRow('The Covenant bookmark name was recognized, but its price and Buy button could not be verified on the same row. Stopped before scrolling or refreshing.')
+            return real(*args,**kwargs)
+        return look
+
+    def test_unclear_row_right_before_buy_is_read_again_once_the_list_settles(self):
+        import itertools
+        clock = itertools.count(0,.25)
+        app,pos,_ = self._moving_buy_app(200)
+        with patch.object(app,'findItemPosition',self._unclear_then(app,1)), \
+                patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                patch('builtins.print'):
+            self.assertTrue(app.clickBuy(pos))
+        self.assertEqual(app.mouse.click.call_args_list[0].args[1],260)
+
+    def test_row_still_unclear_after_the_list_settles_stops_without_a_click(self):
+        import itertools
+        clock = itertools.count(0,.25)
+        app,pos,_ = self._moving_buy_app(200)
+        with patch.object(app,'findItemPosition',self._unclear_then(app,2)), \
+                patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                patch('builtins.print'),self.assertRaisesRegex(MouseStopped,'could not be verified on the same row'):
+            app.clickBuy(pos)
+        app.mouse.click.assert_not_called()
+
     def _ignored_buy_app(self,ignored):
         """A bookmark row whose first `ignored` Buy clicks open no dialog."""
         import itertools

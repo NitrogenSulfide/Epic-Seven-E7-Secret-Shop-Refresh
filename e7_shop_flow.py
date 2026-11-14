@@ -983,11 +983,17 @@ class ObservedShopFlow:
         if pos is None or not self.loop_active or (self._item is None and self._item_name != 'Friendship points'):
             return False
         frame = self.takeScreenshot(); self.navigation.require_shop(frame)
-        current = self.findItemPosition(frame,self._item)
+        try:
+            current = self.findItemPosition(frame,self._item)
+        except (UnclearShopRow,IncompleteCurrencyRow):
+            # A frame mid-animation can split the name from its price/Buy
+            # button (Linux Steam, 2026-11-14, top row right after a refresh).
+            current = None
         if current is None or abs(current[1]-pos[1]) > 20:
             # The list can still be moving right after a refresh (Linux Steam,
             # 2026-11-14: Friendship found, then gone a moment later). Nothing
-            # was clicked yet: let it come to rest and look once more.
+            # was clicked yet: let it come to rest and look once more; a row
+            # that is still unclear then stops the run as before.
             print('Navigation: The item moved before Buy; waiting for the list to settle and checking again.',flush=True)
             frame = self._settled_screenshot(1,'buy recheck settle')
             if frame is None or not self.loop_active:

@@ -47,6 +47,8 @@
 • If the item list was still moving right before Buy, the run stopped with
   "The selected item changed before Buy". It now waits for the list to settle
   and looks once more; it still stops, with no click, if the item is gone.
+  The same applies when the moving list made the item's price and Buy button
+  unreadable ("could not be verified on the same row").
 
 0.2.3 · A refresh dialog the game ignored no longer stops the run
 
