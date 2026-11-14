@@ -25,6 +25,10 @@
   with the Refresh button where it was. Refresh spends nothing on its own.
 • Waits 0.6 seconds after a purchase from the scrolled list before Refresh.
 • Each retry happens at most once; a second miss stops the run as before.
+• Two wanted items on the same page: after buying the first, the app looked
+  for the second while the list was still moving and stopped with "The
+  selected item changed before Buy". It now waits for the list to come to rest
+  after each purchase before looking for the next item.
 
 0.2.3 · A refresh dialog the game ignored no longer stops the run
 

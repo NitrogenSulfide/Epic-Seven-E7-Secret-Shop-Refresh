@@ -35,6 +35,11 @@ confirmation") or a Buy click opened nothing, and the run stopped.
 - A short 0.6 second pause after a purchase from the scrolled list, before Refresh.
 - Each retry happens at most once. A second miss stops the run as before.
 
+**Fix for runs stopping when two wanted items are on the same page.** After buying
+the first, the app looked for the second while the list was still moving and stopped
+with "The selected item changed before Buy". It now waits for the list to come to
+rest after each purchase before looking for the next item.
+
 Settings and history carry over: extract **E7ShopRefresh-0.2.4.zip** into a fresh
 folder and copy `runtime/ShopRefreshGUI.ini`, `runtime/ADBconfig.ini` and
 `runtime/ShopRefreshHistory/` from your old folder if you want them.

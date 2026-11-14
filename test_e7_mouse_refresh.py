@@ -1581,6 +1581,32 @@ class NativeEngineTests(unittest.TestCase):
         self.assertEqual([item.count for item in app.storage.inventory.values()],[1,1])
         self.assertEqual(app.refresh_count,1)
 
+    def test_next_item_is_searched_on_a_settled_list_after_a_purchase(self):
+        # Orlando 2026-11-14: right after a purchase the list still slides; an
+        # item located on that moving frame is not where Buy then lands.
+        app=self.make_engine();self.add_real_currencies(app);app.budget=3
+        animating=[0];events=[]
+        page=shop();page[220:300,1550:1810]=(20,110,40);page[650:730,1550:1810]=(20,110,40)
+        moving=shop();moving[220:300,1550:1810]=(20,110,40);moving[590:670,1550:1810]=(20,110,40)
+        def capture():
+            if animating[0]:
+                animating[0]-=1;return Image.fromarray(moving)
+            return Image.fromarray(page)
+        app.mouse.screenshot.side_effect=capture
+        def words(rgb,region,**kwargs):
+            offset=370 if tuple(app._rgb[700,1600])!=(20,110,40) else 430
+            return dict(words=currency_words('Covenant bookmark')+currency_words('Mystic medal',offset))
+        self.ui_ocr.side_effect=words
+        def buy(pos):
+            events.append((app._item_name,round(pos[1])))
+            animating[0]=2;app.takeScreenshot()  # clickBuy's own capture lands mid-slide
+            return True
+        def refresh():app.loop_active=False;return True
+        app.clickBuy=Mock(side_effect=buy);app.clickRefresh=Mock(side_effect=refresh)
+        with patch('e7_mouse_refresh.time.sleep'):
+            app.refreshShop()
+        self.assertEqual(events[:2],[('Covenant bookmark',260),('Mystic medal',690)])
+
     def test_shared_loop_enforces_four_refreshes_for_twelve_skystones(self):
         app = self.make_engine()
         state = ['shop']

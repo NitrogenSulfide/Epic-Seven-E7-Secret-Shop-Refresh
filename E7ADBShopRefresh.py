@@ -258,6 +258,18 @@ class E7ADBShopRefresh(ObservedShopFlow):
             screenshot = self.takeScreenshot()
             self.navigation.require_shop(screenshot)
 
+    def _after_purchase(self, screenshot):
+        """Search the next wanted item only on a list at rest.
+
+        The bought row animates (sold-out stamp, dialog fade) right after a
+        purchase; a frame taken then can place the next item where it will not
+        be at Buy time. ADB keeps its fixed timing.
+        """
+        if not self.fast_waits or not self.loop_active:
+            return screenshot
+        settled = self._settled_screenshot(1, 'purchase settle')
+        return screenshot if settled is None else settled
+
     def refreshShop(self):
         if not self.clickShop():
             return
@@ -293,6 +305,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
                         value.count += 1
                         brought.add(key)
                         self.reportLiveStats()
+                        screenshot = self._after_purchase(screenshot)
 
             if not self.loop_active: break
             
@@ -323,6 +336,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
                         # purchase from the scrolled list; let it settle first.
                         self._bought_scrolled = True
                         self.reportLiveStats()
+                        screenshot = self._after_purchase(screenshot)
 
             #print every 10% progress
             if self.budget >= 30 and self.refresh_count*3 >= milestone and not self.debug:
