@@ -45,16 +45,12 @@ window, or click **Stop Session**.
 - Keep the PC awake: don't let it sleep or lock during a run.
 - Try a small budget first.
 
-## Screenshots
+## Compact tracker
 
-The compact tracker: a small always-on-top bar with purchases, Skystones spent,
-time left and a Stop button.
+While it runs, the app can shrink to a small always-on-top bar with purchases,
+Skystones spent, time left and a Stop button.
 
 <img src="docs/media/v0.2.1-linux-compact-tracker.png" alt="Compact tracker bar during a run" width="600">
-
-Session history and optional click/timing diagnostics (from an older version):
-
-![Session history and diagnostics](docs/media/v0.1.3-diagnostics.png)
 
 ## Tested game clients
 
@@ -62,7 +58,7 @@ Session history and optional click/timing diagnostics (from an older version):
 | --- | --- | --- | --- |
 | Epic Seven on **Steam** (Windows 11) | Tested | Not tested | Unavailable |
 | Epic Seven on **Steam** (Linux, Proton) | Tested | Unavailable | Unavailable |
-| Official **STOVE** client | Tested (purchase not seen yet) | Tested | Unavailable |
+| Official **STOVE** client | Tested | Tested | Unavailable |
 | Google Play Games on PC **Developer Emulator** | Unavailable | Tested | Tested |
 
 Other clients and emulators have not been tested. The game must be in English,
@@ -107,11 +103,6 @@ game uncovered. Pick **Control mode → Mouse**, then choose the game window.
 
 See the [setup guide](release/SETUP.md) if the device isn't detected. BlueStacks
 hasn't been live-tested yet.
-
-Older demo, Mouse mode on STOVE (about 14 seconds,
-[MP4](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.1/mouse-stove-demo.mp4)):
-
-![Mouse mode on STOVE opens Secret Shop and buys Covenant Bookmarks](docs/media/mouse-stove-demo.gif)
 
 ## Features
 
