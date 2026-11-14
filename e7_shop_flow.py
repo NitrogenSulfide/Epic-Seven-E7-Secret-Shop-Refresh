@@ -985,7 +985,17 @@ class ObservedShopFlow:
         frame = self.takeScreenshot(); self.navigation.require_shop(frame)
         current = self.findItemPosition(frame,self._item)
         if current is None or abs(current[1]-pos[1]) > 20:
-            raise MouseStopped('The selected item changed before Buy. No click sent.')
+            # The list can still be moving right after a refresh (Linux Steam,
+            # 2026-11-14: Friendship found, then gone a moment later). Nothing
+            # was clicked yet: let it come to rest and look once more.
+            print('Navigation: The item moved before Buy; waiting for the list to settle and checking again.',flush=True)
+            frame = self._settled_screenshot(1,'buy recheck settle')
+            if frame is None or not self.loop_active:
+                return False
+            self.navigation.require_shop(frame)
+            current = self.findItemPosition(frame,self._item)
+            if current is None:
+                raise MouseStopped('The selected item changed before Buy. No click sent.')
         boxes = [box for box in green_buttons(self._rgb,(1480,110,1880,1080))
                  if box[0] < current[0] < box[2] and box[1] < current[1] < box[3]]
         if len(boxes) != 1:

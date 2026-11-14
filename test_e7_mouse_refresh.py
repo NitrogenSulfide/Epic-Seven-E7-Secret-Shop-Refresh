@@ -1398,6 +1398,43 @@ class NativeEngineTests(unittest.TestCase):
         adb.assert_not_called()
         self.assertEqual(app.mouse.click.call_args_list[0].args,pos)
 
+    def _moving_buy_app(self,later):
+        """A bookmark row found once, then a still-moving list, then `later`."""
+        app = self.make_engine()
+        template = np.random.default_rng(7).integers(20,240,(40,40),dtype=np.uint8)
+        app.storage.inventory['Covenant bookmark'] = adb_engine.E7Item(template,184000)
+        def row(top):
+            frame = shop(); frame[top:top+40,800:840] = template[:,:,None]
+            frame[top+20:top+100,1550:1810] = (20,110,40)
+            return frame
+        first = row(200); app._rgb = first
+        pos = app.findItemPosition(cv_gray(first),template)
+        app.read_confirmation_text = lambda rgb:'Cancel Buy Covenant Bookmarks 184,000' if rgb[760,1100,1]==110 else ''
+        frames = [shop()]+[row(later) if later is not None else shop()]*4+[dialog('buy'),dialog('buy'),shop()]
+        app.mouse.screenshot.side_effect = [Image.fromarray(frame) for frame in frames]
+        return app,pos,row
+
+    def test_item_missing_right_before_buy_is_found_again_once_the_list_settles(self):
+        import itertools
+        clock = itertools.count(0,.25)
+        app,pos,row = self._moving_buy_app(420)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                patch('builtins.print') as printed:
+            self.assertTrue(app.clickBuy(pos))
+        clicks = [c.args for c in app.mouse.click.call_args_list]
+        self.assertEqual(clicks[0][1],480)  # Buy at the row's settled place (420+60)
+        self.assertEqual(len(clicks),2)  # Buy, then Confirm
+        self.assertTrue(any('moved before Buy' in str(c.args[0]) for c in printed.call_args_list))
+
+    def test_item_still_missing_after_the_list_settles_stops_without_a_click(self):
+        import itertools
+        clock = itertools.count(0,.25)
+        app,pos,_ = self._moving_buy_app(None)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                patch('builtins.print'),self.assertRaisesRegex(MouseStopped,'selected item changed before Buy'):
+            app.clickBuy(pos)
+        app.mouse.click.assert_not_called()
+
     def _ignored_buy_app(self,ignored):
         """A bookmark row whose first `ignored` Buy clicks open no dialog."""
         import itertools

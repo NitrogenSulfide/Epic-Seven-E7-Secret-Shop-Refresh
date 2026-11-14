@@ -61,6 +61,8 @@ window instead of the bar. Background mode is unchanged.
 saved by older versions, are raised to 0.3, because the game ignores faster clicks.
 Random timing never goes below 0.3 either.
 
+**Item list still moving before Buy.** Right after a refresh the list can still be settling; the run used to stop with "The selected item changed before Buy". It now waits for the list to come to rest and checks again, and stops (no click sent) only if the item is really gone.
+
 Settings and history carry over: extract **E7ShopRefresh-0.2.4.zip** into a fresh
 folder and copy `runtime/ShopRefreshGUI.ini`, `runtime/ADBconfig.ini` and
 `runtime/ShopRefreshHistory/` from your old folder if you want them.
