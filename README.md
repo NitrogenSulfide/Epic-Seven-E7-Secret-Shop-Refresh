@@ -1,12 +1,13 @@
 # E7 Secret Shop Refresh
 
-Automatically open Epic Seven's Secret Shop, buy Covenant Bookmarks and Mystic
-Medals, and refresh within your Skystone budget. Windows app (Linux from source) by
-**NitrogenSulfide (Blue Natto)**, based on Solunium's GPL-3.0 engine.
+Opens Epic Seven's Secret Shop, buys Covenant Bookmarks and Mystic Medals, and
+refreshes until your Skystone budget runs out. Works with **Steam** (Windows 11 and
+Linux) and **STOVE** in the background, so you can keep using your PC. Windows app;
+Linux runs from source.
 
 Hi, I'm Blue Natto. This is a small, unofficial hobby project for fellow Epic Seven
-players. I've mainly tested it on my own PC and laptop, so some setups may still
-need fixes. Feedback and bug reports are welcome—I'll do my best to help when I can.
+players, based on Solunium's GPL-3.0 engine. I've tested it on my own PCs, so some
+setups may still need fixes. Feedback and bug reports are welcome!
 
 ## EZ Mode · download, extract, start
 
@@ -20,83 +21,64 @@ need fixes. Feedback and bug reports are welcome—I'll do my best to help when 
    administrator prompt; it appears every time the app opens.
 
    <img src="docs/media/windows-smartscreen-1-more-info.png" alt="Windows protected your PC: click More info" width="360"> <img src="docs/media/windows-smartscreen-2-run-anyway.png" alt="Then click Run anyway" width="360">
-2. Open **English Epic Seven** at home or in Secret Shop. Close any popups; hidden idle home controls are handled automatically.
-3. Leave **Background** selected for Epic Seven on **Steam or STOVE** (your PC stays free to use). For an emulator or Google Play Games, the app offers **Switch to Mouse**; then choose your **game window**. Use **Scan** if needed.
+2. Open Epic Seven (English) on the home screen or in the Secret Shop, with no popups open.
+3. On **Steam or STOVE**, leave **Background** selected. On an emulator or Google
+   Play Games, use [Mouse or ADB](#emulators--mouse-and-adb) instead.
 4. Set your **Skystone budget** and check the **Stop key**, then press **Start Refresh**.
 
-**While Background runs:** you can keep using the PC; keep the pointer off the game
-and never minimize it. **While Mouse runs:** leave the PC alone, keep the game
-uncovered, and avoid moving or resizing its window. **To stop:** press your configured Stop key (default: the
-backtick key, usually below Esc) or click **Stop Session**. Start with a small budget
-for your first run.
+**To stop:** press the Stop key (default: backtick `` ` ``, below Esc) from any
+window, or click **Stop Session**.
 
 **[Detailed setup / troubleshooting](release/SETUP.md)** ·
 **[What's new in v0.2.1](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.2.1)**
 
-**Tips for a smooth Background run**
+**Tips for a smooth run**
 
 - **Two monitors work best:** game on one, everything else on the other.
 - **One monitor:** leave the game open behind your other windows. Covering it is
   fine, but **never minimize it**; a minimized game stops drawing and the run stops.
-- Keep your pointer off the game window (park it on the other monitor or the
-  taskbar). A pointer moving over the game pauses input.
-- Start from the home screen or an open Secret Shop, with no Refresh or Buy dialog
-  left open.
-- Don't resize the game, switch it to or from fullscreen, or open a second Epic
-  Seven window during a run.
+- Keep your pointer off the game window. A pointer moving over the game pauses
+  input; if it keeps moving for 10 seconds, the run stops.
+- Start from the home screen or the Secret Shop, with no Refresh or Buy dialog open.
+- Don't resize the game, toggle fullscreen, or open a second Epic Seven window
+  during a run.
 - Keep the PC awake: don't let it sleep or lock during a run.
-- Try a small budget first. The Stop key (default `` ` ``) works from any window.
+- Try a small budget first.
 
-## Session history and diagnostics
+## Screenshots
 
-![Session history and optional click/timing diagnostics, captured during v0.1.3-rc3 testing](docs/media/v0.1.3-diagnostics.png)
+The compact tracker: a small always-on-top bar with purchases, Skystones spent,
+time left and a Stop button.
 
-The screenshot shows the tested rc3 interface included in v0.1.3.
+<img src="docs/media/v0.2.1-linux-compact-tracker.png" alt="Compact tracker bar during a run" width="600">
 
-## See it work · Mouse on STOVE
+Session history and optional click/timing diagnostics (from an older version):
 
-Hidden home controls → Secret Shop → automatic Covenant Bookmark purchase.
-This real-time clip ends just after the purchase; account details are covered.
-
-[![Mouse mode on STOVE reveals home controls, opens Secret Shop and buys Covenant Bookmarks](docs/media/mouse-stove-demo.gif)](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.1/mouse-stove-demo.mp4)
-
-**[Watch / download the MP4](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.1/mouse-stove-demo.mp4)** · approximately 14 seconds
+![Session history and diagnostics](docs/media/v0.1.3-diagnostics.png)
 
 ## Tested game clients
 
-| Game client | Mouse | ADB | Background |
+| Game client | Background | Mouse | ADB |
 | --- | --- | --- | --- |
-| Google Play Games on PC **Developer Emulator** | Tested | Tested | Unavailable |
-| Official native STOVE client | Tested | Unavailable | Tested (refresh; no purchase seen yet) |
-| Epic Seven on **Steam** (Windows 11) | Not yet tested | Unavailable | Tested |
-| Epic Seven on **Steam** (Linux, Proton) | Unavailable | Unavailable | Tested |
+| Epic Seven on **Steam** (Windows 11) | Tested | Not tested | Unavailable |
+| Epic Seven on **Steam** (Linux, Proton) | Tested | Unavailable | Unavailable |
+| Official **STOVE** client | Tested (purchase not seen yet) | Tested | Unavailable |
+| Google Play Games on PC **Developer Emulator** | Unavailable | Tested | Tested |
 
-Testing is limited to these clients. Other emulators and methods have not been
-tested. Use English game text and a readable landscape 16:9 game view of at least
-640 × 360. Native STOVE Mouse mode also supports its wider maximized client area.
-ADB calibration requires a 1920 × 1080 Android display.
+Other clients and emulators have not been tested. The game must be in English,
+in landscape, at least 640 × 360.
 
-## Background mode · Steam and STOVE on Windows
+## Background mode · Steam and STOVE
 
-For **Epic Seven on Steam or STOVE**, use **Control mode → Background** (the default). Clicks are sent
-to the game window directly and frames are read from the window itself, so your
-mouse pointer is never moved and other windows may cover the game. The game runs
-as administrator on both clients, so the app offers to **restart as administrator** the first time;
-accept it, then press **Start Refresh** again.
+Clicks go straight to the game window and frames are read from the window itself,
+so your pointer never moves and other windows can cover the game. The game runs as
+administrator, so the app does too: Windows asks each time it opens.
 
-You can keep using your PC. Input waits while the pointer is *moving* over the
-game and resumes once it has been still for a second; a still pointer, or one over
-another window or the taskbar, is fine. While it waits, a red line in the app (and the
-compact tracker) counts down to the automatic stop after 10 seconds. Don't minimize or resize the game during a
-run. The Stop key works from any window.
+## Linux · Steam on Proton
 
-## Linux · Steam on Proton (Background mode, preview)
-
-On Linux the app drives **Epic Seven on Steam** (Proton) in the background. Clicks are
-posted to the game window from inside its Wine session and frames are read from the
-game's own X window. Your mouse pointer and keyboard focus are never used, and other
-windows may cover the game. Only tested on Linux Mint 22 (Cinnamon, X11) with
-Proton Experimental. Wayland is not supported yet: log in to an X11 session.
+Same Background mode, driven from inside the game's Wine session. Tested on Linux
+Mint 22 (Cinnamon, X11) with Proton Experimental. Wayland isn't supported yet: log
+in to an X11 session.
 
 ```bash
 git clone https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh.git
@@ -106,81 +88,51 @@ cd Epic-Seven-E7-Secret-Shop-Refresh
 ./e7-shop-refresh-linux.sh menu     # optional: add it to your app menu (menu-remove undoes it)
 ```
 
-Setup needs Python 3 with venv and Tk, Tesseract OCR, and (once, to build the small
-input helper) the MinGW-w64 cross compiler. On Debian, Ubuntu or Mint:
+On Debian, Ubuntu or Mint the packages are
 `sudo apt install python3-venv python3-tk tesseract-ocr gcc-mingw-w64-x86-64`.
 Python packages go into `.venv` inside the folder; nothing is installed system-wide.
 
-Start the game, open it at home or in Secret Shop, then press **Start Refresh**.
-Keep the pointer off the game window: input pauses while it is over the game.
-Don't minimize or resize the game during a run. The Stop key works from any window.
+## Emulators · Mouse and ADB
 
-## ADB mode · optional
+**Mouse** moves your real pointer, so leave the PC alone during a run and keep the
+game uncovered. Pick **Control mode → Mouse**, then choose the game window.
 
-ADB lets you use your PC pointer normally while the app runs through the emulator.
-Native STOVE does not support ADB.
+**ADB** runs through the emulator and leaves your pointer free:
 
 1. Enable and authorize ADB debugging in your emulator.
-2. Switch **Control mode → ADB**, then select the device. Google Developer Emulator uses **localhost:6520**; use **Scan** if needed.
-3. Open Epic Seven at home or in Secret Shop, check your budget and Stop key, then press **Start Refresh**.
+2. Pick **Control mode → ADB** and select the device (Google's Developer Emulator
+   is **localhost:6520**). Use **Scan** if it isn't listed; BlueStacks 5 players
+   show up by name when ADB is enabled.
+3. Press **Start Refresh**.
 
-See the [setup guide](release/SETUP.md) if the device isn't detected.
+See the [setup guide](release/SETUP.md) if the device isn't detected. BlueStacks
+hasn't been live-tested yet.
 
-BlueStacks 5 players appear in **Scan** by instance name and current port when
-their player windows are open and ADB is enabled. Select the intended player;
-its port can differ from 5555 and change between starts. Scanning only discovers
-endpoints. **Start Refresh** connects to the selected endpoint and checks that
-Epic Seven is active. Switching from a selected BlueStacks Mouse window chooses
-that same player in ADB mode. BlueStacks game-surface and permission handling
-have offline regression coverage; live refresh/purchase testing remains pending.
+Older demo, Mouse mode on STOVE (about 14 seconds,
+[MP4](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.1.1/mouse-stove-demo.mp4)):
 
-## Features and updates
+![Mouse mode on STOVE opens Secret Shop and buys Covenant Bookmarks](docs/media/mouse-stove-demo.gif)
 
-Live counters, used/total Skystone budget, configurable Stop key, smooth Mouse
-movement and dragging, randomized tap offsets, adjustable timing variation up to
-±0.10 seconds, session history, day/night themes, and in-app Quickstart/release notes.
-Excel export includes the full saved history with timestamps, outcomes and stop reasons.
-Optional click/timing diagnostics work in Mouse and ADB; enable them in Diagnostics
-before starting. Calibration is ADB-only. Covenant Bookmarks and Mystic Medals
-are purchased by default. The source adds an optional **Also buy Friendship Points**
-setting for normal ADB and Mouse sessions, requiring a matching rebuilt engine.
-It buys the current heart-icon 50-point item for 18,000 gold using observed
-name/category/price recognition, and counts purchases rather than points awarded.
-The old upstream clover bookmark image is retained for provenance and is not
-used for this feature. See [Friendship verification](ENGINE.md#friendship-points-source-feature).
+## Features
 
-The app verifies shop controls and confirmation text before continuing. Unknown or
-changed screens can stop a session. Passing tested cases does not establish support
-for every wallpaper/layout or uninterrupted long runs; insufficient-currency
-stopping has not been live-tested. See [regression coverage](docs/AUTOMATION-REGRESSIONS.md).
+- Skystone budget, live purchase counters and a configurable Stop key.
+- Optional **Also buy Friendship Points** (off by default).
+- Session history with Excel export; day/night themes; in-app Quickstart.
+- Randomized tap positions and adjustable timing variation.
+- Checks shop buttons and confirmation text before every click, and stops on
+  anything unexpected rather than guessing. See
+  [regression coverage](docs/AUTOMATION-REGRESSIONS.md).
 
-**Updating:** back up your settings and history under `runtime` before switching to
-a new extracted release. There is no automatic updater or migration. Personal
-runtime data is excluded from release ZIPs.
+**Updating:** there's no auto-updater. Copy your `runtime` folder (settings and
+history) into the new extracted release.
 
 ## Source and credits
 
-The optional **E7Source-0.1.3.zip** contains the maintained source and rebuild
-instructions. Matching GUI/engine source is also supplied with the player package.
-See [build instructions](release/BUILDING.md) and [engine notes](ENGINE.md).
+**E7Source-0.2.1.zip** on the release page has the source and rebuild steps. See
+[build instructions](release/BUILDING.md) and [engine notes](ENGINE.md).
 
 Software is GPL-3.0; see [LICENSE](LICENSE), [CREDITS.txt](CREDITS.txt) and
-[upstream notices](UPSTREAM.md). Third-party artwork/audio retain their respective
-rights and provenance. This is an independent community tool with no official
-endorsement. Upstream source history is preserved.
+[upstream notices](UPSTREAM.md). Third-party artwork and audio keep their own
+rights. This is an independent community tool, not endorsed by Smilegate.
 
 Optional support: [Buy me a coffee](https://ko-fi.com/bluenatto).
-
-## Private trial 0.1.4-rc9
-
-Finds the STOVE Secret Shop icon under warm display tints (f.lux, Night light)
-and with the new Milestone of Radiance entry. Fixes a false stop when a pre-purchased Friendship row sits at the bottom of
-the scrolled shop, and re-reads unclear rows from fresh captures before stopping.
-Recognizes 0/1 stock beside Buy on pre-purchased currency rows, retains the
-injected-key listener for brief streamed Stop presses, and uses the supplied
-game's green leaf-heart cutout. Includes a global Stop key and a Friendship buys
-counter beside Mystic, with corresponding diagnostics and Excel columns.
-Recognizes either Event or Epic Pass beside the home Secret Shop menu in both
-transports. BlueStacks Mouse accepts only the verified direct Qt input host
-when Windows skips its disabled render child. Offline failure-frame and fake
-cross-client regressions cover these changes; live input is a separate check.
