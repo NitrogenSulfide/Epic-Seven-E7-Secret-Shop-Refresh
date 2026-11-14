@@ -84,6 +84,11 @@ def prepare_references(home, shop, destination):
     return images
 
 
+# A shop label dimmed behind a dialog keeps its shape but loses ~85% of its
+# contrast (Steam: std 13 vs 88); a visible one keeps ~100%.
+MIN_CONTRAST = .5
+
+
 class ShopNavigator:
     def __init__(self, reference_directory):
         self.references = {}
@@ -127,21 +132,33 @@ class ShopNavigator:
                 h,w = template.shape
                 other[max(0,ty-h):ty+h+1,max(0,tx-w):tx+w+1] = -1
                 second = float(other.max())
-                best = dict(score=float(score), second=second,
+                # Correlation ignores brightness, so the shop dimmed behind an
+                # open dialog or reward overlay still matches its shape. Keep
+                # its contrast against the reference to tell the two apart.
+                patch = region[ty:ty+h,tx:tx+w]
+                contrast = float(patch.std())/max(1.,float(resized.std()))
+                best = dict(score=float(score), second=second, contrast=contrast,
                             point=(x1+tx+w//2, y1+ty+h//2))
         if best is not None:
-            best['accepted'] = best['score'] >= (.72 if menu else .90) and best['second'] < best['score']-.10
+            best['shaped'] = best['score'] >= (.72 if menu else .90) and best['second'] < best['score']-.10
+            best['accepted'] = best['shaped'] and (menu or best['contrast'] >= MIN_CONTRAST)
         return best
 
     def match(self, screenshot, name):
         best = self.inspect_match(screenshot, name)
         return best if best and best['accepted'] else None
 
+    def dimmed(self, screenshot, name):
+        """True when the reference is there but darkened, e.g. behind a dialog or overlay."""
+        best = self.inspect_match(screenshot, name)
+        return bool(best and best['shaped'] and not best['accepted'])
+
     def verification_details(self, screenshot):
         results = []
         for label, name in (('title', 'shop-title.png'), ('refresh', 'refresh-label.png')):
             match = self.inspect_match(screenshot, name)
-            results.append(f"{label}={match['score']:.3f} ({'OK' if match['accepted'] else 'unverified'})" if match else f'{label}=unverified')
+            state = 'OK' if match and match['accepted'] else ('dimmed' if match and match['shaped'] else 'unverified')
+            results.append(f"{label}={match['score']:.3f} ({state})" if match else f'{label}=unverified')
         return '; '.join(results)
 
     def shop_visible(self, screenshot):

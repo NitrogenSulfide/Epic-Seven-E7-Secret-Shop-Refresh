@@ -987,7 +987,8 @@ class ObservedShopFlow:
                           if nav.shop_visible(frame) and (match:=nav.match(frame,'refresh-label.png'))]
                 if points and all(abs(x-points[0][0])<=8 and abs(y-points[0][1])<=8 for x,y in points):
                     break
-            elif not any(nav.match(frame,'shop-title.png') for _,nav in self.navigation.navigators):
+            elif not any(nav.match(frame,'shop-title.png') or nav.dimmed(frame,'shop-title.png')
+                         for _,nav in self.navigation.navigators):
                 self.navigation.require_shop(frame)  # Not the shop: stop with the usual details.
             if not self.loop_active:
                 return False

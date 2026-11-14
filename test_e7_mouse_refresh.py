@@ -1036,6 +1036,62 @@ class NativeEngineTests(unittest.TestCase):
             app.clickRefresh()
         app.mouse.click.assert_not_called();self.assertEqual(app.mouse.screenshot.call_count,1)
 
+    def _real_navigator_frames(self):
+        from e7_shop_navigation import create_navigator, REFERENCE_BOXES
+        navigation=create_navigator('adb-assets')
+        refs=navigation.navigators[-1][1].references
+        def frame(dim=1.):
+            gray=np.full((1080,1920),30,dtype=np.uint8)
+            for name in ('shop-title.png','refresh-label.png'):
+                x1,y1,x2,y2=REFERENCE_BOXES[name];gray[y1:y2,x1:x2]=refs[name]
+            gray=(gray*dim).astype(np.uint8)  # a dialog or overlay darkens the whole shop
+            return Image.fromarray(np.stack([gray]*3,axis=2))
+        return navigation,frame
+
+    def test_shop_dimmed_behind_a_dialog_is_not_the_shop(self):
+        # Live Steam/STOVE frames: the shop behind a dialog keeps its shape
+        # (score ~.94) but only ~15% of its contrast.
+        navigation,frame=self._real_navigator_frames()
+        dimmed=np.array(frame(.15).convert('L'))
+        self.assertTrue(navigation.shop_visible(np.array(frame().convert('L'))))
+        self.assertFalse(navigation.shop_visible(dimmed))
+        self.assertTrue(all(nav.dimmed(dimmed,'shop-title.png') for _,nav in navigation.navigators))
+        self.assertIn('dimmed',navigation.verification_details(dimmed))
+
+    def test_refresh_waits_for_an_overlay_to_clear_and_never_clicks_through_it(self):
+        import itertools
+        navigation,frame=self._real_navigator_frames()
+        app=self.make_engine();app.navigation=navigation;app._confirm=Mock(return_value=True)
+        app.mouse.screenshot.side_effect=[frame(.15),frame(.15),frame()]
+        with patch('e7_mouse_refresh.time.sleep'):
+            self.assertTrue(app.clickRefresh())
+        self.assertEqual(app.mouse.click.call_count,1)
+        app=self.make_engine();app.navigation=navigation;app._confirm=Mock(return_value=True);clock=itertools.count(0,.5)
+        app.mouse.screenshot.side_effect=lambda:frame(.15)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                self.assertRaisesRegex(RuntimeError,'dimmed'):
+            app.clickRefresh()
+        app.mouse.click.assert_not_called()
+
+    def test_dialog_still_open_after_confirm_is_not_counted_as_the_shop_returning(self):
+        # Live Linux run: the game ignored a Confirm, one capture's OCR missed
+        # the dialog's buttons, and the dimmed shop behind it was taken as the
+        # shop returning. That counted a refresh that never happened and sent
+        # the next Refresh click into the open dialog.
+        import itertools
+        navigation,frame=self._real_navigator_frames()
+        app=self.make_engine();app.navigation=navigation;app._item_name=None
+        app.read_confirmation_text=Mock(return_value='Use Skystone to refresh?')
+        box=(1100,600,1300,660);calls=itertools.count()
+        found=lambda *a:box if next(calls)<2 else None  # the button is read twice, then OCR misses it
+        clock=itertools.count(0,.25)
+        app.mouse.screenshot.side_effect=lambda:frame(.15)
+        with patch('e7_shop_flow.confirmation_button',side_effect=found),patch('e7_shop_flow.confirmation_matches',return_value=True), \
+                patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                self.assertRaisesRegex(MouseStopped,'shop did not return'):
+            app._confirm('refresh',np.array(frame()))
+        self.assertEqual(app.mouse.click.call_count,1)  # the one Confirm, nothing more
+
     def test_fading_confirmation_is_read_again_and_clicked_once_settled(self):
         # Fast captures can catch the dialog half transparent (seen live on Linux):
         # the button is found but looks different in the next capture.
