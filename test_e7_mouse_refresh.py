@@ -950,6 +950,40 @@ class NativeEngineTests(unittest.TestCase):
         app.mouse.click.assert_not_called()
         self.assertGreater(app.mouse.screenshot.call_count,2)
 
+    def test_real_navigator_waits_for_covered_refresh_but_not_for_another_screen(self):
+        # Codex P2: full shop recognition needs the Refresh label, so the
+        # covered case must be tested through the real navigator, not a mock.
+        import itertools
+        from e7_shop_navigation import create_navigator, REFERENCE_BOXES
+        navigation=create_navigator('adb-assets')
+        refs=navigation.navigators[-1][1].references
+        def frame(title=True,refresh=True):
+            gray=np.full((1080,1920),30,dtype=np.uint8)
+            for name,show in (('shop-title.png',title),('refresh-label.png',refresh)):
+                if show:
+                    x1,y1,x2,y2=REFERENCE_BOXES[name];gray[y1:y2,x1:x2]=refs[name]
+            return Image.fromarray(np.stack([gray]*3,axis=2))
+        self.assertTrue(navigation.shop_visible(np.array(frame().convert('L'))))
+        app=self.make_engine();app.navigation=navigation;app._confirm=Mock(return_value=True)
+        app.mouse.screenshot.side_effect=[frame(refresh=False),frame(refresh=False),frame()]
+        with patch('e7_mouse_refresh.time.sleep'):
+            self.assertTrue(app.clickRefresh())
+        self.assertEqual(app.mouse.click.call_count,1)
+        self.assertEqual(app.mouse.screenshot.call_count,3)
+        # Covered until the deadline: no click.
+        app=self.make_engine();app.navigation=navigation;app._confirm=Mock(return_value=True);clock=itertools.count(0,.5)
+        app.mouse.screenshot.side_effect=lambda:frame(refresh=False)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                self.assertRaises(RuntimeError):
+            app.clickRefresh()
+        app.mouse.click.assert_not_called();self.assertGreater(app.mouse.screenshot.call_count,2)
+        # No shop title: stop on the first frame.
+        app=self.make_engine();app.navigation=navigation;app._confirm=Mock(return_value=True)
+        app.mouse.screenshot.side_effect=lambda:frame(title=False,refresh=False)
+        with patch('e7_mouse_refresh.time.sleep'),self.assertRaisesRegex(RuntimeError,'could not be verified'):
+            app.clickRefresh()
+        app.mouse.click.assert_not_called();self.assertEqual(app.mouse.screenshot.call_count,1)
+
     def test_fading_confirmation_is_read_again_and_clicked_once_settled(self):
         # Fast captures can catch the dialog half transparent (seen live on Linux):
         # the button is found but looks different in the next capture.

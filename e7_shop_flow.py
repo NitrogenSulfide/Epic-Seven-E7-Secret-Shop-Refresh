@@ -905,22 +905,29 @@ class ObservedShopFlow:
             return False
         self._item=self._item_name=None
         # After a purchase the shop can return while a toast or the sold-out
-        # animation still covers the Refresh label (reported on STOVE). Every
-        # capture must still be the shop; only the label match is re-read, for
-        # a bounded time, and nothing is clicked until it matches.
+        # animation still covers the Refresh label (reported on STOVE). Full
+        # shop recognition needs that label, so while it is covered only the
+        # shop title is required: re-read for a bounded time, never click until
+        # the full shop (title and Refresh) is verified, and stop at once on
+        # any frame without the shop title.
         deadline = None
         while True:
-            frame = self.takeScreenshot(); self.navigation.require_shop(frame)
-            points = [match['point'] for _,nav in self.navigation.navigators
-                      if nav.shop_visible(frame) and (match:=nav.match(frame,'refresh-label.png'))]
-            if points and all(abs(x-points[0][0])<=8 and abs(y-points[0][1])<=8 for x,y in points):
-                break
+            frame = self.takeScreenshot()
+            if self.navigation.shop_visible(frame):
+                self.navigation.require_shop(frame)
+                points = [match['point'] for _,nav in self.navigation.navigators
+                          if nav.shop_visible(frame) and (match:=nav.match(frame,'refresh-label.png'))]
+                if points and all(abs(x-points[0][0])<=8 and abs(y-points[0][1])<=8 for x,y in points):
+                    break
+            elif not any(nav.match(frame,'shop-title.png') for _,nav in self.navigation.navigators):
+                self.navigation.require_shop(frame)  # Not the shop: stop with the usual details.
             if not self.loop_active:
                 return False
             now = time.monotonic()
             if deadline is None:
                 deadline = now+REFRESH_FIND_SECONDS
             elif now >= deadline:
+                self.navigation.require_shop(frame)
                 raise MouseStopped('The Refresh target was not recognized. No click sent.')
             self._trace_retry()
             self._poll_wait('refresh find')
