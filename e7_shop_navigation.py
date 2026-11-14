@@ -78,7 +78,10 @@ def prepare_references(home, shop, destination):
         if not ok:
             raise ValueError('Reference encoding failed.')
         (destination/name).write_bytes(data.tobytes())
-    navigator = ShopNavigator(destination)
+    try:
+        navigator = ShopNavigator(destination)
+    except RuntimeError as error:
+        raise ValueError(f'{error}. Close any popup and capture the shop screenshot again.') from error
     if navigator.menu_target(images['home']) is None or navigator.shop_visible(images['home']) or not navigator.shop_visible(images['shop']):
         raise ValueError('Reference screenshots do not match the supported English menu/shop layout.')
     return images
@@ -87,6 +90,9 @@ def prepare_references(home, shop, destination):
 # A shop label dimmed behind a dialog keeps its shape but loses ~85% of its
 # contrast (Steam: std 13 vs 88); a visible one keeps ~100%.
 MIN_CONTRAST = .5
+# Contrast of the shipped shop labels. A saved reference captured behind a
+# dialog would match a dimmed shop against itself, so reject one that dim.
+REFERENCE_CONTRAST = {'shop-title.png': 88., 'refresh-label.png': 78.}
 
 
 class ShopNavigator:
@@ -102,6 +108,8 @@ class ShopNavigator:
             edges = cv2.Canny(reference, 45, 110)
             if np.count_nonzero(edges) < 30:
                 raise RuntimeError(f'Navigation reference has too little detail: {name}')
+            if name in REFERENCE_CONTRAST and float(reference.std()) < MIN_CONTRAST*REFERENCE_CONTRAST[name]:
+                raise RuntimeError(f'Navigation reference looks dimmed (captured behind a dialog?): {name}')
             self.references[name] = reference
 
     def inspect_match(self, screenshot, name):

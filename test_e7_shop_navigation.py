@@ -9,7 +9,7 @@ from unittest.mock import Mock
 import cv2
 import numpy as np
 
-from e7_shop_navigation import FRAME_SIZE, REFERENCE_BOXES, ShopNavigator, ReferenceNavigator, create_navigator, NavigationSetupRequired
+from e7_shop_navigation import FRAME_SIZE, REFERENCE_BOXES, ShopNavigator, ReferenceNavigator, create_navigator, NavigationSetupRequired, prepare_references
 
 
 class NavigationTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class NavigationTests(unittest.TestCase):
         texts = {'menu-secret-shop.png':'Secret Shop','shop-title.png':'Secret Shop','refresh-label.png':'Refresh'}
         for name, (x1,y1,x2,y2) in REFERENCE_BOXES.items():
             image = np.zeros((y2-y1,x2-x1),dtype=np.uint8)
-            cv2.putText(image, texts[name], (2,image.shape[0]-7),cv2.FONT_HERSHEY_SIMPLEX,.5,255,1,cv2.LINE_AA)
+            cv2.putText(image, texts[name], (2,image.shape[0]-7),cv2.FONT_HERSHEY_SIMPLEX,.5,255,2,cv2.LINE_AA)
             cv2.imencode('.png',image)[1].tofile(str(self.directory/name))
             self.images[name] = image
         self.nav = ShopNavigator(self.directory)
@@ -139,6 +139,25 @@ class BuiltinRecognitionTests(unittest.TestCase):
         self.assertEqual((saved/'shop-title.png').read_bytes(),b'invalid saved marker')
         for name in REFERENCE_BOXES: (self.assets/'builtin-navigation'/name).unlink()
         with self.assertRaises(NavigationSetupRequired): create_navigator(self.assets)
+
+    def test_saved_references_captured_behind_a_dialog_are_rejected(self):
+        saved = self.assets/'gui-navigation'; saved.mkdir()
+        for name in REFERENCE_BOXES:
+            image = self.images[name]
+            if name in ('shop-title.png','refresh-label.png'): image = (image.astype(np.float32)*.15).astype(np.uint8)
+            (saved/name).write_bytes(cv2.imencode('.png',image)[1].tobytes())
+        nav = create_navigator(self.assets)
+        self.assertEqual([label for label,_ in nav.navigators],['built-in'])
+        dimmed = (self.frame(['shop-title.png','refresh-label.png']).astype(np.float32)*.15).astype(np.uint8)
+        self.assertFalse(nav.shop_visible(dimmed))
+        home = self.frame(['menu-secret-shop.png'])
+        shop = self.frame(['shop-title.png','refresh-label.png'])
+        folder = self.assets/'shots'; folder.mkdir()
+        cv2.imwrite(str(folder/'home.png'),home); cv2.imwrite(str(folder/'shop.png'),dimmed)
+        with self.assertRaisesRegex(ValueError,'dimmed'):
+            prepare_references(folder/'home.png',folder/'shop.png',self.assets/'new-refs')
+        cv2.imwrite(str(folder/'shop.png'),shop)
+        prepare_references(folder/'home.png',folder/'shop.png',self.assets/'new-refs2')
 
     def test_reference_sets_cannot_mix_partial_shop_markers_or_conflicting_targets(self):
         first,second = Mock(),Mock()
