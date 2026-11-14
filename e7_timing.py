@@ -24,4 +24,4 @@ def sample_tap_delay(delay, jitter, randomized, calibration, uniform):
     # Clamp the final sample as well as validating the configured baseline.
     variation = min(delay * .10, .05) if jitter is None else min(jitter, delay * .5)
     sampled = delay + uniform(-variation, variation) if randomized and not calibration else delay
-    return min(MAX_TAP_DELAY, sampled)
+    return min(MAX_TAP_DELAY, max(MIN_TAP_DELAY, sampled))

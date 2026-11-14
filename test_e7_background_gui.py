@@ -348,6 +348,23 @@ class BackgroundGuiTests(unittest.TestCase):
         self.assertEqual(self.app.open_failure_button.winfo_manager(), '')
         self.assertNotIn('Failure record', self.app._report_text())
 
+    def test_mouse_mode_keeps_the_full_window_instead_of_the_always_on_top_bar(self):
+        # Mouse mode reads the real screen; the always-on-top bar over the game
+        # hid the shop title (W11 STOVE, 2026-11-14). Background is unaffected.
+        self.app.compact_tracker.set(True)
+        for native, entered in ((True, False), (False, True)):
+            with self.subTest(native=native):
+                self.app.tracker = mock.Mock()
+                self.app.run_settings = mock.Mock(debug=False, trace_input=False, buy_friendship=False)
+                self.app._session_started = self.app.stopping = False
+                self.app._finalized_run_id = None
+                self.app._native_mouse_run = native
+                with patch.object(self.app, '_update_remaining_time'), patch.object(self.app, '_play_session_sound'):
+                    self.app._engine_started()
+                    self.app._enter_compact()
+                self.assertEqual(self.app.tracker.enter.called, entered)
+                self.assertEqual(self.app.tracker.enter.call_count, 2 if entered else 0)
+
     def test_compact_hint_expires_unless_still_paused_and_clears_on_stop(self):
         self.app._background_run = True
         self.app._handle_line('E7GUI_MOUSE_RESUMED')

@@ -1204,12 +1204,12 @@ class RefreshGui(tk.Tk):
             self._append_log(f"Sound preference save failed: {exc}\n")
 
     def _enter_compact(self):
-        if self.run_settings is not None and self._session_started:
+        if self.run_settings is not None and self._session_started and not self._native_mouse_run:
             self.tracker.enter(friendship=self.run_settings.buy_friendship)
 
     def _update_compact_button(self):
         running = (self._session_started and self.run_settings is not None and not self.run_settings.debug
-                   and self.status.get() in ('Running', 'Paused', 'Waiting for game'))
+                   and not self._native_mouse_run and self.status.get() in ('Running', 'Paused', 'Waiting for game'))
         if running and not self.compact_button.winfo_manager():
             self.compact_button.pack(side='left', padx=(0, self._dp(8)), before=self.coffee_button)
         elif not running and self.compact_button.winfo_manager():
@@ -1814,8 +1814,11 @@ class RefreshGui(tk.Tk):
         self.progress_text.set("Calibration in progress · engine uses 100 skystone" if self.run_settings.debug else "Waiting for the engine’s first progress update…")
         self._event("Calibration started. Check the image window." if self.run_settings.debug else "Engine ready. Checking Secret Shop.")
         self._play_session_sound("started")
-        # Calibration needs the full window beside its image windows.
-        if self.compact_tracker.get() and not self.run_settings.debug:
+        # Calibration needs the full window beside its image windows. Mouse mode
+        # reads the real screen, so an always-on-top bar over the game would hide
+        # what it reads (the shop title, W11 STOVE 2026-11-14); Background
+        # captures the game window itself and is unaffected.
+        if self.compact_tracker.get() and not self.run_settings.debug and not self._native_mouse_run:
             self.tracker.enter(friendship=self.run_settings.buy_friendship)
 
     def _freeze_elapsed(self):

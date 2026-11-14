@@ -41,6 +41,9 @@
 • Copy report also hides short Windows user names in profile paths.
 • An item bought by hand before the run started could be tried again, stopping
   at the Buy dialog. The app now also skips a row the game shows greyed out.
+• Mouse mode no longer shrinks to the always-on-top compact bar: over the game
+  it hid what Mouse mode reads from the screen, and the run stopped.
+• Random timing no longer draws a click delay below the 0.3 second floor.
 
 0.2.3 · A refresh dialog the game ignored no longer stops the run
 

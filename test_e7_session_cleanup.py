@@ -79,6 +79,9 @@ class SessionCleanupTests(unittest.TestCase):
                 E7ADBShopRefresh(tap_sleep=delay)
             capture.assert_not_called()
         self.assertEqual(sample_tap_delay(2., .1, True, False, lambda a,b:b), 2.)
+        # Random variation never draws a delay below the floor either.
+        self.assertEqual(sample_tap_delay(.3, .1, True, False, lambda a,b:a), .3)
+        self.assertEqual(sample_tap_delay(.3, None, True, False, lambda a,b:a), .3)
 
     def test_legacy_migration_preserves_bytes_values_and_unknown_columns(self):
         with tempfile.TemporaryDirectory() as folder:

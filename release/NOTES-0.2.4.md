@@ -52,8 +52,14 @@ Mystic from the current shop by hand and then started a run, the app could try t
 it again and stop at the Buy dialog. It now also recognizes the greyed-out row the
 game shows for a bought item and skips it.
 
+**Fix for Mouse mode stopping right after it starts.** The compact tracker bar stays
+on top of other windows, and in Mouse mode it could sit over the game, where Mouse mode
+reads the screen, so it lost track of the shop. Mouse mode now keeps the normal app
+window instead of the bar. Background mode is unchanged.
+
 **Tap delay is now at least 0.3 seconds**, the default. Lower values, including ones
 saved by older versions, are raised to 0.3, because the game ignores faster clicks.
+Random timing never goes below 0.3 either.
 
 Settings and history carry over: extract **E7ShopRefresh-0.2.4.zip** into a fresh
 folder and copy `runtime/ShopRefreshGUI.ini`, `runtime/ADBconfig.ini` and

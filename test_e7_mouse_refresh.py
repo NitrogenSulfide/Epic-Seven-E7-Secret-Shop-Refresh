@@ -1291,7 +1291,8 @@ class NativeEngineTests(unittest.TestCase):
         app.mouse.screenshot.side_effect=[Image.fromarray(frame) for frame in (shop(),dialog(),dialog(),shop())]
         with patch.object(adb_engine.random, 'uniform', side_effect=[-.03,.03]), patch('e7_mouse_refresh.time.sleep') as sleep:
             self.assertTrue(app.clickRefresh())
-        self.assert_paced(sleep,app,.27)
+        # A draw below the 0.3 s floor is raised to it.
+        self.assert_paced(sleep,app,.3)
         self.assertEqual(app.tap_sleep,.3)
 
     def assert_paced(self,sleep,app,delay):
@@ -1306,8 +1307,9 @@ class NativeEngineTests(unittest.TestCase):
         with patch.object(adb_engine.random,'uniform',side_effect=[-.1,.1]),patch('e7_mouse_refresh.time.sleep') as sleep:
             self.assertTrue(app.clickRefresh())
         # Dialog and shop-return waits poll; the confirm click is paced by one
-        # draw from the full jitter range, measured from the Refresh click.
-        self.assert_paced(sleep,app,.2)
+        # draw from the jitter range, measured from the Refresh click, and
+        # never faster than the 0.3 s floor.
+        self.assert_paced(sleep,app,.3)
 
     def test_mouse_cli_rejects_fractional_budget_and_invalid_jitter_before_input(self):
         from e7_mouse_refresh import run_mouse_session

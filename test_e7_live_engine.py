@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import E7ADBShopRefresh as engine
+from e7_timing import MIN_TAP_DELAY
 
 
 class StartupSelectionTests(unittest.TestCase):
@@ -123,8 +124,9 @@ class EngineTests(unittest.TestCase):
         for baseline, variation in ((.3, .03), (2., .05), (.01, .001), (0., 0.)):
             app.tap_sleep = baseline
             with patch.object(engine.random, 'uniform', side_effect=[-variation, variation]) as rng:
-                self.assertAlmostEqual(app.generateTapDelay(), baseline - variation)
-                self.assertAlmostEqual(app.generateTapDelay(), min(2., baseline + variation))
+                # Draws never go below the 0.3 s floor.
+                self.assertAlmostEqual(app.generateTapDelay(), max(MIN_TAP_DELAY, baseline - variation))
+                self.assertAlmostEqual(app.generateTapDelay(), min(2., max(MIN_TAP_DELAY, baseline + variation)))
                 self.assertEqual(rng.call_args_list, [unittest.mock.call(-variation, variation)] * 2)
             self.assertEqual(app.tap_sleep, baseline)
 
@@ -141,11 +143,11 @@ class EngineTests(unittest.TestCase):
         for baseline,variation in ((.3,.1),(.04,.02),(.01,.005)):
             app.tap_sleep=baseline
             with patch.object(engine.random,'uniform',side_effect=[-variation,variation]) as rng:
-                self.assertAlmostEqual(app.generateTapDelay(),baseline-variation)
-                self.assertAlmostEqual(app.generateTapDelay(),baseline+variation)
+                self.assertAlmostEqual(app.generateTapDelay(),max(MIN_TAP_DELAY,baseline-variation))
+                self.assertAlmostEqual(app.generateTapDelay(),max(MIN_TAP_DELAY,baseline+variation))
                 self.assertEqual(rng.call_args_list,[unittest.mock.call(-variation,variation)]*2)
         app.tap_jitter=0
-        self.assertEqual(app.generateTapDelay(),app.tap_sleep)
+        self.assertEqual(app.generateTapDelay(),max(MIN_TAP_DELAY,app.tap_sleep))
 
     def test_invalid_budget_or_jitter_fails_before_any_adb_operation(self):
         for budget,jitter in ((3.5,.1),(0,.1),(12,float('nan')),(12,.11)):
@@ -209,7 +211,7 @@ class EngineTests(unittest.TestCase):
             app=self.make_engine();app.random_offset=True
             with patch.object(engine.subprocess, 'run'), patch.object(engine.random, 'uniform', side_effect=[-.03,.03]), patch.object(engine.time, 'sleep') as sleep:
                 self.assertTrue(app._calibration_clickBuy((10,10)) if action=='buy' else app._calibration_clickRefresh())
-            self.assertEqual([round(call.args[0],2) for call in sleep.call_args_list[:2]],[.27,.33])
+            self.assertEqual([round(call.args[0],2) for call in sleep.call_args_list[:2]],[.3,.33])
             self.assertEqual(app.tap_sleep,.3)
 
     def test_adb_failure_does_not_count_purchase(self):
