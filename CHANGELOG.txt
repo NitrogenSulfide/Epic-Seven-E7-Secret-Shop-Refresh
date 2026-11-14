@@ -1,3 +1,20 @@
+0.2.2 · Background runs recover from a passing pointer, and the tracker says what to do
+
+• If the pointer passes over the game just as Refresh is read, the label is
+  read again for up to 2.5 seconds instead of stopping the run. Still only one
+  Refresh click; a screen that is not the shop stops at once as before.
+• If a pointer pause swallows the Secret Shop menu click on the home screen,
+  the app checks the home screen again and reselects the menu, up to 3 times.
+  The retry comes about 2 seconds after the pause instead of waiting the full
+  8 seconds again on every pause.
+• If a pointer pause swallows a Confirm click and the same dialog, with the
+  same text, is still open and settled, the app confirms once more. It does
+  this at most once, never without a pause, and never on a changed dialog.
+• The compact tracker shows one plain line under the bar saying what is
+  happening and what to do: move or park the mouse, restore a minimized game,
+  close popups, or that a missed click is being retried. It clears once the
+  shop is recognized.
+
 0.2.1 · Background for Steam and STOVE by default, with one-click mode switches
 
 • Background mode now also drives the official STOVE client on Windows. Its
