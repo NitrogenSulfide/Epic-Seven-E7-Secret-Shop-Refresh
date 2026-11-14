@@ -930,6 +930,26 @@ class NativeEngineTests(unittest.TestCase):
         self.assertEqual(app.mouse.click.call_args_list[1].args,(1165,695))
         self.assertEqual(app.refresh_count,0)  # Only the shared loop increments.
 
+    def test_covered_refresh_label_is_read_again_before_one_click(self):
+        # STOVE: after a purchase a toast can still cover Refresh when the shop returns.
+        app=self.make_engine();marker=app.navigation.navigators[0][1]
+        marker.match.side_effect=[None,None,dict(point=(436,994))]
+        app.mouse.screenshot.side_effect=[Image.fromarray(f) for f in (shop(),shop(),shop(),dialog(),dialog(),shop())]
+        with patch('e7_mouse_refresh.time.sleep'):
+            self.assertTrue(app.clickRefresh())
+        self.assertEqual(app.mouse.click.call_args_list[0].args,(436,994))
+        self.assertEqual(app.mouse.click.call_count,2)  # Refresh, then one Confirm
+
+    def test_refresh_label_that_stays_covered_stops_without_any_click(self):
+        import itertools
+        app=self.make_engine();clock=itertools.count(0,.5)
+        app.navigation.navigators[0][1].match.return_value=None
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                self.assertRaisesRegex(MouseStopped,'Refresh target was not recognized'):
+            app.clickRefresh()
+        app.mouse.click.assert_not_called()
+        self.assertGreater(app.mouse.screenshot.call_count,2)
+
     def test_fading_confirmation_is_read_again_and_clicked_once_settled(self):
         # Fast captures can catch the dialog half transparent (seen live on Linux):
         # the button is found but looks different in the next capture.

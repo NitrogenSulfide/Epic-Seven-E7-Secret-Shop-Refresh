@@ -406,6 +406,7 @@ def recheck_mouse_action(action):
 LIST_REGION = (760,110,1880,1080)
 LIST_STILL = 1.5   # mean grey change between frames of a list at rest
 LIST_MOVED = 4.0   # mean grey change once the list shows something new
+REFRESH_FIND_SECONDS = 2.5  # how long to keep re-reading a covered Refresh label before stopping
 LIST_REST_SECONDS = .2  # how long the list must stay unchanged to count as settled
 
 
@@ -902,12 +903,29 @@ class ObservedShopFlow:
     def clickRefresh(self):
         if not self.loop_active:
             return False
-        frame = self.takeScreenshot(); self.navigation.require_shop(frame)
         self._item=self._item_name=None
-        points = [match['point'] for _,nav in self.navigation.navigators
-                  if nav.shop_visible(frame) and (match:=nav.match(frame,'refresh-label.png'))]
-        if not points or any(abs(x-points[0][0])>8 or abs(y-points[0][1])>8 for x,y in points):
-            raise MouseStopped('The Refresh target was not recognized. No click sent.')
+        # After a purchase the shop can return while a toast or the sold-out
+        # animation still covers the Refresh label (reported on STOVE). Every
+        # capture must still be the shop; only the label match is re-read, for
+        # a bounded time, and nothing is clicked until it matches.
+        deadline = None
+        while True:
+            frame = self.takeScreenshot(); self.navigation.require_shop(frame)
+            points = [match['point'] for _,nav in self.navigation.navigators
+                      if nav.shop_visible(frame) and (match:=nav.match(frame,'refresh-label.png'))]
+            if points and all(abs(x-points[0][0])<=8 and abs(y-points[0][1])<=8 for x,y in points):
+                break
+            if not self.loop_active:
+                return False
+            now = time.monotonic()
+            if deadline is None:
+                deadline = now+REFRESH_FIND_SECONDS
+            elif now >= deadline:
+                raise MouseStopped('The Refresh target was not recognized. No click sent.')
+            self._trace_retry()
+            self._poll_wait('refresh find')
+            if not self.loop_active:
+                return False
         before = self._rgb.copy()
         # The next list settle waits for the new items, not this page.
         self._list_before = before
