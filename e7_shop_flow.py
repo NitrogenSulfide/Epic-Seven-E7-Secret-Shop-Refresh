@@ -406,6 +406,7 @@ def recheck_mouse_action(action):
 LIST_REGION = (760,110,1880,1080)
 LIST_STILL = 1.5   # mean grey change between frames of a list at rest
 LIST_MOVED = 4.0   # mean grey change once the list shows something new
+SHOP_RETRY_AFTER_PAUSE = 2  # seconds after a pointer pause before re-selecting an unopened shop menu
 SHOP_OPEN_ATTEMPTS = 3  # menu selections before 'did not open' stops the run (opening spends nothing)
 REFRESH_FIND_SECONDS = 2.5  # how long to keep re-reading a covered Refresh label before stopping
 LIST_REST_SECONDS = .2  # how long the list must stay unchanged to count as settled
@@ -649,7 +650,11 @@ class ObservedShopFlow:
                 return False
             frame = self.takeScreenshot()
             if self._capture_resumed:
-                deadline = time.monotonic()+8
+                # The pointer crossed the game, which can swallow the menu
+                # click; the shop normally opens within a second. Retry soon
+                # after it leaves rather than waiting out the full 8 s, except
+                # on the last attempt.
+                deadline = time.monotonic()+(8 if final else SHOP_RETRY_AFTER_PAUSE)
             if self.navigation.shop_visible(frame):
                 print('Navigation: Secret Shop screen verified.',flush=True)
                 return True

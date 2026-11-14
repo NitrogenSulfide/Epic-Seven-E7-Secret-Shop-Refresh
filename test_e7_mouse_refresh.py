@@ -813,6 +813,29 @@ class NativeEngineTests(unittest.TestCase):
         self.assertEqual([call.args for call in app.mouse.click.call_args_list],[(100,580.5)]*2)
         self.assertEqual(app.refresh_count,0)
 
+    def test_menu_retry_comes_soon_after_a_pointer_pause(self):
+        # Live STOVE 2026-11-14: repeated hovers each restarted the full 8 s wait.
+        from e7_shop_flow import SHOP_RETRY_AFTER_PAUSE
+        app=self.make_engine();app.mouse.pause_revision=0;clock=[0.]
+        app.navigation.shop_visible.return_value=False
+        def capture():
+            if len(app.mouse.screenshot.call_args_list)==3:app.mouse.pause_revision+=1
+            return Image.fromarray(shop())
+        app.mouse.screenshot.side_effect=capture
+        def tick():clock[0]+=.25;return clock[0]
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=tick):
+            self.assertIsNone(app._wait_for_shop(final=False))
+        self.assertLess(clock[0],8)
+        self.assertGreaterEqual(clock[0],SHOP_RETRY_AFTER_PAUSE)
+        # The last attempt still allows the full wait after a pause.
+        app=self.make_engine();app.mouse.pause_revision=0;clock[0]=0.
+        app.navigation.shop_visible.return_value=False
+        app.mouse.screenshot.side_effect=capture
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=tick), \
+                self.assertRaisesRegex(MouseStopped,'did not open'):
+            app._wait_for_shop(final=True)
+        self.assertGreaterEqual(clock[0],8)
+
     def test_shop_menu_that_never_opens_stops_after_bounded_attempts(self):
         import itertools
         from e7_shop_flow import SHOP_OPEN_ATTEMPTS
