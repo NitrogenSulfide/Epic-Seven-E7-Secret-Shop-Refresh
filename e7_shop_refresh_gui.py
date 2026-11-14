@@ -56,6 +56,39 @@ def pointer_pause_text(reason, seconds_left):
     return f'{where} · paused · stops in {max(0, seconds_left)} s'
 
 
+# A plain next step under the compact bar for the situations players hit most.
+# Each maps an engine message to what is happening and what (if anything) to do.
+COMPACT_HINT_SECONDS = 15
+NAVIGATION_HINTS = (
+    ('Waiting for visible game controls.', 'Close popups in the game so the home screen or shop shows.'),
+    ('The Secret Shop did not open', 'Shop didn’t open (click missed) · retrying. Keep the mouse off the game.'),
+    ('The pointer passed over the game and the same confirmation',
+     'Confirm click was missed · confirming once more. Keep the mouse off the game.'),
+    ('Looking for the home Secret Shop menu', 'Finding the shop · leave the game on the home screen or shop.'),
+    ('Visibility restored', 'Resumed · checking the screen again before the next click.'),
+)
+CLEAR_HINT_NAVIGATION = ('Secret Shop screen verified',)
+
+
+def pause_hint(reason):
+    """What to do while a Background run is paused."""
+    if reason.startswith(POINTER_PAUSE_REASONS[0]):
+        return 'Leave the mouse still, or park it on the taskbar. It resumes by itself.'
+    if reason.startswith(POINTER_PAUSE_REASONS):
+        return 'Move the mouse off the game (taskbar or another screen). It resumes by itself.'
+    if 'minimized or hidden' in reason:
+        return 'Restore the game window. It resumes by itself.'
+    return ''
+
+
+def navigation_hint(message):
+    """The hint for a Navigation line, '' to clear it, or None to keep the current one."""
+    for prefix, hint in NAVIGATION_HINTS:
+        if message.startswith(prefix):
+            return hint
+    return '' if message.startswith(CLEAR_HINT_NAVIGATION) else None
+
+
 def mode_label(mode):
     """What the Control mode list shows; settings keep the plain mode name."""
     return {'Background': ('Background · Steam / STOVE (recommended)' if os.name == "nt"
@@ -320,6 +353,9 @@ class RefreshGui(tk.Tk):
         self._pointer_deadline = None
         self._pointer_job = None
         self._background_run = False
+        # One muted line under the compact bar: what is happening and what to do.
+        self.compact_hint = tk.StringVar(value='')
+        self._hint_job = None
         self.ev = tk.StringVar()
         self._load_config()
         self._build_ui()
@@ -1628,6 +1664,7 @@ class RefreshGui(tk.Tk):
         background = self.control_mode.get() == 'Background' and mouse_target is not None
         self._background_run = background
         self._clear_pointer_alert()
+        self._set_compact_hint("")
         self._native_mouse_run = mouse_target is not None and not background
         self._graceful_stop = mouse_target is not None or self._structured_adb
         self._session_log_path = None
@@ -1772,6 +1809,25 @@ class RefreshGui(tk.Tk):
         self.pointer_alert.set(pointer_pause_text(self._pointer_reason, left))
         self._pointer_job = self.after(250, self._tick_pointer_alert)
 
+    def _set_compact_hint(self, text):
+        """Show a hint; it clears by itself unless the run stays paused."""
+        if self._hint_job is not None:
+            try:
+                self.after_cancel(self._hint_job)
+            except tk.TclError:
+                pass
+            self._hint_job = None
+        self.compact_hint.set(text)
+        if text:
+            self._hint_job = self.after(COMPACT_HINT_SECONDS*1000, self._expire_compact_hint)
+
+    def _expire_compact_hint(self):
+        self._hint_job = None
+        if self.status.get() == 'Paused' or self.status.get() in ('Waiting for game', 'Waiting for game window'):
+            self._hint_job = self.after(COMPACT_HINT_SECONDS*1000, self._expire_compact_hint)
+        else:
+            self.compact_hint.set('')
+
     def _clear_pointer_alert(self):
         self._pointer_deadline = None
         if self._pointer_job is not None:
@@ -1839,7 +1895,9 @@ class RefreshGui(tk.Tk):
                 self.status.set('Needs attention')
                 self.remaining_time.set('Time remaining: Session stopped')
                 self._freeze_elapsed()
+                self._set_compact_hint('')
             else:
+                self._set_compact_hint(pause_hint(reason))
                 self.status.set('Paused')
                 self.session_estimate.pause(observed_at)
                 self._update_remaining_time(observed_at)
@@ -1860,6 +1918,7 @@ class RefreshGui(tk.Tk):
                 self._update_remaining_time(observed_at)
                 self.detail.set('Game visible again. Checking the current screen before continuing.')
                 self.progress_text.set('Checking the game again…')
+                self._set_compact_hint('Resumed · checking the screen again before the next click.')
             return
         if line.startswith('E7GUI_SETUP_REQUIRED '):
             if not self.stopping and not self.stop_key_pressed:
@@ -1880,6 +1939,9 @@ class RefreshGui(tk.Tk):
                     self.progress_text.set('Waiting for the engine’s first progress update…')
                 if hasattr(self, 'session_estimate'):
                     self._update_remaining_time(observed_at)
+                hint = navigation_hint(message)
+                if hint is not None:
+                    self._set_compact_hint(hint)
             self._event(line)
             return
         if line.startswith('E7GUI_STOP_KEY '):

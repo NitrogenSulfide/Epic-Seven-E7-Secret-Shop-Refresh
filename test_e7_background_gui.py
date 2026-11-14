@@ -263,6 +263,51 @@ class BackgroundGuiTests(unittest.TestCase):
         self.assertEqual(self.app.status.get(), 'Needs attention')
         self.assertEqual(self.app.pointer_alert.get(), '')
 
+    def hint_shown(self):
+        return self.app.tracker.hint.winfo_manager() == 'grid'
+
+    def test_compact_hint_says_what_to_do_while_paused_and_after(self):
+        self.app._background_run = True
+        self.pause(self.WINDOWS_POINTER)
+        self.assertEqual(self.app.compact_hint.get(), 'Leave the mouse still, or park it on the taskbar. It resumes by itself.')
+        self.assertTrue(self.hint_shown())
+        self.app._handle_line('E7GUI_MOUSE_RESUMED')
+        self.assertTrue(self.app.compact_hint.get().startswith('Resumed · checking the screen'))
+        self.app._handle_line('Navigation: The Secret Shop did not open; checking the home screen again.')
+        self.assertTrue(self.app.compact_hint.get().startswith('Shop didn’t open (click missed)'))
+        self.app._handle_line('Navigation: Revealing the recognized home screen controls.')
+        self.assertTrue(self.app.compact_hint.get().startswith('Shop didn’t open'))  # unrelated lines keep it
+        self.app._handle_line('Navigation: Secret Shop screen verified.')
+        self.assertEqual(self.app.compact_hint.get(), '')
+        self.assertFalse(self.hint_shown())
+
+    def test_compact_hint_for_linux_pointer_minimized_game_and_missed_confirm(self):
+        self.app._background_run = True
+        self.pause('Move your mouse off the game window; background input pauses while the pointer is over it.')
+        self.assertTrue(self.app.compact_hint.get().startswith('Move the mouse off the game'))
+        self.pause('The game window is minimized or hidden.')
+        self.assertEqual(self.app.compact_hint.get(), 'Restore the game window. It resumes by itself.')
+        self.app._handle_line('E7GUI_MOUSE_RESUMED')
+        self.app._handle_line('Navigation: The pointer passed over the game and the same confirmation is still open; confirming once more.')
+        self.assertTrue(self.app.compact_hint.get().startswith('Confirm click was missed'))
+
+    def test_compact_hint_expires_unless_still_paused_and_clears_on_stop(self):
+        self.app._background_run = True
+        self.app._handle_line('E7GUI_MOUSE_RESUMED')
+        self.app._expire_compact_hint()
+        self.assertEqual(self.app.compact_hint.get(), '')
+        self.pause(self.WINDOWS_POINTER)
+        self.app._expire_compact_hint()
+        self.assertNotEqual(self.app.compact_hint.get(), '')
+        self.app._handle_line('E7GUI_MOUSE_STOPPED '+gui.json.dumps({'reason': 'Stopped after 10 seconds.'}))
+        self.assertEqual(self.app.compact_hint.get(), '')
+        self.assertIsNone(self.app._hint_job)
+
+    def test_navigation_hints_match_the_engine(self):
+        source = Path('e7_shop_flow.py').read_text(encoding='utf-8')
+        for prefix, _ in gui.NAVIGATION_HINTS[1:]+tuple((p, '') for p in gui.CLEAR_HINT_NAVIGATION):
+            self.assertIn('Navigation: '+prefix, source)
+
     def test_pointer_alert_matches_the_engine(self):
         import e7_background
         self.assertEqual(gui.POINTER_PAUSE_LIMIT, e7_background.PAUSE_LIMIT)

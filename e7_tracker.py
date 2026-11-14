@@ -65,6 +65,11 @@ class CompactTracker:
         self.alert.grid(row=1, column=0, columnspan=column+1, sticky='w', pady=(dp(4), 0))
         self.alert.grid_remove()
         root.pointer_alert.trace_add('write', lambda *_: self.alert.grid() if root.pointer_alert.get() else self.alert.grid_remove())
+        # Muted line: what is happening and what the player can do about it.
+        self.hint = ttk.Label(frame, textvariable=root.compact_hint, style='Muted.TLabel', wraplength=dp(660), justify='left')
+        self.hint.grid(row=2, column=0, columnspan=column+1, sticky='w', pady=(dp(2), 0))
+        self.hint.grid_remove()
+        root.compact_hint.trace_add('write', lambda *_: self.hint.grid() if root.compact_hint.get() else self.hint.grid_remove())
 
     def enter(self, *, friendship):
         root = self.root
