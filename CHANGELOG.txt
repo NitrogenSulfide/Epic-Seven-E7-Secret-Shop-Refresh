@@ -1,3 +1,15 @@
+0.2.3 · A refresh dialog the game ignored no longer stops the run
+
+• If the game ignored a Confirm click (for example right after a purchase that
+  followed a scroll), the shop dimmed behind the still-open "Use Skystone to
+  refresh?" dialog could be taken for the shop. The refresh was counted and the
+  next Refresh click went into the dialog, stopping with "The refresh
+  confirmation was not recognized". The shop now has to be fully visible, not
+  just dimmed behind a dialog, before a refresh is counted or Refresh is clicked;
+  the app waits for an overlay to clear instead.
+• Saved recognition images captured while a dialog dimmed the shop are refused,
+  and the built-in images are used instead.
+
 0.2.2 · Background runs recover from a passing pointer, and the tracker says what to do
 
 • If the pointer passes over the game just as Refresh is read, the label is

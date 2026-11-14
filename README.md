@@ -11,7 +11,7 @@ setups may still need fixes. Feedback and bug reports are welcome!
 
 ## EZ Mode · download, extract, start
 
-**[Download the Windows app — v0.2.2](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.2.2/E7ShopRefresh-0.2.2.zip)**
+**[Download the Windows app — v0.2.3](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.2.3/E7ShopRefresh-0.2.3.zip)**
 
 > **Ban risk:** This is unofficial automation. [Smilegate's terms](https://common.game.onstove.com/terms/index?gameType=MOBILE&langCode=en&termsType=1) prohibit unauthorized scripts and macros. Account penalties, including bans, are possible; use at your own risk.
 
@@ -30,7 +30,7 @@ setups may still need fixes. Feedback and bug reports are welcome!
 window, or click **Stop Session**.
 
 **[Detailed setup / troubleshooting](release/SETUP.md)** ·
-**[What's new in v0.2.2](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.2.2)**
+**[What's new in v0.2.3](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.2.3)**
 
 **Tips for a smooth run**
 
@@ -124,7 +124,7 @@ history) into the new extracted release.
 
 ## Source and credits
 
-**E7Source-0.2.2.zip** on the release page has the source and rebuild steps. See
+**E7Source-0.2.3.zip** on the release page has the source and rebuild steps. See
 [build instructions](release/BUILDING.md) and [engine notes](ENGINE.md).
 
 Software is GPL-3.0; see [LICENSE](LICENSE), [CREDITS.txt](CREDITS.txt) and
