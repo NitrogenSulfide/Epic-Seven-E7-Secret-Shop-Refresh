@@ -1063,7 +1063,7 @@ class ObservedShopFlow:
             if not self.navigation.shop_visible(frame):
                 raise
             again = self.findItemPosition(frame,self._item)
-            if again is None or abs(again[1]-pos[1]) > 20 or not any(
+            if again is None or abs(again[1]-current[1]) > 20 or not any(
                     box[0] < again[0] < box[2] and box[1] < again[1] < box[3]
                     for box in green_buttons(self._rgb,(1480,110,1880,1080))):
                 raise

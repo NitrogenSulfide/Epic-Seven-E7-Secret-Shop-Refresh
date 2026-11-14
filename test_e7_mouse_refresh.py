@@ -1513,6 +1513,28 @@ class NativeEngineTests(unittest.TestCase):
             app.clickBuy(pos)
         app.mouse.click.assert_not_called()
 
+    def test_ignored_buy_after_the_row_moved_is_retried_at_its_new_place(self):
+        # Codex review 2026-11-14: the retry compared against the scan position.
+        import itertools
+        clock = itertools.count(0,.25)
+        app,pos,row = self._moving_buy_app(420)
+        moved, after = row(420), [dialog('buy'),dialog('buy'),shop()]
+        def capture():
+            clicks = app.mouse.click.call_count
+            if clicks == 0:
+                capture.n += 1
+                return Image.fromarray(shop() if capture.n == 1 else moved)
+            if clicks == 1:
+                return Image.fromarray(moved)  # the game ignored this Buy
+            return Image.fromarray(after.pop(0) if len(after) > 1 else after[0])
+        capture.n = 0
+        app.mouse.screenshot.side_effect = capture
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                patch('builtins.print'):
+            self.assertTrue(app.clickBuy(pos))
+        ys = [c.args[1] for c in app.mouse.click.call_args_list]
+        self.assertEqual(ys[:2],[480,480])  # Buy, then Buy once more at the moved row
+
     def _ignored_buy_app(self,ignored):
         """A bookmark row whose first `ignored` Buy clicks open no dialog."""
         import itertools
