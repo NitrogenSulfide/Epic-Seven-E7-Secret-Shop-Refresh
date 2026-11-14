@@ -15,16 +15,18 @@ need fixes. Feedback and bug reports are welcome—I'll do my best to help when 
 > **Ban risk:** This is unofficial automation. [Smilegate's terms](https://common.game.onstove.com/terms/index?gameType=MOBILE&langCode=en&termsType=1) prohibit unauthorized scripts and macros. Account penalties, including bans, are possible; use at your own risk.
 
 1. Extract the **whole ZIP**, then open **E7 Secret Shop Refresh.exe**. Python is included.
+   Windows 11 may show **Windows protected your PC**: click **More info**, then
+   **Run anyway** (the app is not code-signed). Then choose **Yes** at the
+   administrator prompt; it appears every time the app opens.
+
+   <img src="docs/media/windows-smartscreen-1-more-info.png" alt="Windows protected your PC: click More info" width="360"> <img src="docs/media/windows-smartscreen-2-run-anyway.png" alt="Then click Run anyway" width="360">
 2. Open **English Epic Seven** at home or in Secret Shop. Close any popups; hidden idle home controls are handled automatically.
 3. Leave **Background** selected for Epic Seven on **Steam or STOVE** (your PC stays free to use). For an emulator or Google Play Games, the app offers **Switch to Mouse**; then choose your **game window**. Use **Scan** if needed.
 4. Set your **Skystone budget** and check the **Stop key**, then press **Start Refresh**.
 
-If the app offers to **restart as administrator**, accept the restart and Windows
-permission prompt. Once it reopens, select your game and press **Start Refresh**
-again. This is only needed when the selected game runs with administrator permission.
-
-**While Mouse runs:** leave the PC alone, keep the game uncovered, and avoid moving
-or resizing its window. **To stop:** press your configured Stop key (default: the
+**While Background runs:** you can keep using the PC; keep the pointer off the game
+and never minimize it. **While Mouse runs:** leave the PC alone, keep the game
+uncovered, and avoid moving or resizing its window. **To stop:** press your configured Stop key (default: the
 backtick key, usually below Esc) or click **Stop Session**. Start with a small budget
 for your first run.
 

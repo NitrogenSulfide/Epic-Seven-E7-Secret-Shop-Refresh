@@ -4,6 +4,9 @@
 
 Download the **E7ShopRefresh ZIP** for your chosen version, then extract it into a new
 folder such as `Documents\E7 Shop Refresh`. Double-click **E7 Secret Shop Refresh.exe**.
+If Windows 11 shows **Windows protected your PC**, click **More info**, then **Run
+anyway**; the app is not code-signed. Then choose **Yes** at the administrator
+prompt, which appears every time the app opens.
 The EXE includes Python, Tk and Pillow: players do not install Python or an image
 library. Keep the entire folder together, including artwork and `runtime`.
 The separate Source ZIP is optional for developers.

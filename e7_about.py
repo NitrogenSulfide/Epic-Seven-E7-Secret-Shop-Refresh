@@ -7,16 +7,16 @@ import webbrowser
 from e7_appearance import profile_avatar
 
 TESTED_CLIENTS = (
-    'First release testing: Google Play Games on PC Developer Emulator and the '
-    'official STOVE client of Epic Seven. Other emulators and methods have not '
-    'been tested.'
+    'Tested: Background on Steam (Windows 11 and Linux) and STOVE; Mouse on STOVE '
+    'and Google Play Games Developer Emulator; ADB on Google Play Games Developer '
+    'Emulator. Other clients and setups have not been tested.'
 )
 QUICKSTART = (
     'Background mode (Epic Seven on Steam or STOVE)\n\n'
     '1. Open English Epic Seven on Steam or STOVE at home or in Secret Shop. Close popups.\n'
-    '2. Background is selected by default. Press Start Refresh and accept the '
-    'administrator restart the first time. You can keep using your PC; keep the '
-    'pointer off the game window.\n'
+    '2. Background is selected by default. Press Start Refresh. You can keep using '
+    'your PC; keep the pointer off the game window. Two monitors work best; on one '
+    'monitor, cover the game if you like but never minimize it.\n'
     'Playing on Google Play Games or an emulator? Background works only with Steam '
     'and STOVE: the banner offers Switch to Mouse.\n\n'
     'Mouse mode (emulators; takes over your pointer)\n\n'
@@ -36,11 +36,9 @@ QUICKSTART = (
     'Optionally enable Also buy Friendship Points for the current heart item '
     '(50 points for 18,000 gold per buy). Calibration excludes Friendship.\n'
     'To stop: press your stop key or use Stop Session.\n\n'
-    'Mouse: resize before Start; game view must be at least 640 × 360. If the '
-    'game runs as administrator, or Windows denies access to its permissions, '
-    'Start offers to restart the app with Windows\' '
-    'permission prompt. After reopening, select the game and press Start again. '
-    'Cancelling leaves this app open without sending Mouse input.\n\n'
+    'Mouse: resize before Start; game view must be at least 640 × 360.\n\n'
+    'Windows asks for administrator permission each time the app opens, because '
+    'Steam and STOVE run Epic Seven as administrator. Choose Yes.\n\n'
     + TESTED_CLIENTS
 )
 
@@ -79,8 +77,11 @@ class AboutDialog(tk.Toplevel):
         notebook.grid(row=1, column=0, sticky='nsew', padx=dp(20))
         self.notebook = notebook
         overview = (
-            'Welcome! Choose Mouse or ADB, then check the budget and stop key. '
-            'See Quickstart for the basic steps.\n\n'
+            'Welcome! Playing on Steam or STOVE? Keep Background (the default): it '
+            'clicks the game window directly, so you can keep using your PC. Check '
+            'the budget and stop key, then press Start Refresh.\n\n'
+            'Emulators and Google Play Games use Mouse or ADB instead. See Quickstart '
+            'for the steps.\n\n'
             f'{TESTED_CLIENTS}\n\n'
             'GUI and enhancements: NitrogenSulfide (Blue Natto)\n'
             'Original refresh engine: Solunium\n'
