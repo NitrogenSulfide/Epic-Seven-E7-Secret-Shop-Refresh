@@ -6,8 +6,13 @@ Linux) and **STOVE** in the background, so you can keep using your PC. Windows a
 Linux runs from source.
 
 Hi, I'm Blue Natto. This is a small, unofficial hobby project for fellow Epic Seven
-players, based on Solunium's GPL-3.0 engine. I've tested it on my own PCs, so some
-setups may still need fixes. Feedback and bug reports are welcome!
+players, based on Solunium's GPL-3.0 engine. Feedback and bug reports are welcome!
+
+> ⚠️ **Only tested on my own PCs.** Steam (Windows 11 and Linux), the STOVE client and
+> Google Play Games Developer Emulator work for me. Other PCs, emulators and settings
+> may hit edge cases I haven't seen. Start with a small Skystone budget, and if
+> something breaks, report it on [GitHub Issues](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/issues)
+> or Reddit with the log line the app shows.
 
 ## EZ Mode · download, extract, start
 

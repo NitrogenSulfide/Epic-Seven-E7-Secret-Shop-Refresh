@@ -1,5 +1,11 @@
 # v0.2.3 — Waits out a refresh dialog the game ignored
 
+> ⚠️ **Only tested on my own PCs.** Steam (Windows 11 and Linux), the STOVE client and
+> Google Play Games Developer Emulator work for me. Other PCs, emulators and settings
+> may hit edge cases I haven't seen. Start with a small Skystone budget, and if
+> something breaks, report it on [GitHub Issues](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/issues)
+> or Reddit with the log line the app shows.
+
 **Fix for "The refresh confirmation was not recognized."** Sometimes the game ignores
 a Confirm click, most often right after a purchase that followed a scroll, while
 the shop is still busy. The "Use Skystone to refresh?" dialog then stays open, and
