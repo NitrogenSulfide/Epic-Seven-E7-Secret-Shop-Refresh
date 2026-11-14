@@ -71,7 +71,7 @@ def build_report(*, version, mode, target, state, reason, log, app_dir, since,
                  system=None, home=None, user=None, lines=LOG_LINES, max_chars=MAX_CHARS):
     """Markdown that reads well on Reddit (old and new) and GitHub. The log is
     indented four spaces, which both render as a code block."""
-    head = [f'**E7 Secret Shop Refresh v{version} report**', '',
+    head = [f'**E7 Secret Shop Refresh v{version} (beta) report**', '',
             f'- System: {system or system_name()}',
             f'- Mode: {mode}' + (f' · {target}' if target else '')]
     window = game_window_line(log)

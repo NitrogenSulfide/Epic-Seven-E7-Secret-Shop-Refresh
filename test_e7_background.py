@@ -124,6 +124,16 @@ class BackgroundGameTest(unittest.TestCase):
         with self.assertRaisesRegex(MouseStopped, 'blank'):
             game.screenshot()
 
+    def test_one_blank_capture_is_taken_again_before_stopping(self):
+        window = FakeWindow()
+        good = window.image
+        frames = [Image.new('RGB', window.size(), (0, 0, 0)), good]
+        window.capture = lambda: frames.pop(0) if len(frames) > 1 else frames[0]
+        game, _, _ = make(window=window)
+        with mock.patch('e7_background.time.sleep') as slept:
+            self.assertIsNotNone(game.screenshot())
+        slept.assert_any_call(.5)
+
     def test_letterboxed_client_is_cropped_to_16_by_9(self):
         window = FakeWindow((2000, 1080))
         window.image = Image.new('RGB', (2000, 1080), (0, 0, 0))

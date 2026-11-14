@@ -426,9 +426,23 @@ LIST_STILL = 1.5   # mean grey change between frames of a list at rest
 LIST_MOVED = 4.0   # mean grey change once the list shows something new
 SHOP_RETRY_AFTER_PAUSE = 2  # seconds after a pointer pause before re-selecting an unopened shop menu
 SHOP_OPEN_ATTEMPTS = 3  # menu selections before 'did not open' stops the run (opening spends nothing)
-REFRESH_FIND_SECONDS = 2.5  # how long to keep re-reading a covered Refresh label before stopping
-LIST_REST_SECONDS = .2  # how long the list must stay unchanged to count as settled
+REFRESH_FIND_SECONDS = 5  # how long to keep re-reading a covered Refresh label before stopping (a sold-out stamp or toast can outlast 2.5 s)
+LIST_REST_SECONDS = .4  # how long the list must stay unchanged to count as settled
+LIST_REST_STEPS = 3  # and over at least this many consecutive unchanged frames
+LIST_BAND = 16  # rows of the 1/8 list view per band (~one shop row); each band must be still
+FAST_SETTLE_SECONDS = 2.0  # least upper bound for any list settle on fast transports
+INVENTORY_SETTLE_SECONDS = 2.5  # upper bound for the list to settle after a refresh (fast transports)
 SCROLLED_PURCHASE_SETTLE = .6  # extra wait before Refresh after buying from the scrolled list
+
+
+def list_change(current, previous):
+    """Largest mean grey change of any row band between two list views.
+
+    A whole-list mean hides one row still sliding, fading or being stamped
+    while the rest sits still (Linux Steam, 2026-11-14), so stillness is judged
+    per band."""
+    diff = np.abs(current-previous)
+    return max(float(np.mean(diff[top:top+LIST_BAND])) for top in range(0,diff.shape[0],LIST_BAND))
 
 
 def list_view(rgb):
@@ -469,17 +483,21 @@ class ObservedShopFlow:
         ADB waits `seconds` and captures. Fast transports poll: when
         `changed_from` (an earlier frame) is given, the list must first differ
         from it; then it must stay unchanged for LIST_REST_SECONDS and show at
-        least three Buy buttons. `seconds` stays the upper bound, and the poll
-        count is capped too so a stalled clock cannot loop forever.
+        least three Buy buttons. Stillness is judged per row band and must last
+        LIST_REST_SECONDS over at least LIST_REST_STEPS frames. `seconds` stays
+        the upper bound (a list that never qualifies is captured then, as the
+        old fixed wait did), and the poll count is capped too so a stalled
+        clock cannot loop forever.
         """
         if not self.fast_waits:
             self._wait_observed(seconds, action)
             return self.takeScreenshot() if self.loop_active else None
+        seconds = max(seconds, FAST_SETTLE_SECONDS)
         started = time.monotonic()
         deadline = started+seconds
         before = None if changed_from is None else list_view(changed_from)
         changed, previous, previous_at, still_since, settled, polls = before is None, None, None, None, False, 0
-        still_steps = 0  # consecutive unchanged frames; each poll waits POLL_SECONDS, so 2 steps >= LIST_REST_SECONDS
+        still_steps = 0  # consecutive unchanged frames
         max_polls = math.ceil(seconds/self.POLL_SECONDS)+2
         readings = []  # (moved from changed_from, change from previous frame) per poll, for the trace
         frame = None
@@ -488,7 +506,7 @@ class ObservedShopFlow:
             captured_at = time.monotonic()
             current = list_view(self._rgb)
             moved = None if before is None else float(np.mean(np.abs(current-before)))
-            step = None if previous is None else float(np.mean(np.abs(current-previous)))
+            step = None if previous is None else list_change(current,previous)
             readings.append([None if moved is None else round(moved,2), None if step is None else round(step,2)])
             if not changed and moved >= LIST_MOVED:
                 changed = True
@@ -499,7 +517,7 @@ class ObservedShopFlow:
                 still_since, still_steps = None, 0
             previous, previous_at = current, captured_at
             if (changed and still_since is not None
-                    and (captured_at-still_since >= LIST_REST_SECONDS or still_steps >= 2)
+                    and captured_at-still_since >= LIST_REST_SECONDS and still_steps >= LIST_REST_STEPS
                     and len(green_buttons(self._rgb,(1480,110,1880,1080))) >= 3):
                 settled = True
                 break
@@ -978,34 +996,54 @@ class ObservedShopFlow:
             return False
 
 
+    BUY_LOOKS = 3  # pre-Buy looks; each after the first waits for the list to settle
+
+    def _buy_target(self, pos):
+        """Find the selected item and its Buy button again right before Buy.
+
+        Frames taken while the list still moves (after a refresh, a purchase or
+        a scroll; Linux Steam 2026-11-14) can lose the shop title, split a row
+        from its price/Buy button, or show the item elsewhere. No click has
+        been sent here, so look up to BUY_LOOKS times, settling in between,
+        and stop with the last reason only if no look is clean. The first look
+        must find the item where the scan did; a settled look may find it
+        anywhere, as the click then follows that observed Buy button.
+        """
+        failure = None
+        for look in range(self.BUY_LOOKS):
+            if look == 0:
+                frame = self.takeScreenshot()
+            else:
+                if look == 1:
+                    print('Navigation: The item moved before Buy; waiting for the list to settle and checking again.',flush=True)
+                frame = self._settled_screenshot(1,'buy recheck settle')
+            if frame is None or not self.loop_active:
+                return None
+            try:
+                self.navigation.require_shop(frame)
+                current = self.findItemPosition(frame,self._item)
+            except (UnclearShopRow,IncompleteCurrencyRow) as error:
+                failure = error; continue
+            except RuntimeError as error:
+                if isinstance(error,MouseStopped):
+                    raise
+                failure = error; continue  # shop not verified on this frame
+            if current is None or (look == 0 and abs(current[1]-pos[1]) > 20):
+                failure = MouseStopped('The selected item changed before Buy. No click sent.'); continue
+            boxes = [box for box in green_buttons(self._rgb,(1480,110,1880,1080))
+                     if box[0] < current[0] < box[2] and box[1] < current[1] < box[3]]
+            if len(boxes) != 1:
+                failure = MouseStopped('The Buy button was not recognized. No click sent.'); continue
+            return current
+        raise failure
+
     @recheck_mouse_action
     def clickBuy(self,pos):
         if pos is None or not self.loop_active or (self._item is None and self._item_name != 'Friendship points'):
             return False
-        frame = self.takeScreenshot(); self.navigation.require_shop(frame)
-        try:
-            current = self.findItemPosition(frame,self._item)
-        except (UnclearShopRow,IncompleteCurrencyRow):
-            # A frame mid-animation can split the name from its price/Buy
-            # button (Linux Steam, 2026-11-14, top row right after a refresh).
-            current = None
-        if current is None or abs(current[1]-pos[1]) > 20:
-            # The list can still be moving right after a refresh (Linux Steam,
-            # 2026-11-14: Friendship found, then gone a moment later). Nothing
-            # was clicked yet: let it come to rest and look once more; a row
-            # that is still unclear then stops the run as before.
-            print('Navigation: The item moved before Buy; waiting for the list to settle and checking again.',flush=True)
-            frame = self._settled_screenshot(1,'buy recheck settle')
-            if frame is None or not self.loop_active:
-                return False
-            self.navigation.require_shop(frame)
-            current = self.findItemPosition(frame,self._item)
-            if current is None:
-                raise MouseStopped('The selected item changed before Buy. No click sent.')
-        boxes = [box for box in green_buttons(self._rgb,(1480,110,1880,1080))
-                 if box[0] < current[0] < box[2] and box[1] < current[1] < box[3]]
-        if len(boxes) != 1:
-            raise MouseStopped('The Buy button was not recognized. No click sent.')
+        current = self._buy_target(pos)
+        if current is None:
+            return False
         before = self._rgb.copy()
         # Name/price recognition uses the observed Buy label to keep random
         # clicks away from the native button's separate stock-count inset.

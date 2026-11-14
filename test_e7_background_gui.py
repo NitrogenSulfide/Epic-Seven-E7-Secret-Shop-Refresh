@@ -313,7 +313,7 @@ class BackgroundGuiTests(unittest.TestCase):
         with patch.object(self.app, 'clipboard_clear'), patch.object(self.app, 'clipboard_append') as copy:
             self.app._copy_report()
         report = copy.call_args.args[0]
-        self.assertIn(f'v{gui.APP_VERSION} report', report)
+        self.assertIn(f'v{gui.APP_VERSION} (beta) report', report)
         self.assertIn('- Mode: Background · Epic Seven (Steam)', report)
         self.assertIn('- Game window: 1920 x 1009, windowed, display scale 100%', report)
         self.assertIn('- Result: Needs attention · The Secret Shop did not open', report)

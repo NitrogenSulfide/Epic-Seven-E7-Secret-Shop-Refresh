@@ -271,7 +271,7 @@ class RefreshGui(tk.Tk):
     def __init__(self):
         enable_dpi_awareness()
         super().__init__()
-        self.title("E7 Secret Shop Refresh")
+        self.title("E7 Secret Shop Refresh (Beta)")
         self._configure_scaling()
         self._layout_job = None
         self._icon_job = None

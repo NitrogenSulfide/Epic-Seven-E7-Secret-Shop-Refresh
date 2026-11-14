@@ -225,16 +225,22 @@ class WindowsMouse:
                 raise MouseStopped(reason+' No input sent while paused; focus did not return within 10 seconds.')
             time.sleep(.1)
 
-    def screenshot(self):
+    def _capture_once(self):
         for _ in range(3):
             before = self.guard()
             revision = self.pause_revision
             image = self.grabber(bbox=before.rectangle,all_screens=True).convert('RGB')
             self.guard()
             if revision == self.pause_revision:
-                break
-        else:
-            raise MouseStopped('Game visibility repeatedly changed during capture. No input sent.')
+                return before,image
+        raise MouseStopped('Game visibility repeatedly changed during capture. No input sent.')
+
+    def screenshot(self):
+        before,image = self._capture_once()
+        if max(hi-lo for lo,hi in image.getextrema()) < 12:
+            # A fade or loading frame can be momentarily blank; look once more.
+            time.sleep(.5)
+            before,image = self._capture_once()
         width,height = before.rectangle[2]-before.rectangle[0],before.rectangle[3]-before.rectangle[1]
         if image.size != (width,height) or max(hi-lo for lo,hi in image.getextrema()) < 12:
             raise MouseStopped('The client capture is blank or has the wrong size. Mouse session stopped.')

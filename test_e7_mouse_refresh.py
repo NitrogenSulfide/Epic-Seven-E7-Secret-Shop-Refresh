@@ -1,6 +1,7 @@
 import os
 """Fake native input and synthetic shop/dialog tests. Never operate the desktop."""
 import contextlib
+import gc
 import ctypes
 import io
 import itertools
@@ -271,6 +272,15 @@ class TransportTests(unittest.TestCase):
         self.mouse.grabber.return_value = self.image; self.mouse.screenshot()
         for x,y in ((1920,1),(-1,1),(1,1080),(float('nan'),1)):
             with self.assertRaises(MouseStopped): self.mouse.click(x,y)
+        self.sender.assert_not_called()
+
+    def test_one_blank_capture_is_taken_again_before_stopping(self):
+        # A fade or loading frame can be blank for a moment.
+        self.mouse.grabber.side_effect = [Image.new('RGB',(3840,2019)),self.image]
+        with patch('e7_native_mouse.time.sleep') as slept:
+            self.mouse.screenshot()
+        slept.assert_called_once_with(.5)
+        self.assertEqual(self.mouse.grabber.call_count,2)
         self.sender.assert_not_called()
 
     def test_selected_client_is_not_restricted_to_stove_but_identity_is_verified(self):
@@ -603,6 +613,10 @@ class NativeEngineTests(unittest.TestCase):
     def setUp(self):
         self.ocr_patch=patch('e7_shop_flow.read_ui_text',return_value=dict(text='',words=[]))
         self.ui_ocr=self.ocr_patch.start();self.addCleanup(self.ocr_patch.stop)
+        # Mocks record every full frame passed to them; drop those records
+        # after each test so the module stays within the capped test memory.
+        self.addCleanup(self.ui_ocr.reset_mock)
+        self.addCleanup(gc.collect)
 
     def make_engine(self):
         app = E7MouseShopRefresh.__new__(E7MouseShopRefresh)
@@ -1410,8 +1424,15 @@ class NativeEngineTests(unittest.TestCase):
         first = row(200); app._rgb = first
         pos = app.findItemPosition(cv_gray(first),template)
         app.read_confirmation_text = lambda rgb:'Cancel Buy Covenant Bookmarks 184,000' if rgb[760,1100,1]==110 else ''
-        frames = [shop()]+[row(later) if later is not None else shop()]*4+[dialog('buy'),dialog('buy'),shop()]
-        app.mouse.screenshot.side_effect = [Image.fromarray(frame) for frame in frames]
+        settled = row(later) if later is not None else shop()
+        after = [dialog('buy'),dialog('buy'),shop()]
+        captures = [0]
+        def capture():
+            captures[0] += 1
+            if app.mouse.click.call_count:
+                return Image.fromarray(after.pop(0) if len(after) > 1 else after[0])
+            return Image.fromarray(shop() if captures[0] == 1 else settled)
+        app.mouse.screenshot.side_effect = capture
         return app,pos,row
 
     def test_item_missing_right_before_buy_is_found_again_once_the_list_settles(self):
@@ -1459,9 +1480,36 @@ class NativeEngineTests(unittest.TestCase):
         import itertools
         clock = itertools.count(0,.25)
         app,pos,_ = self._moving_buy_app(200)
-        with patch.object(app,'findItemPosition',self._unclear_then(app,2)), \
+        with patch.object(app,'findItemPosition',self._unclear_then(app,3)), \
                 patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
                 patch('builtins.print'),self.assertRaisesRegex(MouseStopped,'could not be verified on the same row'):
+            app.clickBuy(pos)
+        app.mouse.click.assert_not_called()
+
+    def test_shop_unverified_on_one_frame_before_buy_is_looked_at_again(self):
+        # A fade or toast can hide the shop title for one frame; no click was sent.
+        import itertools
+        clock = itertools.count(0,.25)
+        app,pos,_ = self._moving_buy_app(200)
+        real, looks = app.navigation.require_shop, []
+        def require(frame):
+            looks.append(1)
+            if len(looks) == 1:
+                raise RuntimeError('Secret Shop screen could not be verified (test). Stopped before further shop actions.')
+            return real(frame)
+        with patch.object(app.navigation,'require_shop',side_effect=require), \
+                patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                patch('builtins.print'):
+            self.assertTrue(app.clickBuy(pos))
+        self.assertEqual(app.mouse.click.call_args_list[0].args[1],260)
+
+    def test_pre_buy_looks_are_bounded_and_send_no_click(self):
+        import itertools
+        clock = itertools.count(0,.25)
+        app,pos,_ = self._moving_buy_app(200)
+        with patch.object(app,'findItemPosition',self._unclear_then(app,99)) as look, \
+                patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                patch('builtins.print'),self.assertRaises(MouseStopped):
             app.clickBuy(pos)
         app.mouse.click.assert_not_called()
 
@@ -1657,6 +1705,26 @@ class NativeEngineTests(unittest.TestCase):
         self.assertEqual(events,['drag','buy Covenant bookmark','buy Mystic medal','refresh'])
         self.assertEqual([item.count for item in app.storage.inventory.values()],[1,1])
         self.assertEqual(app.refresh_count,1)
+
+    def test_one_row_still_moving_keeps_the_list_unsettled(self):
+        # Linux Steam 2026-11-14: one row still animating is too small a change
+        # for a whole-list average, so the list counted as settled too early.
+        from e7_shop_flow import list_change,list_view,LIST_STILL
+        base=shop();base[220:300,1550:1810]=base[420:500,1550:1810]=base[620:700,1550:1810]=(20,110,40)
+        def with_block(x):
+            frame=base.copy();frame[520:580,x:x+60]=230;return frame
+        a,b=list_view(with_block(900)),list_view(with_block(1000))
+        self.assertLess(float(np.mean(np.abs(a-b))),LIST_STILL)  # the old whole-list test saw "still"
+        self.assertGreater(list_change(a,b),LIST_STILL)
+        app=self.make_engine();app.fast_waits=True
+        frames=[with_block(800+40*i) for i in range(6)]+[with_block(1100)]*8
+        app.mouse.screenshot.side_effect=[Image.fromarray(f) for f in frames]
+        clock=itertools.count(0,.05)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)):
+            frame=app._settled_screenshot(2.5,'inventory settle')
+        self.assertIsNotNone(frame)
+        self.assertEqual(int(app._rgb[550,1110,0]),230)  # the row at its final place
+        self.assertGreaterEqual(app.mouse.screenshot.call_count,6+4)
 
     def test_next_item_is_searched_on_a_settled_list_after_a_purchase(self):
         # Orlando 2026-11-14: right after a purchase the list still slides; an

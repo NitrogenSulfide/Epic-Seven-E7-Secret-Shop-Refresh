@@ -1,4 +1,4 @@
-0.2.4 · A mouse resting on the game no longer cancels clicks; recovers from ignored clicks
+0.2.4 (beta) · A mouse resting on the game no longer cancels clicks; recovers from ignored clicks
 
 • Windows: the game cancels a Background click while your mouse rests
   anywhere on it, so the shop icon was pressed but the shop
@@ -49,6 +49,14 @@
   and looks once more; it still stops, with no click, if the item is gone.
   The same applies when the moving list made the item's price and Buy button
   unreadable ("could not be verified on the same row").
+• Steadier, a little slower: Mouse and Background now wait until every row of
+  the item list has stopped moving (not just the list on average) before
+  reading it, with a longer upper bound after a refresh.
+• Fewer stops from a single unlucky frame, none of them after a click: right
+  before Buy the app looks up to three times (settling in between) before
+  stopping; a frame where a fade or toast hides the shop title is read again
+  instead of stopping; a Refresh button covered by a toast gets 5 seconds
+  instead of 2.5; a momentarily blank game capture is taken again once.
 
 0.2.3 · A refresh dialog the game ignored no longer stops the run
 

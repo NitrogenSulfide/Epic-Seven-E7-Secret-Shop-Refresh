@@ -287,16 +287,22 @@ class BackgroundGame:
                 raise MouseStopped(problem+f' No input sent while paused; it did not clear within {PAUSE_LIMIT} seconds.')
             time.sleep(.1)
 
-    def screenshot(self):
+    def _capture_once(self):
         for _ in range(3):
             self.guard()
             revision = self.pause_revision
             image = self.window.capture().convert('RGB')
             self.guard()
             if revision == self.pause_revision:
-                break
-        else:
-            raise MouseStopped('The game repeatedly paused during capture. No input sent.')
+                return image
+        raise MouseStopped('The game repeatedly paused during capture. No input sent.')
+
+    def screenshot(self):
+        image = self._capture_once()
+        if image.size == self.client and max(hi-lo for lo, hi in image.getextrema()) < 12:
+            # A fade or loading frame can be momentarily blank; look once more.
+            time.sleep(.5)
+            image = self._capture_once()
         if image.size != self.client or max(hi-lo for lo, hi in image.getextrema()) < 12:
             raise MouseStopped('The game capture is blank or has the wrong size. Background session stopped.')
         if self._view_bounds is None:

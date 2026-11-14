@@ -1,4 +1,4 @@
-# E7 Secret Shop Refresh
+# E7 Secret Shop Refresh (Beta)
 
 Opens Epic Seven's Secret Shop, buys Covenant Bookmarks and Mystic Medals, and
 refreshes until your Skystone budget runs out. Works with **Steam** (Windows 11 and
@@ -8,7 +8,7 @@ Linux runs from source.
 Hi, I'm Blue Natto. This is a small, unofficial hobby project for fellow Epic Seven
 players, based on Solunium's GPL-3.0 engine. Feedback and bug reports are welcome!
 
-> ⚠️ **Only tested on my own PCs.** Steam (Windows 11 and Linux), the STOVE client and
+> ⚠️ **Beta, only tested on my own PCs.** Steam (Windows 11 and Linux), the STOVE client and
 > Google Play Games Developer Emulator work for me. Other PCs, emulators and settings
 > may hit edge cases I haven't seen. Start with a small Skystone budget, and if
 > something breaks, report it on [GitHub Issues](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/issues)

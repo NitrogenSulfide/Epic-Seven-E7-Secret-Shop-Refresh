@@ -1,6 +1,6 @@
-# v0.2.4 — A mouse resting on the game no longer cancels clicks; recovers from ignored clicks
+# v0.2.4 (beta) — A mouse resting on the game no longer cancels clicks; recovers from ignored clicks
 
-> ⚠️ **Only tested on my own PCs.** Steam (Windows 11 and Linux), the STOVE client and
+> ⚠️ **Beta, only tested on my own PCs.** Steam (Windows 11 and Linux), the STOVE client and
 > Google Play Games Developer Emulator work for me. Other PCs, emulators and settings
 > may hit edge cases I haven't seen. Start with a small Skystone budget, and if
 > something breaks, report it on [GitHub Issues](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/issues)
@@ -62,6 +62,10 @@ saved by older versions, are raised to 0.3, because the game ignores faster clic
 Random timing never goes below 0.3 either.
 
 **Item list still moving before Buy.** Right after a refresh the list can still be settling; the run used to stop with "The selected item changed before Buy". It now waits for the list to come to rest and checks again, and stops (no click sent) only if the item is really gone. The same goes for "its price and Buy button could not be verified on the same row" when it was caused by the moving list.
+
+**Steadier, a little slower.** Mouse and Background now wait until every row of the item list has stopped moving, not just the list on average, before reading it. After a refresh the wait can last up to 2.5 seconds; it ends sooner once the list is still.
+
+**Fewer stops from a single unlucky frame.** Each of these happens before any click, so waiting is safe: right before Buy the app looks up to three times, settling in between, before stopping; a frame where a fade or toast hides the shop title is read again; a Refresh button covered by a toast gets 5 seconds instead of 2.5; a momentarily blank game capture is taken again once.
 
 Settings and history carry over: extract **E7ShopRefresh-0.2.4.zip** into a fresh
 folder and copy `runtime/ShopRefreshGUI.ini`, `runtime/ADBconfig.ini` and

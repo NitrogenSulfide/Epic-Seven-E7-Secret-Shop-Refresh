@@ -14,7 +14,7 @@ import configparser
 import json
 import math
 from e7_shop_navigation import create_navigator, NavigationSetupRequired, prepare_references
-from e7_shop_flow import ObservedShopFlow, UnclearShopRow, list_view, LIST_MOVED
+from e7_shop_flow import ObservedShopFlow, UnclearShopRow, IncompleteCurrencyRow, list_view, LIST_MOVED, INVENTORY_SETTLE_SECONDS
 from e7_mouse_confirmation import read_confirmation_text,read_ui_text
 from e7_native_mouse import MouseStopped
 from e7_frame import normalize_game_frame
@@ -248,15 +248,25 @@ class E7ADBShopRefresh(ObservedShopFlow):
         """
         for attempt in range(attempts):
             try:
+                if attempt:
+                    # A single frame without the verified shop (fade, toast)
+                    # is re-read like an unclear row, never clicked through.
+                    self.navigation.require_shop(screenshot)
                 return self.findItemPosition(screenshot, image)
-            except UnclearShopRow:
+            except (UnclearShopRow, IncompleteCurrencyRow, RuntimeError) as error:
+                if isinstance(error, MouseStopped) and not isinstance(error, (UnclearShopRow, IncompleteCurrencyRow)):
+                    raise
                 if attempt == attempts-1 or not self.loop_active:
                     raise
+            if self.fast_waits:
+                screenshot = self._settled_screenshot(1, 'row recheck')
+                if screenshot is None:
+                    return None
+                continue
             self._wait_observed(.4, 'row recheck')
             if not self.loop_active:
                 return None
             screenshot = self.takeScreenshot()
-            self.navigation.require_shop(screenshot)
 
     def _after_purchase(self, screenshot):
         """Search the next wanted item only on a list at rest.
@@ -297,7 +307,10 @@ class E7ADBShopRefresh(ObservedShopFlow):
         while self.loop_active:
 
             changed_from, self._list_before = getattr(self, '_list_before', None), None
-            screenshot = self._settled_screenshot(sliding_time, 'inventory settle', changed_from=changed_from)
+            # Fast transports end the wait as soon as the list is at rest; the
+            # longer bound only applies when it is not (ADB keeps its fixed wait).
+            settle_bound = max(sliding_time, INVENTORY_SETTLE_SECONDS) if self.fast_waits else sliding_time
+            screenshot = self._settled_screenshot(settle_bound, 'inventory settle', changed_from=changed_from)
             brought = set()
 
             if not self.loop_active: break
