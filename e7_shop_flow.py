@@ -406,6 +406,7 @@ def recheck_mouse_action(action):
 LIST_REGION = (760,110,1880,1080)
 LIST_STILL = 1.5   # mean grey change between frames of a list at rest
 LIST_MOVED = 4.0   # mean grey change once the list shows something new
+SHOP_OPEN_ATTEMPTS = 3  # menu selections before 'did not open' stops the run (opening spends nothing)
 REFRESH_FIND_SECONDS = 2.5  # how long to keep re-reading a covered Refresh label before stopping
 LIST_REST_SECONDS = .2  # how long the list must stay unchanged to count as settled
 
@@ -545,6 +546,7 @@ class ObservedShopFlow:
     def clickShop(self):
         deadline = time.monotonic()+30
         revealed = False
+        opens = 0
         while self.loop_active and time.monotonic()<deadline:
             frame = self.takeScreenshot()
             if self.navigation.shop_visible(frame):
@@ -561,7 +563,17 @@ class ObservedShopFlow:
                     continue
                 print('Navigation: Opening the recognized Secret Shop menu.',flush=True)
                 self._tap_observed(*fresh_target, action='open shop')
-                return self._wait_for_shop()
+                opens += 1
+                opened = self._wait_for_shop(final=opens>=SHOP_OPEN_ATTEMPTS)
+                if opened is not None:
+                    return opened
+                # A pointer brushing over the game can swallow the menu click.
+                # Opening the shop spends nothing: re-recognize the home screen
+                # from scratch (including one reveal) and select it again.
+                print('Navigation: The Secret Shop did not open; checking the home screen again.',flush=True)
+                revealed = False
+                deadline = max(deadline,time.monotonic()+15)
+                continue
             if not revealed and hidden_home_matches(frame):
                 fresh = self.takeScreenshot()
                 if hidden_home_matches(fresh):
@@ -628,7 +640,8 @@ class ObservedShopFlow:
             return False
 
 
-    def _wait_for_shop(self):
+    def _wait_for_shop(self, *, final=True):
+        """True once the shop shows; False if stopped; None on timeout unless final."""
         deadline = time.monotonic()+8
         while self.loop_active and time.monotonic()<deadline:
             self.wait(.25)
@@ -642,6 +655,8 @@ class ObservedShopFlow:
                 return True
         if not self.loop_active:
             return False
+        if not final:
+            return None
         raise MouseStopped('The Secret Shop did not open after selecting its menu. No refresh or purchase sent.')
 
 

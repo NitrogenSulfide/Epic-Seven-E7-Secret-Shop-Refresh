@@ -797,6 +797,35 @@ class NativeEngineTests(unittest.TestCase):
         with patch('e7_mouse_refresh.time.sleep'): self.assertTrue(app.clickShop())
         app.mouse.click.assert_called_once_with(100,580.5)
 
+    def test_swallowed_shop_menu_click_is_retried_from_fresh_recognition(self):
+        # Live 2026-11-14: the pointer brushed the game right after the menu
+        # click and the shop never opened. Opening spends nothing: retry.
+        import itertools
+        app=self.make_engine();clock=itertools.count(0,.5)
+        app.navigation.menu_target.return_value=(97,635)
+        visible=shop();visible[561:590,75:95]=230;visible[565:600,105:125]=230
+        app.mouse.screenshot.return_value=Image.fromarray(visible)
+        opened=[False]
+        app.navigation.shop_visible.side_effect=lambda _:opened[0]
+        app.mouse.click.side_effect=lambda *_:opened.__setitem__(0,app.mouse.click.call_count>=2)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)):
+            self.assertTrue(app.clickShop())
+        self.assertEqual([call.args for call in app.mouse.click.call_args_list],[(100,580.5)]*2)
+        self.assertEqual(app.refresh_count,0)
+
+    def test_shop_menu_that_never_opens_stops_after_bounded_attempts(self):
+        import itertools
+        from e7_shop_flow import SHOP_OPEN_ATTEMPTS
+        app=self.make_engine();clock=itertools.count(0,.5)
+        app.navigation.menu_target.return_value=(97,635)
+        app.navigation.shop_visible.return_value=False
+        visible=shop();visible[561:590,75:95]=230;visible[565:600,105:125]=230
+        app.mouse.screenshot.return_value=Image.fromarray(visible)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                self.assertRaisesRegex(MouseStopped,'did not open after selecting its menu'):
+            app.clickShop()
+        self.assertEqual(app.mouse.click.call_count,SHOP_OPEN_ATTEMPTS)
+
     def test_home_entry_rejects_controls_that_disappear_before_click(self):
         app=self.make_engine();app.navigation.shop_visible.return_value=False
         app.navigation.menu_target.return_value=(97,635)
