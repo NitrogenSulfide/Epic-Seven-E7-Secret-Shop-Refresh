@@ -862,20 +862,68 @@ class ObservedShopFlow:
             if text_rejected:
                 raise MouseStopped('The confirmation does not match the intended shop action. No confirmation click sent.'+detail)
             raise MouseStopped(f'The {operation} confirmation was not recognized. No confirmation click sent.'+detail)
-        deadline = time.monotonic()+5
-        while self.loop_active and time.monotonic()<deadline:
-            self._poll_wait(operation+' shop return')
+        clicked, click_revision, retried = current, self._pause_revision(), False
+        while True:
+            deadline = time.monotonic()+5
+            while self.loop_active and time.monotonic()<deadline:
+                self._poll_wait(operation+' shop return')
+                if not self.loop_active:
+                    return False
+                frame = self.takeScreenshot()
+                if self._capture_resumed:
+                    deadline = time.monotonic()+5
+                if confirmation_button(self._rgb,operation,before) is None and self.navigation.shop_visible(frame):
+                    return True
+                self._trace_retry()
             if not self.loop_active:
                 return False
-            frame = self.takeScreenshot()
-            if self._capture_resumed:
-                deadline = time.monotonic()+5
-            if confirmation_button(self._rgb,operation,before) is None and self.navigation.shop_visible(frame):
-                return True
-            self._trace_retry()
+            # A pointer passing over the game can swallow the Confirm click and
+            # leave the dialog open. Confirm once more only if that happened
+            # (a pause since the click) and the very same validated dialog is
+            # still open: a delivered click closes it, so this cannot charge
+            # twice. Anything else stops as before.
+            if retried or click_revision is None or self._pause_revision() == click_revision:
+                raise MouseStopped('The shop did not return after confirmation. Stopped before another action.')
+            retried = True
+            box = self._same_confirmation_open(operation,before,clicked)
+            if not self.loop_active:
+                return False
+            if box is None:
+                raise MouseStopped('The shop did not return after confirmation. Stopped before another action.')
+            print('Navigation: The pointer passed over the game and the same confirmation is still open; confirming once more.',flush=True)
+            click_revision = self._pause_revision()
+            try:
+                self._click_button(box, action=operation+' confirm retry')
+            except MouseRecheckRequired:
+                if not self.loop_active:
+                    return False
+                raise MouseStopped('The game paused again before the repeated confirmation. No second confirmation click sent.') from None
+
+
+    def _pause_revision(self):
+        """Pointer-pause counter of the Background/Mouse transport; None for ADB."""
+        revision = getattr(getattr(self,'mouse',None),'pause_revision',None)
+        return revision if isinstance(revision,int) else None
+
+
+    def _same_confirmation_open(self,operation,before,clicked):
+        """The clicked dialog, if it is still open, settled and still names the intended action."""
+        self.takeScreenshot()
+        prior = self._rgb.copy()
+        first = confirmation_button(prior,operation,before)
+        if (first is None or any(abs(a-b)>8 for a,b in zip(first,clicked))
+                or not confirmation_matches(self.read_confirmation_text(prior),operation,self._item_name)):
+            return None
+        self._poll_wait(operation+' confirm recheck')
         if not self.loop_active:
-            return False
-        raise MouseStopped('The shop did not return after confirmation. Stopped before another action.')
+            return None
+        self.takeScreenshot()
+        current = confirmation_button(self._rgb,operation,before)
+        if (current is None or any(abs(a-b)>8 for a,b in zip(current,clicked))
+                or not button_settled(prior,self._rgb,current)
+                or not confirmation_matches(self.read_confirmation_text(self._rgb),operation,self._item_name)):
+            return None
+        return current
 
 
     def _save_confirmation_failure(self,operation,before,*,validated=None):

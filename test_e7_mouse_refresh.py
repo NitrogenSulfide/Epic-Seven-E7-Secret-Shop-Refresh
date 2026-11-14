@@ -1040,6 +1040,51 @@ class NativeEngineTests(unittest.TestCase):
         app.mouse.click.assert_not_called()
         self.assertIsNotNone(app._save_confirmation_failure.call_args.kwargs['validated'])
 
+    def _paused_confirm_app(self,frames,pause_at):
+        """Captures from `frames`; the pointer-pause counter rises at capture `pause_at`."""
+        import itertools
+        app=self.make_engine();app.mouse.pause_revision=0;clock=itertools.count(0,.5)
+        app.read_confirmation_text=lambda rgb:'Use Skystone to refresh? Cancel Confirm' if rgb[700,1100,1]==110 else ''
+        frames=iter(frames);count=[0]
+        def capture():
+            count[0]+=1
+            if count[0]==pause_at:app.mouse.pause_revision+=1
+            return Image.fromarray(next(frames))
+        app.mouse.screenshot.side_effect=capture
+        return app,clock
+
+    def test_confirm_swallowed_by_pointer_is_repeated_once_on_same_dialog(self):
+        # Live 2026-11-14 08:27: pointer crossed the game after Confirm; dialog stayed.
+        frames=[dialog()]*2+[dialog()]*12+[dialog(),dialog(),shop()]
+        app,clock=self._paused_confirm_app(frames+[shop()]*5,pause_at=3)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)):
+            self.assertTrue(app._confirm('refresh',shop()))
+        self.assertEqual([c.args for c in app.mouse.click.call_args_list],[(1165,695)]*2)
+
+    def test_open_dialog_without_pointer_pause_is_never_confirmed_twice(self):
+        app,clock=self._paused_confirm_app([dialog()]*40,pause_at=0)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                self.assertRaisesRegex(MouseStopped,'shop did not return after confirmation'):
+            app._confirm('refresh',shop())
+        app.mouse.click.assert_called_once()
+
+    def test_confirm_retry_happens_at_most_once(self):
+        app,clock=self._paused_confirm_app([dialog()]*60,pause_at=3)
+        def pause_each_click(*_):app.mouse.pause_revision+=1
+        app.mouse.click.side_effect=pause_each_click
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                self.assertRaisesRegex(MouseStopped,'shop did not return after confirmation'):
+            app._confirm('refresh',shop())
+        self.assertEqual(app.mouse.click.call_count,2)
+
+    def test_changed_dialog_after_pause_is_not_confirmed_again(self):
+        other=shop();other[300:920,550:1400]=90;other[810:890,1100:1350]=(20,110,40)  # a dialog whose action moved: not the clicked one
+        app,clock=self._paused_confirm_app([dialog()]*2+[other]*40,pause_at=3)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                self.assertRaisesRegex(MouseStopped,'shop did not return after confirmation'):
+            app._confirm('refresh',shop())
+        app.mouse.click.assert_called_once()
+
     def test_dialog_already_open_before_refresh_is_named_in_the_stop(self):
         app=self.make_engine()
         app.read_confirmation_text=lambda rgb:'Use Skystone to refresh? Cancel Confirm' if rgb[700,1100,1]==110 else ''
