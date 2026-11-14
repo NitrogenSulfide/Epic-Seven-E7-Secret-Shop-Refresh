@@ -20,6 +20,11 @@ def base_image():
     rgb[10:70,1700:1800]=(60,90,140)
     return rgb
 
+def no_ui_text(*_args,**_kwargs):
+    # OCR fakes are plain functions, not Mocks: a Mock records every 6 MB
+    # frame it receives, and this module then outgrows a 3 GB test cap.
+    return dict(text='',words=[])
+
 ITEM_ROWS = (('Covenant bookmark','cov.png',184000,220),
              ('Mystic medal','mys.png',280000,470),
              ('Friendship points',None,18000,720))
@@ -102,7 +107,7 @@ class SharedFlowTests(unittest.TestCase):
         app._fake_shop_ocr=shop_ocr
         def scroll():
             state['events'].append(('drag',));state['page']=2
-        app.read_confirmation_text=Mock(side_effect=text)
+        app.read_confirmation_text=text  # Plain function: see no_ui_text.
         if mode=='adb':
             def runner(command,**kwargs):
                 self.assertTrue(kwargs['check']);self.assertEqual(kwargs['timeout'],10)
@@ -140,7 +145,7 @@ class SharedFlowTests(unittest.TestCase):
             with self.subTest(size=(width,height)):
                 wallpaper=np.random.default_rng(width+height).integers(10,65,(1080,1920,3),dtype=np.uint8)
                 app,state=self.make_app('mouse-stove',width,wallpaper,items=True,height=height)
-                with patch('e7_shop_flow.hidden_home_matches',return_value=False),patch('e7_shop_flow.read_ui_text',return_value=dict(text='',words=[])),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
+                with patch('e7_shop_flow.hidden_home_matches',return_value=False),patch('e7_shop_flow.read_ui_text',new=no_ui_text),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
                     app.refreshShop()
                 self.assertEqual(state['refreshes'],2)
                 self.assertEqual([item.count for item in app.storage.inventory.values()],[3,3])
@@ -163,7 +168,7 @@ class SharedFlowTests(unittest.TestCase):
                     rng=np.random.default_rng(width);wallpaper=rng.integers(10,65,(1080,1920,3),dtype=np.uint8)
                     app,state=self.make_app('adb' if mode=='adb' else 'mouse',width,wallpaper)
                     # Disable private wallpaper matching: exercise the generic reveal.
-                    with patch('e7_shop_flow.hidden_home_matches',return_value=False),patch('e7_shop_flow.read_ui_text',return_value=dict(text='',words=[])),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
+                    with patch('e7_shop_flow.hidden_home_matches',return_value=False),patch('e7_shop_flow.read_ui_text',new=no_ui_text),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
                         app.refreshShop()
                     self.assertEqual(app.refresh_count,2);self.assertEqual(state['refreshes'],2)
                     self.assertEqual([event[0] for event in state['events'] if event[0]!='drag'],['hidden','home','shop','refresh','shop','refresh'])
@@ -172,7 +177,7 @@ class SharedFlowTests(unittest.TestCase):
     def test_both_currencies_are_bought_once_before_each_refresh_in_both_transports(self):
         for mode in ('adb','mouse'):
             app,state=self.make_app(mode,items=True);state['screen']='shop'
-            with patch('e7_shop_flow.read_ui_text',return_value=dict(text='',words=[])),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
+            with patch('e7_shop_flow.read_ui_text',new=no_ui_text),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
                 app.refreshShop()
             self.assertEqual(state['refreshes'],2)
             # Final generated inventory is checked even when the budget is exhausted.
@@ -201,7 +206,7 @@ class SharedFlowTests(unittest.TestCase):
                             ('Currency',[1035,660,1135,685]),('Friendship',[1035,710,1180,742]),
                             ('Points',[1190,710,1320,742]),('Purchased',[1590,755,1790,787]))])
                     return original()
-                with patch('e7_shop_flow.read_ui_text',side_effect=ocr),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
+                with patch('e7_shop_flow.read_ui_text',new=ocr),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
                     app.refreshShop()
                 self.assertEqual(state['refreshes'],2)
                 self.assertEqual(app.storage.inventory['Friendship points'].count,2)
@@ -221,7 +226,7 @@ class SharedFlowTests(unittest.TestCase):
                         output=io.StringIO()
                         # Generated icons are exactly 1:1. Other shared tests
                         # exercise real rescaling; this matrix checks combinations.
-                        with patch('e7_shop_flow.np.linspace',return_value=np.array([1.])),patch('e7_shop_flow.read_ui_text',side_effect=lambda *_,**kwargs:app._fake_shop_ocr()),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(output):
+                        with patch('e7_shop_flow.np.linspace',return_value=np.array([1.])),patch('e7_shop_flow.read_ui_text',new=lambda *_,**kwargs:app._fake_shop_ocr()),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(output):
                             app.refreshShop()
                         self.assertEqual(state['refreshes'],2)
                         self.assertEqual([item.count for item in app.storage.inventory.values()],
@@ -258,7 +263,7 @@ class SharedFlowTests(unittest.TestCase):
                                 words.extend(dict(text=text,box=box) for text,box in (
                                     (f'{price:,}',[1684,y-47,1786,y-16]),('Buy',[1711,y+35,1757,y+67])))
                         return dict(words=words)
-                    with patch('e7_shop_flow.read_ui_text',side_effect=ocr),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
+                    with patch('e7_shop_flow.read_ui_text',new=ocr),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
                         app.refreshShop()
                     expected=[2,2]+([2] if enabled else [])
                     self.assertEqual([item.count for item in app.storage.inventory.values()],expected)
@@ -285,7 +290,7 @@ class SharedFlowTests(unittest.TestCase):
                                 ('0/1' if name in state['bought'] else '1/1',[1580,y+35,1628,y+67]),
                                 ('Only',[1035,y+40,1085,y+70]),('1',[1094,y+40,1103,y+70]),('available',[1114,y+40,1220,y+70])))
                         return dict(words=words)
-                    with patch('e7_shop_flow.read_ui_text',side_effect=ocr),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
+                    with patch('e7_shop_flow.read_ui_text',new=ocr),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
                         app.refreshShop()
                     expected=[1 if name==prebought else 2 for name in names]
                     self.assertEqual([item.count for item in app.storage.inventory.values()],expected)
@@ -297,7 +302,7 @@ class SharedFlowTests(unittest.TestCase):
         names=tuple(row[0] for row in ITEM_ROWS)
         for mode in ('adb','mouse'):
             app,state=self.make_app(mode,items=True,offered=(names,names));state['screen']='shop'
-            with patch('e7_shop_flow.read_ui_text',return_value=dict(text='',words=[])),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
+            with patch('e7_shop_flow.read_ui_text',new=no_ui_text),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(io.StringIO()):
                 app.refreshShop()
             self.assertEqual([item.count for item in app.storage.inventory.values()],[3,3])
             self.assertEqual(sum(event[0]=='buy' for event in state['events']),6)

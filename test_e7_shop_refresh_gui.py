@@ -1165,8 +1165,36 @@ class GuiTests(unittest.TestCase):
         self.pump_until(lambda: self.app.winfo_viewable() and self.app.winfo_width() > 1000)
         return self.app.geometry()
 
+    def test_destroy_succeeds_while_a_hint_is_pending(self):
+        # A hover/focus hint schedules its popup on the hinted widget. Closing
+        # the app before it appears must not fail, or Tk is left half-destroyed.
+        self.app.version_hint.enter()
+        self.assertIsNotNone(self.app.version_hint.job)
+        self.app.destroy()
+        self.app = gui.RefreshGui()
+        self.app.withdraw()
+
+    def track_topmost(self):
+        """Return a getter for the window's topmost state.
+
+        On X11, Tk reports -topmost only after a window manager confirms
+        _NET_WM_STATE_ABOVE, so a headless display without a WM (xvfb-run)
+        always reads 0. There, check the state the app requested instead.
+        """
+        if self.app.tk.call('tk', 'windowingsystem') != 'x11':
+            return lambda: bool(self.app.attributes('-topmost'))
+        requested = {'value': False}
+        original = self.app.attributes
+        def attributes(*args):
+            if len(args) == 2 and args[0] == '-topmost':
+                requested['value'] = bool(args[1])
+            return original(*args)
+        self.app.attributes = attributes
+        return lambda: requested['value']
+
     def test_compact_tracker_shrinks_on_start_and_restores_on_stop(self):
         full = self.show_full_window()
+        topmost = self.track_topmost()
         self.start_fake(stall=True)
         self.pump_until(lambda: self.app.tracker.active)
         self.app.update_idletasks()
@@ -1174,11 +1202,11 @@ class GuiTests(unittest.TestCase):
         self.assertFalse(self.app.body_frame.winfo_ismapped())
         self.assertTrue(self.app.tracker.frame.winfo_ismapped())
         self.assertLess(self.app.winfo_height(), 200)
-        self.assertTrue(self.app.attributes('-topmost'))
+        self.assertTrue(topmost())
         self.app.tracker.stop_button.invoke()
         self.pump_until(lambda: self.app.status.get() == 'Stopped')
         self.assertFalse(self.app.tracker.active)
-        self.assertFalse(self.app.attributes('-topmost'))
+        self.assertFalse(topmost())
         self.app.update_idletasks()
         self.assertTrue(self.app.body_frame.winfo_ismapped())
         self.assertEqual(self.app.geometry().split('+')[0], full.split('+')[0])

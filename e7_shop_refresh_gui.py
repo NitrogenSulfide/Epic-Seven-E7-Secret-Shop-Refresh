@@ -2390,9 +2390,13 @@ class RefreshGui(tk.Tk):
             self.process_tree.close()
         if native_running:
             release_native_button()
-        # Cancel scheduled callbacks before Tcl commands are destroyed.
+        # Cancel scheduled callbacks before Tcl commands are destroyed. Use the
+        # raw Tcl cancel: Misc.after_cancel would delete the callback command
+        # from the root even when a child widget (e.g. a ThemeHint label)
+        # registered it, and that widget's own destroy then fails with
+        # "can't delete Tcl command". Each owner deletes its commands itself.
         for callback in self.tk.splitlist(self.tk.call("after", "info")):
-            self.after_cancel(callback)
+            self.tk.call("after", "cancel", callback)
         super().destroy()
         if self._native_icons:
             self._native_icons.close()
