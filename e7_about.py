@@ -12,9 +12,16 @@ TESTED_CLIENTS = (
     'been tested.'
 )
 QUICKSTART = (
-    'Mouse mode\n\n'
+    'Background mode (Epic Seven on Steam or STOVE)\n\n'
+    '1. Open English Epic Seven on Steam or STOVE at home or in Secret Shop. Close popups.\n'
+    '2. Background is selected by default. Press Start Refresh and accept the '
+    'administrator restart the first time. You can keep using your PC; keep the '
+    'pointer off the game window.\n'
+    'Playing on Google Play Games or an emulator? Background works only with Steam '
+    'and STOVE: the banner offers Switch to Mouse.\n\n'
+    'Mouse mode (emulators; takes over your pointer)\n\n'
     '1. Open English Epic Seven at home or in Secret Shop. Close popups.\n'
-    '2. Mouse is selected by default. Select your game window; use Scan if needed.\n'
+    '2. Choose Control mode → Mouse. Select your game window; use Scan if needed.\n'
     '3. Press Start Refresh. The app opens the shop if needed. Leave the PC '
     'alone; keep the game visible and its window still.\n\n'
     'ADB mode\n\n'

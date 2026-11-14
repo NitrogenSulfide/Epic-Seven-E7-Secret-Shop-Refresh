@@ -1,3 +1,28 @@
+0.2.1 · Background for Steam and STOVE by default, with one-click mode switches
+
+• Background mode now also drives the official STOVE client on Windows. Its
+  game window is the same kind as Steam's (title "Epic Seven", GLFW window,
+  running as administrator); only the process name differs.
+• Background is now the default control mode for new settings on Windows.
+  Saved settings keep their mode.
+• The Control mode list says who each mode is for: "Background · Steam /
+  STOVE (recommended)", "Mouse · emulators, takes over your pointer" and
+  "ADB · emulators", with Background first. Settings still save the plain
+  mode name.
+• When Background finds only an emulator or Google Play Games window, or an
+  Epic Seven from another client, the banner explains that Background works
+  only with Steam and STOVE and offers Switch to Mouse.
+• When Mouse mode sees Epic Seven on Steam or STOVE, the banner suggests
+  Background with a Switch to Background button. Nothing changes until it
+  is clicked, and a dismissed suggestion stays dismissed.
+• When a moving pointer over the game pauses a Background run, a red line in
+  both the full window and the compact tracker says so and counts down to the
+  automatic stop at 10 seconds. It clears once the pointer is still or off
+  the game. A still pointer over the game on Windows does not pause.
+• The Quickstart covers Background mode first.
+• 0.2.1 is the first published 0.2 release; it includes every 0.2.0 change
+  below.
+
 0.2.0 · Background mode for Steam, Linux support and faster refreshes
 
 • New Background control mode for Epic Seven on Steam, on Windows 11 and

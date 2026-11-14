@@ -10,13 +10,13 @@ need fixes. Feedback and bug reports are welcome—I'll do my best to help when 
 
 ## EZ Mode · download, extract, start
 
-**[Download the Windows app — v0.2.0](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.2.0/E7ShopRefresh-0.2.0.zip)**
+**[Download the Windows app — v0.2.1](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.2.1/E7ShopRefresh-0.2.1.zip)**
 
 > **Ban risk:** This is unofficial automation. [Smilegate's terms](https://common.game.onstove.com/terms/index?gameType=MOBILE&langCode=en&termsType=1) prohibit unauthorized scripts and macros. Account penalties, including bans, are possible; use at your own risk.
 
 1. Extract the **whole ZIP**, then open **E7 Secret Shop Refresh.exe**. Python is included.
 2. Open **English Epic Seven** at home or in Secret Shop. Close any popups; hidden idle home controls are handled automatically.
-3. Leave **Mouse** selected (or choose **Background** for Epic Seven on Steam) and choose your **game window**. Use **Scan** if needed.
+3. Leave **Background** selected for Epic Seven on **Steam or STOVE** (your PC stays free to use). For an emulator or Google Play Games, the app offers **Switch to Mouse**; then choose your **game window**. Use **Scan** if needed.
 4. Set your **Skystone budget** and check the **Stop key**, then press **Start Refresh**.
 
 If the app offers to **restart as administrator**, accept the restart and Windows
@@ -29,7 +29,7 @@ backtick key, usually below Esc) or click **Stop Session**. Start with a small b
 for your first run.
 
 **[Detailed setup / troubleshooting](release/SETUP.md)** ·
-**[What's new in v0.2.0](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.2.0)**
+**[What's new in v0.2.1](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.2.1)**
 
 ## Session history and diagnostics
 
@@ -51,7 +51,7 @@ This real-time clip ends just after the purchase; account details are covered.
 | Game client | Mouse | ADB | Background |
 | --- | --- | --- | --- |
 | Google Play Games on PC **Developer Emulator** | Tested | Tested | Unavailable |
-| Official native STOVE client | Tested | Unavailable | Unavailable |
+| Official native STOVE client | Tested | Unavailable | Tested (refresh; no purchase seen yet) |
 | Epic Seven on **Steam** (Windows 11) | Not yet tested | Unavailable | Tested |
 | Epic Seven on **Steam** (Linux, Proton) | Unavailable | Unavailable | Tested |
 
@@ -60,17 +60,18 @@ tested. Use English game text and a readable landscape 16:9 game view of at leas
 640 × 360. Native STOVE Mouse mode also supports its wider maximized client area.
 ADB calibration requires a 1920 × 1080 Android display.
 
-## Background mode · Steam on Windows (preview)
+## Background mode · Steam and STOVE on Windows
 
-For **Epic Seven on Steam**, choose **Control mode → Background**. Clicks are sent
+For **Epic Seven on Steam or STOVE**, use **Control mode → Background** (the default). Clicks are sent
 to the game window directly and frames are read from the window itself, so your
-mouse pointer is never moved and other windows may cover the game. Steam's E7 runs
-as administrator, so the app offers to **restart as administrator** the first time;
+mouse pointer is never moved and other windows may cover the game. The game runs
+as administrator on both clients, so the app offers to **restart as administrator** the first time;
 accept it, then press **Start Refresh** again.
 
 You can keep using your PC. Input waits while the pointer is *moving* over the
 game and resumes once it has been still for a second; a still pointer, or one over
-another window or the taskbar, is fine. Don't minimize or resize the game during a
+another window or the taskbar, is fine. While it waits, a red line in the app (and the
+compact tracker) counts down to the automatic stop after 10 seconds. Don't minimize or resize the game during a
 run. The Stop key works from any window.
 
 ## Linux · Steam on Proton (Background mode, preview)

@@ -1,10 +1,10 @@
-"""Background control of Epic Seven on Steam (Linux/Proton and Windows).
+"""Background control of Epic Seven on Steam (Linux/Proton and Windows) and STOVE (Windows).
 
 Input is posted as window messages by e7_wine_input.exe, so the real pointer
 and keyboard focus are never used. On Linux the helper runs inside the game's
 Wine session and capture reads the game's own X window. On Windows the helper
 runs directly and capture uses PrintWindow; both need administrator rights
-because the Steam game runs elevated. Other windows may cover the game. The
+because the game runs elevated. Other windows may cover the game. The
 transport mirrors WindowsMouse (screenshot/click/move/drag in 1920 x 1080
 game space).
 """
@@ -26,7 +26,9 @@ from e7_windows_capture import game_view
 STEAM_APP_ID = 5019180
 GAME_TITLE = 'Epic Seven'
 HELPER_NAME = 'e7_wine_input.exe'
-WINDOWS_GAME_EXE = 'epicseven_steam.exe'
+# Windows game processes Background accepts, by client. Both draw the same
+# GLFW 'Epic Seven' window (checked with STOVE on 2026-11-13).
+WINDOWS_GAME_EXES = {'epicseven_steam.exe': 'Steam', 'epicseven.exe': 'STOVE'}
 # Windows: a pointer over the game counts as in use until it has been still this long.
 POINTER_STILL_SECONDS = 1.0
 PAUSE_LIMIT = 10
@@ -342,7 +344,7 @@ class BackgroundGame:
 # ---- Windows ---------------------------------------------------------------
 
 def require_background_permissions(pid):
-    """The Steam game runs elevated; Windows blocks capture and input from a
+    """The game runs elevated; Windows blocks capture and input from a
     normal app. Raise MouseElevationRequired so the GUI can offer a restart."""
     from types import SimpleNamespace
     from e7_native_mouse import MouseElevationRequired, require_mouse_permissions
@@ -353,7 +355,7 @@ def require_background_permissions(pid):
 
 
 class WinGameWindow:
-    """The Steam game's Win32 window: PrintWindow capture, state and pointer checks."""
+    """The game's Win32 window (Steam or STOVE): PrintWindow capture, state and pointer checks."""
 
     def __init__(self, *, api=None):
         import ctypes
@@ -373,19 +375,19 @@ class WinGameWindow:
                 found.append(handle)
             return True
         user.EnumWindows(visit, 0)
-        steam = []
+        games = []
         for handle in found:
             pid = w.DWORD(); user.GetWindowThreadProcessId(handle, ctypes.byref(pid))
             name = (process_name(pid.value) or '').replace('/', '\\').rsplit('\\', 1)[-1].lower()
-            if name == WINDOWS_GAME_EXE:
-                steam.append((handle, pid.value))
-        if not steam:
+            if name in WINDOWS_GAME_EXES:
+                games.append((handle, pid.value, WINDOWS_GAME_EXES[name]))
+        if not games:
             if found:
-                raise ValueError('Background mode supports Epic Seven on Steam. Use Mouse mode for this game client.')
-            raise ValueError('Epic Seven (Steam) is not running. Start the game, then try again.')
-        if len(steam) > 1:
+                raise ValueError('Background mode supports Epic Seven on Steam and STOVE. Use Mouse mode for this game client.')
+            raise ValueError('Epic Seven (Steam or STOVE) is not running. Start the game, then try again.')
+        if len(games) > 1:
             raise ValueError('More than one Epic Seven game window is open. Close the extra one, then try again.')
-        self.hwnd, self.pid = steam[0]
+        self.hwnd, self.pid, self.game_client = games[0]
         self._clock = time.monotonic
         self._cursor, self._cursor_moved = None, float('-inf')
 

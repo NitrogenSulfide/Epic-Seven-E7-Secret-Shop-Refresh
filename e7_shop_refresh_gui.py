@@ -39,8 +39,29 @@ DEFAULT_ENGINE_DIR = Path.home() / "Downloads" / "E7 Secret Shop Refresh" if os.
 ENGINE_NAME = "E7ADBShopRefresh.exe" if os.name == "nt" else "E7ADBShopRefresh.py"
 # Control modes this platform supports. Background drives Epic Seven on Steam
 # (directly on Windows, under Proton on Linux) without the real pointer.
-CONTROL_MODES = ('ADB', 'Mouse', 'Background') if os.name == "nt" else ('Background',)
-DEFAULT_CONTROL_MODE = 'Mouse' if os.name == "nt" else 'Background'
+CONTROL_MODES = ('Background', 'Mouse', 'ADB') if os.name == "nt" else ('Background',)
+# Background is the default everywhere: most players run Steam or STOVE, and it
+# leaves the pointer free. Emulators get a one-click switch to Mouse.
+DEFAULT_CONTROL_MODE = 'Background'
+# A Background pause that the pointer causes; the engine (e7_background.PAUSE_LIMIT)
+# stops the session if it has not cleared after this many seconds.
+POINTER_PAUSE_LIMIT = 10
+POINTER_PAUSE_REASONS = ('The pointer is moving over the game window',  # Windows: moving only
+                         'Move your mouse off the game window')         # Linux: any pointer over it
+
+
+def pointer_pause_text(reason, seconds_left):
+    """The red line shown while the pointer is pausing a Background run."""
+    where = 'Mouse moving over the game' if reason.startswith(POINTER_PAUSE_REASONS[0]) else 'Mouse over the game'
+    return f'{where} · paused · stops in {max(0, seconds_left)} s'
+
+
+def mode_label(mode):
+    """What the Control mode list shows; settings keep the plain mode name."""
+    return {'Background': ('Background · Steam / STOVE (recommended)' if os.name == "nt"
+                           else 'Background · Steam (recommended)'),
+            'Mouse': 'Mouse · emulators, takes over your pointer',
+            'ADB': 'ADB · emulators'}.get(mode, mode)
 ENGINE_LOCATION_FILE = PROJECT_DIR / "engine-location.ini"
 APP_DIR = DEFAULT_ENGINE_DIR
 ENGINE_EXE = APP_DIR / ENGINE_NAME
@@ -134,7 +155,7 @@ def session_log_folder(mode):
 
 @dataclass(frozen=True)
 class BackgroundTarget:
-    """The running Steam game, shaped like a Mouse-mode window choice."""
+    """The running game (Steam or STOVE), shaped like a Mouse-mode window choice."""
     title: str
     label: str
     handle: int
@@ -144,12 +165,13 @@ class BackgroundTarget:
 
 
 def list_background_games():
-    """Read-only: find Epic Seven on Steam and its game window. No input."""
+    """Read-only: find Epic Seven (Steam, or STOVE on Windows) and its game window. No input."""
     if os.name == "nt":
         from e7_background import WinGameWindow
         window = WinGameWindow()
         width, height = window.size()
-        return [BackgroundTarget('Epic Seven (Steam)', 'Epic Seven (Steam)', window.hwnd, window.pid, (0, 0, width, height))]
+        name = f'Epic Seven ({window.game_client})'
+        return [BackgroundTarget(name, name, window.hwnd, window.pid, (0, 0, width, height))]
     from e7_background import XGameWindow, find_proton_session
     find_proton_session()
     window = XGameWindow()
@@ -158,6 +180,35 @@ def list_background_games():
         return [BackgroundTarget('Epic Seven (Steam)', 'Epic Seven (Steam)', window.window.id, 0, (0, 0, width, height))]
     finally:
         window.display.close()
+
+
+def suggested_mode(background, windows, error):
+    """Read-only, Windows only: the control mode that suits the game the scan
+    found, or None. Background drives Epic Seven on Steam and STOVE; Google
+    Play Games and emulators need Mouse mode. Never sends input."""
+    if os.name != "nt":
+        return None
+    try:
+        if background:
+            if 'supports Epic Seven on Steam' in error:
+                return 'Mouse'
+            # Only "the game is not running" plus another game window means an
+            # emulator or other client. Other errors (two windows, elevation) keep
+            # their own instructions.
+            if 'is not running' not in error:
+                return None
+            return 'Mouse' if WindowsCapture().list_windows() else None
+        from e7_background import WINDOWS_GAME_EXES
+        from e7_native_mouse import process_name
+        for window in windows:
+            try:
+                if process_name(window.pid).lower() in WINDOWS_GAME_EXES:
+                    return 'Background'
+            except (OSError, ValueError):
+                continue
+    except Exception:  # a hint only: a failed check never blocks the scan
+        return None
+    return None
 
 
 def duration_text(value):
@@ -213,6 +264,8 @@ class RefreshGui(tk.Tk):
         self._device_scan_busy = False
         self._background_scan = False
         self.connection_warning = ''
+        # The control mode a scan suggests switching to; the banner offers it.
+        self.mode_suggestion = None
         self.control_mode = tk.StringVar(value=DEFAULT_CONTROL_MODE)
         self.mouse_target = tk.StringVar(value='')
         self.mouse_windows = {}
@@ -261,6 +314,12 @@ class RefreshGui(tk.Tk):
         for var in (self.covenant,self.mystic,self.friendship,self.buy_friendship):
             var.trace_add('write',lambda *_:self._update_diagnostics_summary())
         self.progress_text = tk.StringVar(value="Waiting for a session")
+        # Red line in the full view and the compact bar while the pointer pauses a Background run.
+        self.pointer_alert = tk.StringVar(value='')
+        self._pointer_reason = ''
+        self._pointer_deadline = None
+        self._pointer_job = None
+        self._background_run = False
         self.ev = tk.StringVar()
         self._load_config()
         self._build_ui()
@@ -268,6 +327,7 @@ class RefreshGui(tk.Tk):
         self.tracker = CompactTracker(self, ASSET_DIR, (self.header_frame, self.body_frame))
         self.status.trace_add('write', lambda *_: self.tracker.status_changed())
         self.status.trace_add('write', lambda *_: self._update_compact_button())
+        self.status.trace_add('write', lambda *_: self.status.get() != 'Paused' and self._clear_pointer_alert())
         self._apply_theme()
         self._update_home_ui_hint()
         self._load_icon()
@@ -436,6 +496,7 @@ class RefreshGui(tk.Tk):
         for name in ('TFrame', 'TLabel', 'TLabelframe', 'TLabelframe.Label', 'Large.TCheckbutton'):
             style.configure(name, background=bg, foreground=fg, bordercolor=border)
         style.configure('Muted.TLabel', foreground=muted)
+        style.configure('Alert.TLabel', foreground='#fca5a5' if dark else '#b91c1c')
         style.configure('Status.TLabel', foreground=('#fbbf24' if dark else '#92400e') if self.status.get() in ('Waiting for game','Waiting for game window') else ('#60a5fa' if dark else '#2563eb'))
         self._style_home_ui_banner()
         for name in ('TEntry', 'TCombobox'):
@@ -518,7 +579,16 @@ class RefreshGui(tk.Tk):
             reminder = 'Mouse uses your pointer · leave the PC alone.'
         elif self.control_mode.get() == 'Background':
             reminder = 'Background never uses your pointer · keep it off the game window.'
+        suggestion = self.mode_suggestion
+        if suggestion == 'Background' and not self.connection_warning:
+            reminder = ('Epic Seven on Steam or STOVE found. Background mode runs it without your pointer, '
+                        'so you can keep using your PC.')
         self.home_ui_hint.set(self.connection_warning or reminder)
+        if suggestion:
+            self.home_ui_action.configure(text=f'Switch to {suggestion}')
+            self.home_ui_action.grid()
+        else:
+            self.home_ui_action.grid_remove()
         self._style_home_ui_banner()
         dark = self.dark_mode.get()
         ttk.Style(self).configure('Status.TLabel', foreground=('#fbbf24' if dark else '#92400e') if waiting else ('#60a5fa' if dark else '#2563eb'))
@@ -538,6 +608,9 @@ class RefreshGui(tk.Tk):
         style.configure('Dismiss.TButton', background=bg, foreground=fg, bordercolor=bg,
                         lightcolor=bg, darkcolor=bg, borderwidth=0, padding=0, font=self.heading_font)
         style.map('Dismiss.TButton', background=[('active', hover)], foreground=[('active', fg)])
+        style.configure('BannerAction.TButton', background=bg, foreground=fg, bordercolor=border,
+                        lightcolor=bg, darkcolor=bg, borderwidth=1, font=self.heading_font)
+        style.map('BannerAction.TButton', background=[('active', hover)], foreground=[('active', fg)])
 
     def _set_connection_warning(self, warning, *, reveal=False):
         changed = warning != self.connection_warning
@@ -833,10 +906,13 @@ class RefreshGui(tk.Tk):
         mode_panel.grid(row=1,column=0,sticky='ew',pady=(0,dp(10)))
         mode_panel.columnconfigure(0,weight=1)
         ttk.Label(mode_panel,text='Control mode').grid(row=0,column=0,sticky='w')
-        self.mode_box = ttk.Combobox(mode_panel,textvariable=self.control_mode,
-            values=CONTROL_MODES,state='readonly',font=self.ui_font)
+        # The list shows who each mode is for; control_mode keeps the plain name.
+        self.mode_label = tk.StringVar(value=mode_label(self.control_mode.get()))
+        self.control_mode.trace_add('write', lambda *_: self.mode_label.set(mode_label(self.control_mode.get())))
+        self.mode_box = ttk.Combobox(mode_panel,textvariable=self.mode_label,
+            values=[mode_label(mode) for mode in CONTROL_MODES],state='readonly',font=self.ui_font)
         self.mode_box.grid(row=1,column=0,sticky='ew',pady=(dp(4),0))
-        self.mode_box.bind('<<ComboboxSelected>>',self._change_control_mode)
+        self.mode_box.bind('<<ComboboxSelected>>',self._select_control_mode)
         self.settings_widgets.append(self.mode_box)
         self.settings_details.grid_remove()
         def bind_wheel(widget):
@@ -868,6 +944,11 @@ class RefreshGui(tk.Tk):
                                       wraplength=dp(620), padx=dp(10), pady=dp(6),
                                       borderwidth=0, highlightthickness=0)
         self.home_ui_notice.grid(row=0, column=0, sticky='ew')
+        self.home_ui_action = ttk.Button(self.home_ui_banner, style='BannerAction.TButton', cursor='hand2',
+                                         padding=(dp(10), dp(3)), command=self._take_mode_suggestion)
+        # Its own line under the message, so the text keeps the banner's full width.
+        self.home_ui_action.grid(row=1, column=0, sticky='w', padx=dp(10), pady=(0, dp(8)))
+        self.home_ui_action.grid_remove()
         self.home_ui_dismiss = ttk.Button(self.home_ui_banner, text='×', style='Dismiss.TButton',
                                         width=2, padding=0,
                                         cursor='hand2', command=self._dismiss_home_ui_hint)
@@ -908,6 +989,12 @@ class RefreshGui(tk.Tk):
         ttk.Label(progress, textvariable=self.progress_text, style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(4, 0))
         self.remaining_label = ttk.Label(progress, textvariable=self.remaining_time, style='Muted.TLabel')
         self.remaining_label.grid(row=2, column=0, sticky='w', pady=(dp(3), 0))
+        self.pointer_alert_label = ttk.Label(progress, textvariable=self.pointer_alert, style='Alert.TLabel',
+                                             font=self.heading_font)
+        self.pointer_alert_label.grid(row=3, column=0, sticky='w', pady=(dp(3), 0))
+        self.pointer_alert_label.grid_remove()
+        self.pointer_alert.trace_add('write', lambda *_: self.pointer_alert_label.grid()
+                                     if self.pointer_alert.get() else self.pointer_alert_label.grid_remove())
         ThemeHint(self.remaining_label, lambda: 'Approximate time from the last eight refresh intervals; purchases and recognition speed can change it. Focus pauses are excluded.')
         self.notebook = notebook = ttk.Notebook(right)
         notebook.bind("<<NotebookTabChanged>>", self._schedule_layout)
@@ -1207,6 +1294,14 @@ class RefreshGui(tk.Tk):
             self._background_scan = False
         self.after(10000, self._rescan_idle_devices)
 
+    def _select_control_mode(self, _event=None):
+        chosen = next((mode for mode in CONTROL_MODES if mode_label(mode) == self.mode_label.get()), None)
+        if chosen is None or (self._checking_connection or (self.process and self.process.poll() is None)):
+            self.mode_label.set(mode_label(self.control_mode.get()))
+            return
+        self.control_mode.set(chosen)
+        self._change_control_mode()
+
     def _change_control_mode(self, _event=None):
         if self._checking_connection or (self.process and self.process.poll() is None):
             return
@@ -1222,6 +1317,7 @@ class RefreshGui(tk.Tk):
                                   state='readonly' if mouse else 'normal')
         self.target_label.configure(text='Game window' if mouse else 'Emulator / ADB device')
         self.start_button.configure(text='Start Refresh', state=tk.NORMAL)
+        self.mode_suggestion = None
         self._set_connection_warning('')
         self.home_ui_hint_dismissed = False
         self.home_ui_banner.grid()
@@ -1252,7 +1348,8 @@ class RefreshGui(tk.Tk):
             left, top, right, bottom = target.rectangle
             next_step = ('Press Start Refresh to open the shop and run.\nBackground mode never moves your pointer; '
                          'the game may be covered.' if self.control_mode.get() == 'Background' else
-                         'Press Start Refresh to open the shop and run.\nMouse mode uses your actual pointer.')
+                         'Press Start Refresh to open the shop and run.\nMouse mode takes over your pointer; leave '
+                         'the PC alone. On Steam or STOVE, Background lets you keep using it.')
             self.device_notice.set(f'Selected: {target.title} · {right-left} × {bottom-top}\n'+next_step)
         elif self.mouse_windows:
             self.device_notice.set('Several game windows found. Choose your game above.')
@@ -1260,7 +1357,18 @@ class RefreshGui(tk.Tk):
             self.device_notice.set('Open Epic Seven, then Scan to find its window.')
         self.start_button.configure(state=tk.NORMAL if target is not None else tk.DISABLED)
 
-    def _apply_mouse_windows(self, windows, error):
+    def _take_mode_suggestion(self):
+        mode = self.mode_suggestion
+        if mode not in CONTROL_MODES or self._checking_connection or (self.process and self.process.poll() is None):
+            return
+        self.control_mode.set(mode)
+        self._change_control_mode()
+        try:
+            self._write_sound_preference()
+        except (OSError, configparser.Error) as exc:
+            self._append_log(f'Control mode preference save failed: {exc}\n')
+
+    def _apply_mouse_windows(self, windows, error, suggestion=None):
         selected = self.mouse_windows.get(self.mouse_target.get())
         titles = [window.title for window in windows]
         choices = {}
@@ -1280,6 +1388,17 @@ class RefreshGui(tk.Tk):
         self.device_box.configure(values=list(choices))
         self.device_button.configure(state=tk.NORMAL)
         warning = error or ('No game window found. Open Epic Seven, then Scan.' if not windows else '')
+        previous = self.mode_suggestion
+        self.mode_suggestion = (suggestion if suggestion in CONTROL_MODES and suggestion != self.control_mode.get()
+                                else None)
+        if self.mode_suggestion == 'Mouse':
+            warning = ('This Epic Seven is not the Steam or STOVE version. Background mode works only with those; '
+                       'switch to Mouse mode to run this game.' if 'supports Epic Seven on Steam' in error else
+                       'Epic Seven on Steam or STOVE is not running, but another game window is open (Google Play '
+                       'Games or an emulator?). Background mode works only with Steam and STOVE; switch to Mouse mode.')
+        if self.mode_suggestion and self.mode_suggestion != previous:
+            self.home_ui_hint_dismissed = False
+            self.home_ui_banner.grid()
         self._set_connection_warning(warning)
         self._update_mouse_selection()
         if error:
@@ -1300,7 +1419,8 @@ class RefreshGui(tk.Tk):
                                   else WindowsCapture().list_windows()), ''
             except Exception as exc:  # e.g. Xlib BadWindow when the game closes mid-scan
                 windows, error = [], str(exc) or type(exc).__name__
-            self.log_queue.put((None,'windows',(token,windows,error)))
+            suggestion = suggested_mode(background, windows, error)
+            self.log_queue.put((None,'windows',(token,windows,error,suggestion)))
         threading.Thread(target=scan,daemon=True).start()
 
     def _start_connection_check(self, settings):
@@ -1430,7 +1550,7 @@ class RefreshGui(tk.Tk):
             if settings.debug:
                 raise ValueError('Turn off Debug / calibration for Background mode.')
             if target is None:
-                raise ValueError('Start Epic Seven on Steam, then Scan to find it.')
+                raise ValueError('Start Epic Seven on Steam or STOVE, then Scan to find it.')
             if not ENGINE_EXE.is_file():
                 raise ValueError(f'Could not find the engine: {ENGINE_EXE}')
             from e7_background import HELPER_NAME, require_background_permissions
@@ -1506,6 +1626,8 @@ class RefreshGui(tk.Tk):
         self.stopping = self.finished = False
         self._mouse_failure = None
         background = self.control_mode.get() == 'Background' and mouse_target is not None
+        self._background_run = background
+        self._clear_pointer_alert()
         self._native_mouse_run = mouse_target is not None and not background
         self._graceful_stop = mouse_target is not None or self._structured_adb
         self._session_log_path = None
@@ -1636,6 +1758,31 @@ class RefreshGui(tk.Tk):
             self.elapsed.set(duration_text(time.monotonic() - self.started_at))
             self.started_at = None
 
+    def _start_pointer_alert(self, reason, observed_at=None):
+        self._pointer_reason = reason
+        self._pointer_deadline = (time.monotonic() if observed_at is None else observed_at)+POINTER_PAUSE_LIMIT
+        self._tick_pointer_alert()
+
+    def _tick_pointer_alert(self):
+        self._pointer_job = None
+        if self._pointer_deadline is None or self.status.get() != 'Paused':
+            self._clear_pointer_alert()
+            return
+        left = math.ceil(self._pointer_deadline-time.monotonic())
+        self.pointer_alert.set(pointer_pause_text(self._pointer_reason, left))
+        self._pointer_job = self.after(250, self._tick_pointer_alert)
+
+    def _clear_pointer_alert(self):
+        self._pointer_deadline = None
+        if self._pointer_job is not None:
+            try:
+                self.after_cancel(self._pointer_job)
+            except tk.TclError:
+                pass
+            self._pointer_job = None
+        if self.pointer_alert.get():
+            self.pointer_alert.set('')
+
     def _update_remaining_time(self, observed_at=None):
         if not self._session_started or self.finished or self.stopping or self.stop_key_pressed or self._mouse_failure:
             return
@@ -1696,7 +1843,13 @@ class RefreshGui(tk.Tk):
                 self.status.set('Paused')
                 self.session_estimate.pause(observed_at)
                 self._update_remaining_time(observed_at)
-                self.progress_text.set('Paused · no input while the game is covered or unfocused')
+                if reason.startswith(POINTER_PAUSE_REASONS):
+                    self.progress_text.set('Paused · no input while the pointer is over the game')
+                    self._start_pointer_alert(reason, observed_at)
+                else:
+                    self._clear_pointer_alert()
+                    self.progress_text.set('Paused · see the reason above' if self._background_run else
+                                           'Paused · no input while the game is covered or unfocused')
             self.detail.set(reason)
             self._event(reason)
             return
@@ -1995,10 +2148,10 @@ class RefreshGui(tk.Tk):
             elif kind == 'connection':
                 self._complete_connection_check(*value)
             elif kind == 'windows':
-                token, windows, error = value
+                token, windows, error, suggestion = value
                 self._mouse_scan_busy = False
                 if token == self._connection_check_id and self.control_mode.get() != 'ADB':
-                    self._apply_mouse_windows(windows, error)
+                    self._apply_mouse_windows(windows, error, suggestion)
         if output:
             self._handle_output_batch(output)
         self.after(100, self._drain_log_queue)

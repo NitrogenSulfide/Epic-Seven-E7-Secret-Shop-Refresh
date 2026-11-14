@@ -66,7 +66,10 @@ class BackgroundGuiTests(unittest.TestCase):
 
     def test_fresh_settings_use_background_and_find_the_steam_game(self):
         self.assertEqual(self.app.control_mode.get(), 'Background')
-        self.assertEqual(tuple(self.app.mode_box.cget('values')), ('Background',))
+        label = gui.mode_label('Background')
+        self.assertIn('Steam', label)
+        self.assertEqual(tuple(self.app.mode_box.cget('values')), (label,))
+        self.assertEqual(self.app.mode_label.get(), label)
         self.pump_until(lambda: self.app.mouse_target.get() == 'Epic Seven (Steam)')
         self.assertIn('never moves your pointer', self.app.device_notice.get())
         self.assertTrue(self.app.debug_check.instate(['disabled']))
@@ -142,13 +145,175 @@ class BackgroundGuiTests(unittest.TestCase):
             self.pump_until(lambda: not self.app._mouse_scan_busy)
         scan.assert_called_once()
 
+    def all_modes(self):
+        return patch.object(gui, 'CONTROL_MODES', ('ADB', 'Mouse', 'Background'))
+
+    def test_other_client_offers_a_one_click_switch_to_mouse(self):
+        app = self.app
+        with self.all_modes(), patch.object(gui.RefreshGui, 'refresh_devices'):
+            app._apply_mouse_windows([], 'Background mode supports Epic Seven on Steam and STOVE. Use Mouse mode for this game client.', 'Mouse')
+            self.assertIn('STOVE', app.home_ui_hint.get())
+            self.assertEqual(app.home_ui_action.winfo_manager(), 'grid')
+            self.assertEqual(app.home_ui_action.cget('text'), 'Switch to Mouse')
+            self.assertEqual(str(app.start_button.cget('state')), 'disabled')
+            app.home_ui_action.invoke()
+        self.assertEqual(app.control_mode.get(), 'Mouse')
+        self.assertIn('control_mode = Mouse', gui.GUI_CONFIG_FILE.read_text())
+        self.assertIsNone(app.mode_suggestion)
+        self.assertEqual(app.home_ui_action.winfo_manager(), '')
+
+    def test_steam_seen_in_mouse_mode_suggests_background_without_switching(self):
+        app = self.app
+        with self.all_modes(), patch.object(gui.RefreshGui, 'refresh_devices'):
+            app.control_mode.set('Mouse'); app._change_control_mode()
+            app._apply_mouse_windows([GAME], '', 'Background')
+            self.assertEqual(app.control_mode.get(), 'Mouse')
+            self.assertEqual(app.connection_warning, '')
+            self.assertIn('Steam or STOVE found', app.home_ui_hint.get())
+            self.assertEqual(app.home_ui_action.cget('text'), 'Switch to Background')
+            # A dismissed suggestion stays dismissed on the next idle scan.
+            app.home_ui_dismiss.invoke()
+            app._apply_mouse_windows([GAME], '', 'Background')
+            self.assertEqual(app.home_ui_banner.winfo_manager(), '')
+            app.home_ui_action.invoke()
+        self.assertEqual(app.control_mode.get(), 'Background')
+        self.assertIn('control_mode = Background', gui.GUI_CONFIG_FILE.read_text())
+
+    def test_suggestion_for_a_missing_or_current_mode_is_ignored(self):
+        app = self.app  # this platform offers Background only
+        for suggestion in ('Mouse', 'Background', None):
+            app._apply_mouse_windows([GAME], '', suggestion)
+            self.assertIsNone(app.mode_suggestion)
+            self.assertEqual(app.home_ui_action.winfo_manager(), '')
+
+    def test_mode_list_shows_labels_but_saves_plain_mode_names(self):
+        app = self.app
+        with self.all_modes(), patch.object(gui.RefreshGui, 'refresh_devices'):
+            app.mode_box.configure(values=[gui.mode_label(mode) for mode in gui.CONTROL_MODES])
+            app.mode_label.set('Mouse · emulators, takes over your pointer')
+            app._select_control_mode()
+            self.assertEqual(app.control_mode.get(), 'Mouse')
+            app.control_mode.set('ADB')  # e.g. a loaded setting or a Switch button
+            self.assertEqual(app.mode_label.get(), 'ADB · emulators')
+            app.process = mock.Mock(); app.process.poll.return_value = None
+            app.mode_label.set(gui.mode_label('Background'))
+            app._select_control_mode()
+            app.process = None
+        self.assertEqual(app.control_mode.get(), 'ADB')
+        self.assertEqual(app.mode_label.get(), 'ADB · emulators')
+        with os_named('nt'):
+            self.assertEqual(gui.mode_label('Background'), 'Background · Steam / STOVE (recommended)')
+
+    def test_switch_is_refused_while_a_session_runs(self):
+        app = self.app
+        with self.all_modes():
+            app.mode_suggestion = 'Mouse'
+            app.process = mock.Mock(); app.process.poll.return_value = None
+            app._take_mode_suggestion()
+            app.process = None
+        self.assertEqual(app.control_mode.get(), 'Background')
+
+
+    WINDOWS_POINTER = ('The pointer is moving over the game window; background input waits until it stays still. '
+                       'Leave it still, or park it on the taskbar.')
+
+    def pause(self, reason, observed_at=None):
+        self.app._handle_line('E7GUI_MOUSE_PAUSED '+gui.json.dumps({'reason': reason}), observed_at=observed_at)
+
+    def alert_shown(self):
+        return (self.app.pointer_alert_label.winfo_manager() == 'grid', self.app.tracker.alert.winfo_manager() == 'grid')
+
+    def test_pointer_pause_shows_red_countdown_in_both_views_until_resumed(self):
+        self.app._background_run = True
+        self.pause(self.WINDOWS_POINTER, observed_at=time.monotonic()-7.2)
+        self.assertEqual(self.app.status.get(), 'Paused')
+        self.assertEqual(self.app.pointer_alert.get(), 'Mouse moving over the game · paused · stops in 3 s')
+        self.assertEqual(self.alert_shown(), (True, True))
+        self.assertEqual(self.app.progress_text.get(), 'Paused · no input while the pointer is over the game')
+        self.app._handle_line('E7GUI_MOUSE_RESUMED')
+        self.assertEqual(self.app.status.get(), 'Running')
+        self.assertEqual(self.app.pointer_alert.get(), '')
+        self.assertEqual(self.alert_shown(), (False, False))
+        self.assertIsNone(self.app._pointer_job)
+
+    def test_pointer_countdown_ticks_down_and_never_goes_negative(self):
+        self.app._background_run = True
+        self.pause(self.WINDOWS_POINTER)
+        self.assertTrue(self.app.pointer_alert.get().endswith('stops in 10 s'))
+        self.app._pointer_deadline = time.monotonic()-5
+        self.app._tick_pointer_alert()
+        self.assertTrue(self.app.pointer_alert.get().endswith('stops in 0 s'))
+
+    def test_linux_pointer_pause_says_over_not_moving(self):
+        self.app._background_run = True
+        self.pause('Move your mouse off the game window; background input pauses while the pointer is over it.')
+        self.assertTrue(self.app.pointer_alert.get().startswith('Mouse over the game · paused · stops in '))
+
+    def test_other_background_pauses_show_no_pointer_alert(self):
+        self.app._background_run = True
+        self.pause('The game window is minimized or hidden.')
+        self.assertEqual(self.app.pointer_alert.get(), '')
+        self.assertEqual(self.alert_shown(), (False, False))
+        self.assertEqual(self.app.progress_text.get(), 'Paused · see the reason above')
+
+    def test_session_stop_clears_pointer_alert(self):
+        self.app._background_run = True
+        self.pause(self.WINDOWS_POINTER)
+        self.app._handle_line('E7GUI_MOUSE_STOPPED '+gui.json.dumps({'reason': 'Stopped after 10 seconds.'}))
+        self.assertEqual(self.app.status.get(), 'Needs attention')
+        self.assertEqual(self.app.pointer_alert.get(), '')
+
+    def test_pointer_alert_matches_the_engine(self):
+        import e7_background
+        self.assertEqual(gui.POINTER_PAUSE_LIMIT, e7_background.PAUSE_LIMIT)
+        source = Path(e7_background.__file__).read_text(encoding='utf-8')
+        for prefix in gui.POINTER_PAUSE_REASONS:
+            self.assertIn(prefix, source)
+
+
+class SuggestedModeTest(unittest.TestCase):
+    def test_background_is_the_default_on_every_platform(self):
+        self.assertEqual(gui.DEFAULT_CONTROL_MODE, 'Background')
+
+    def test_windows_suggestions(self):
+        steam_only = 'Background mode supports Epic Seven on Steam and STOVE. Use Mouse mode for this game client.'
+        missing = 'Epic Seven (Steam or STOVE) is not running. Start the game, then try again.'
+        with os_named('nt'):
+            self.assertEqual(gui.suggested_mode(True, [], steam_only), 'Mouse')
+            self.assertIsNone(gui.suggested_mode(True, [GAME], ''))
+            with patch.object(gui, 'WindowsCapture') as capture:
+                capture.return_value.list_windows.return_value = [GAME]
+                self.assertEqual(gui.suggested_mode(True, [], missing), 'Mouse')
+                capture.return_value.list_windows.return_value = []
+                self.assertIsNone(gui.suggested_mode(True, [], missing))
+                capture.return_value.list_windows.return_value = [GAME]
+                for other in ('More than one Epic Seven game window is open. Close the extra one, then try again.',
+                              'Could not verify the selected game process. Scan again.'):
+                    self.assertIsNone(gui.suggested_mode(True, [], other))
+                capture.return_value.list_windows.side_effect = OSError('scan failed')
+                self.assertIsNone(gui.suggested_mode(True, [], missing))
+            with patch('e7_native_mouse.process_name', side_effect=['LDPlayer.exe', 'EpicSeven_Steam.exe']):
+                self.assertEqual(gui.suggested_mode(False, [GAME, GAME], ''), 'Background')
+            with patch('e7_native_mouse.process_name', side_effect=ValueError('gone')):
+                self.assertIsNone(gui.suggested_mode(False, [GAME], ''))
+            with patch('e7_native_mouse.process_name', return_value='EpicSeven.exe'):  # STOVE
+                self.assertEqual(gui.suggested_mode(False, [GAME], ''), 'Background')
+            with patch('e7_native_mouse.process_name', return_value='HD-Player.exe'):
+                self.assertIsNone(gui.suggested_mode(False, [GAME], ''))
+
+    def test_other_platforms_never_suggest(self):
+        with os_named('posix'):
+            self.assertIsNone(gui.suggested_mode(True, [], 'Background mode supports Epic Seven on Steam.'))
+
 
 class ListBackgroundGamesTest(unittest.TestCase):
     def test_windows_reports_the_steam_window(self):
-        window = mock.Mock(hwnd=0x5012e, pid=777); window.size.return_value = (3840, 2019)
-        with os_named('nt'), patch('e7_background.WinGameWindow', return_value=window):
-            games = gui.list_background_games()
-        self.assertEqual(games, [gui.BackgroundTarget('Epic Seven (Steam)', 'Epic Seven (Steam)', 0x5012e, 777, (0, 0, 3840, 2019))])
+        for client in ('Steam', 'STOVE'):
+            window = mock.Mock(hwnd=0x5012e, pid=777, game_client=client); window.size.return_value = (3840, 2019)
+            with os_named('nt'), patch('e7_background.WinGameWindow', return_value=window):
+                games = gui.list_background_games()
+            name = f'Epic Seven ({client})'
+            self.assertEqual(games, [gui.BackgroundTarget(name, name, 0x5012e, 777, (0, 0, 3840, 2019))])
 
 
     def test_reports_the_game_window_read_only(self):

@@ -1,44 +1,31 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.2.0** adds **Background mode** for Epic Seven on Steam: clicks go to
+Version **0.2.1** adds **Background mode** for Epic Seven on Steam and STOVE: clicks go to
 the game window directly and frames are read from the window, so your pointer is
 never moved and other windows may cover the game. Background and Mouse refreshes
 are faster (about 5–6.5 seconds per refresh on Steam at 2560 × 1440, down from about
 8.5). It also includes the 0.1.4 trial changes: the global Stop key, optional
 Friendship Points purchases, remaining-time estimates, BlueStacks fixes and warm
 display tint handling. See CHANGELOG.txt or About & Credits → Release notes.
-Players need only **E7ShopRefresh-0.2.0.zip**; extract it into a fresh folder.
-New settings start in Mouse mode; your existing saved mode is preserved.
+Players need only **E7ShopRefresh-0.2.1.zip**; extract it into a fresh folder.
+New settings start in Background mode. Your existing saved mode is preserved; the
+app offers a one-click switch when another mode suits the game it finds.
 
 Extract the whole ZIP and open **E7 Secret Shop Refresh.exe**. Python, Tk and
 Pillow are included in this EXE. Artwork, the matching compiled engine, ADB tools
 and templates are arranged beside it, with the runtime path configured.
-Follow [START-HERE.md](START-HERE.md) or [SETUP.md](SETUP.md) for the emulator and
+Follow [START-HERE.md](START-HERE.md) or [SETUP.md](SETUP.md) for Steam/STOVE, emulators and
 automatic shop recognition. A guided recognition helper is offered only when
 startup recognition fails. The optional Source ZIP is for developers.
 
-Use Google Play Games on PC Developer Emulator, English Epic Seven and a
-landscape 16:9 Android game view of at least 640 × 360 for normal ADB refreshing. STOVE and visible emulator windows have
-Mouse automation described below; other emulators are unverified. Press Start in ADB
-mode to try the built-in English templates. If the helper is
-needed, it only reads screenshots; press Start again after it succeeds.
-Start checks the selected ADB connection first. A red banner explains missing
-connections without launching the refresh engine; open the emulator, enable ADB
-and press Start again. Idle scans update every 10 seconds.
-An ADB connection alone is not enough: Epic Seven must be active inside the
-emulator, and the Google Play Games window must be open. Its background VM can
-stay connected after closing the window. Other PC apps can retain focus.
-Normal fresh settings are 12 skystones, 0.3-second
-delay, backtick stop key and randomized offsets; saved settings take precedence.
-
-For Epic Seven on **Steam**, choose **Control mode → Background**, select the game
-and press **Start Refresh**. Steam's E7 runs as administrator, so Start offers the
+**Steam or STOVE (most players):** keep **Control mode → Background** (the
+default), select the game and press **Start Refresh**. The game runs as administrator, so Start offers the
 administrator restart the first time; accept it and press Start again. You can keep
 using the PC: input waits while the pointer moves over the game and resumes once it
 has been still for a second. Don't minimize or resize the game during a run. Only
 one Epic Seven window may be open.
 
-For STOVE or Google Play Games Developer Emulator, choose **Control mode → Mouse**, select Epic Seven and press
+**Emulators and Google Play Games:** choose **Control mode → Mouse** (STOVE also still works in Mouse), select Epic Seven and press
 **Start Refresh**. The app brings that game forward and uses your actual pointer
 to open its recognized shop, buy Covenant/Mystic items, scroll and refresh.
 If no home controls are recognized, startup can try one center click, wait
@@ -56,6 +43,19 @@ remains an ADB feature. Saving settings also saves your control mode without
 starting a session next time. The owner regression-tested Mouse and ADB with the rc3 candidate used for this
 release. Begin with a small supervised budget on your own setup. Keep English game text readable.
 
+**ADB (optional, emulators only):** use Google Play Games on PC Developer Emulator, English Epic Seven and a
+landscape 16:9 Android game view of at least 640 × 360; other emulators are unverified. Press Start in ADB
+mode to try the built-in English templates. If the helper is
+needed, it only reads screenshots; press Start again after it succeeds.
+Start checks the selected ADB connection first. A red banner explains missing
+connections without launching the refresh engine; open the emulator, enable ADB
+and press Start again. Idle scans update every 10 seconds.
+An ADB connection alone is not enough: Epic Seven must be active inside the
+emulator, and the Google Play Games window must be open. Its background VM can
+stay connected after closing the window. Other PC apps can retain focus.
+
+Normal fresh settings are 12 skystones, 0.3-second
+delay, backtick stop key and randomized offsets; saved settings take precedence.
 Live counters report engine-completed buys/refreshes, not confirmed balances.
 Insufficient-currency stopping remains unverified. Keep initial runs supervised.
 Settings, history and private recognition captures stay under `runtime`; back
@@ -76,9 +76,10 @@ are under `runtime/third-party-licenses`, with ADB notices in its tool folder.
 About & Credits contains Quickstart and bundled Release notes tabs. The main
 screen’s Buy me a coffee button opens https://ko-fi.com/bluenatto only when clicked.
 
-Testing has been limited to Google Play
-Games on PC Developer Emulator, the official STOVE client and Epic Seven on Steam
-(Background mode, Windows 11 and Linux).
+Testing has been limited to Epic Seven on Steam (Background mode, Windows 11 and
+Linux), the official STOVE client (Background since 0.2.1: a live refresh is tested,
+a STOVE purchase not yet seen; and Mouse) and Google Play Games on PC Developer
+Emulator (Mouse and ADB).
 Other emulators and methods have not been tested. Both modes buy Covenant
 Bookmarks and Mystic Medals by default. Optionally enable **Also buy Friendship
 Points** for the current heart item (50 points for 18,000 gold per buy), using

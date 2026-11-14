@@ -654,7 +654,7 @@ class GuiTests(unittest.TestCase):
         with patch.object(gui, 'launch_engine') as launch, patch.object(gui, 'activate_native_target') as activate:
             self.app._load_config()
             self.assertEqual(self.app.control_mode.get(), 'Mouse')
-            self.assertEqual(tuple(self.app.mode_box.cget('values')), ('ADB', 'Mouse'))
+            self.assertEqual(tuple(self.app.mode_box.cget('values')), ('ADB · emulators', 'Mouse · emulators, takes over your pointer'))
             self.assertFalse(hasattr(self.app, '_start_mouse_preview'))
             self.assertIsNone(self.app.process)
             launch.assert_not_called(); activate.assert_not_called()
@@ -712,7 +712,7 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(self.app.mouse_target.get(), 'Epic Seven')
         self.assertEqual(self.app.mouse_windows['Epic Seven'], target)
         self.assertIn('3840 × 2019', self.app.device_notice.get())
-        self.assertIn('actual pointer', self.app.device_notice.get())
+        self.assertIn('takes over your pointer', self.app.device_notice.get())
         self.assertFalse(self.app.start_button.instate(['disabled']))
         capture.assert_not_called(); launch.assert_not_called()
 
@@ -771,7 +771,7 @@ class GuiTests(unittest.TestCase):
     def test_mouse_scan_results_and_switch_back_preserve_adb_choice(self):
         before=self.app._device_address()
         target=self.choose_mouse_fixture()
-        self.app.log_queue.put((None,'windows',(self.app._connection_check_id,[target],'')))
+        self.app.log_queue.put((None,'windows',(self.app._connection_check_id,[target],'',None)))
         self.app._drain_log_queue()
         self.assertEqual(self.app.device_box.cget('textvariable'),str(self.app.mouse_target))
         self.app.control_mode.set('ADB');self.app._change_control_mode()

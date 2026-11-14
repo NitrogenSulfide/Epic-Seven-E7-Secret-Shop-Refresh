@@ -1,38 +1,5 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-## Optional detailed diagnostics
-
-In **Diagnostics**, enable **Log click coordinates and timing** before starting
-to see applied click offsets, mapped screen/device coordinates, sampled tap
-pacing and measured waits. It works in Mouse and ADB, independently of calibration.
-Cycle totals include scanning, purchases, settling and pauses; initial/final
-scans and interrupted intervals are labelled separately. Coordinates labelled
-1920 × 1080 refer to the recognition frame, not your monitor resolution.
-
-Use the release's matching bundled engine. Detailed events and saved logs have
-size limits; reaching one does not stop the session. Logs stay local. **Copy
-Diagnostics** copies the retained output for a report you choose to share.
-
-## Remaining time and session shortcuts (0.1.4 trial)
-
-**Time remaining** starts with “Estimating…” until three intervals between
-confirmed refreshes are available. It then uses the latest eight intervals to
-show an approximate countdown. Purchases and recognition speed can change the
-estimate. Startup is excluded, and focus pauses freeze the countdown. At the
-last budgeted refresh it shows “Finishing final scan…” while the engine checks
-the remaining items. Calibration and older engines without live refresh
-counters do not receive a time estimate. Detailed logging can remain off.
-
-**Open Logs Folder** in Diagnostics opens the current or last session's saved
-log folder, otherwise the selected mode's folder. For Mouse it becomes available
-after the session ends, so opening Explorer cannot cover the running game.
-ADB logs are saved when detailed diagnostics are enabled.
-
-Excel export suggests a name such as
-`E7-sessions-2026-10-07_09-15-04-a1b2c3d4.xlsx`. The date/time use the PC's local
-clock; the suffix distinguishes exports even within the same second. You can
-still choose your own filename in the save dialog.
-
 ## Download and open
 
 Download the **E7ShopRefresh ZIP** for your chosen version, then extract it into a new
@@ -50,39 +17,22 @@ templates are included for automatic recognition. Check the optional release che
 Get-FileHash -Algorithm SHA256 -LiteralPath '.\E7ShopRefresh-<version>.zip'
 ```
 
-## Emulator setup
+## Steam and STOVE · Background mode
 
-**Mouse** is the default for new settings and automates the visible
-game in STOVE or an emulator, including Google Play Games Developer Emulator.
+Most players use Epic Seven on **Steam** or **STOVE**. Keep **Control mode →
+Background** (the default for new settings), select the game window and press
+**Start Refresh**. Clicks go to the game window directly and frames are read
+from it, so your pointer is never moved and other windows may cover the game.
+The game runs as administrator, so Start offers the administrator restart the
+first time; accept it and press Start again. You can keep using the PC: input
+waits while the pointer moves over the game, and a red line counts down to an
+automatic stop if it stays there. Park the pointer elsewhere or on the taskbar.
+Don't minimize or resize the game during a run. Only one Epic Seven window may
+be open.
 
-Use [Google Play Games on PC Developer Emulator](https://developer.android.com/games/playgames/emulator),
-English Epic Seven and a **landscape 16:9 game view of at least 640 × 360**. Native STOVE Mouse mode also accepts its wider maximized client area. ADB calibration requires 1920 × 1080. STOVE and visible emulator windows can also use Mouse mode;
-other emulators are unverified. Different home-screen artwork is fine.
-Enable/authorize ADB debugging in the emulator. ADB is the connection that lets
-the tool interact with the game while leaving your PC mouse free.
-The main screen shows an amber reminder until you dismiss it with ×; that ADB
-acknowledgement is saved. The hidden-UI reminder returns when the app restarts.
-
-Select the connected emulator in the app. Google's documented endpoint is
-`localhost:6520`; see the [official connection guide](https://developer.android.com/games/playgames/pg-emulator#installing-a-game).
-Start checks the selected connection and can connect the entered ADB endpoint.
-With no usable connection, a red banner explains how to fix it; the engine does
-not launch. Start remains available to retry. Idle scans update every 10 seconds
-and do not connect or send game actions. An open emulator still needs ADB enabled
-and authorized; `offline` and `unauthorized` devices are not ready.
-Open Epic Seven inside the emulator. For Google Play Games, keep its game window
-open too: its ADB connection can remain alive after you close the window. The app
-checks that window and Epic Seven's current Android activity before starting.
-You may keep using other PC windows; the tool does not take keyboard/mouse focus.
-If needed, run PowerShell inside the included `runtime` folder:
-
-```powershell
-.\adb-assets\platform-tools\adb.exe connect localhost:6520
-.\adb-assets\platform-tools\adb.exe devices
-```
-
-Continue only when its actual identifier is listed as `device`, rather than
-`offline` or `unauthorized`. Choose that identifier in the app.
+For an emulator, including Google Play Games Developer Emulator, use **Mouse**
+(it takes over your pointer) or the optional **ADB** setup below; when Background
+finds one of those, its banner offers **Switch to Mouse**.
 
 ## Start refreshing
 
@@ -97,24 +47,6 @@ normal ADB and Mouse sessions can try one center click to reveal them, then
 recognize the menu and verify shop entry. Close popups first. Unknown screens,
 blank captures and recognized dialog/loading controls stop without a shop action.
 If startup recognition fails, the recognition helper is available.
-
-## Recognition helper — only if needed
-
-Follow the two capture buttons if automatic recognition could not verify your UI:
-
-1. Open the game's home screen and close popups. Click once inside the game if
-   its home controls have faded. Choose **Capture home menu**.
-2. Open **Secret Shop manually** and leave its normal item list visible.
-   Choose **Capture shop & finish**.
-3. After the recognition checks pass, close setup. Check the budget and stop key,
-   then press **Start refresh** again when you are ready.
-
-Setup reads two ADB screenshots and runs the matching engine's offline image
-utility. It sends no taps, refreshes or purchases. Screenshots stay private under
-`runtime/setup-captures`; recognition images stay in `runtime/adb-assets/gui-navigation`.
-Any replaced calibration folder is preserved as a backup. Keep these files private.
-Completing this helper never starts refreshing automatically. Close it and press
-Start again when ready. Built-in templates are kept separate from these private files.
 
 ## First supervised run
 
@@ -131,7 +63,7 @@ If home controls fade, click the game once or open the shop. The app waits up to
 Theme backgrounds and currency artwork are included in the EXE's image support;
 the sun/moon button switches between the supplied day/night artwork.
 
-## Mouse automation — visible game windows
+## Mouse automation — emulators and visible game windows
 
 Open English Epic Seven in STOVE or your emulator (including Google Play Games
 Developer Emulator), on home (including hidden idle controls) or Secret Shop. Close popups. Choose **Control mode → Mouse**, select its
@@ -208,54 +140,63 @@ The owner reports passing Mouse and ADB regression runs with the rc3 candidate.
 Insufficient-currency stopping remains unverified;
 begin with a small supervised budget and check Stop and your Stop key.
 Save Settings retains your control mode and other preferences. Reopening the app
-scans that mode without starting a session. Mouse is the fresh-install default;
-an existing saved ADB preference is preserved.
+scans that mode without starting a session. Background is the fresh-install default;
+an existing saved Mouse or ADB preference is preserved, and Mouse mode offers
+**Switch to Background** when it sees Epic Seven on Steam or STOVE.
 No ADB connection is made by a Mouse session.
 
 Native stops show their actual reason on the main screen. Detailed text logs stay
 private under `runtime/mouse-session-logs`. The app checks that the pointer reaches the game before clicking. A missing confirmation also saves central game crops under `runtime/mouse-failures`; keep both folders out of shared ZIPs. Focus pauses discard stale captures and restart the recognition timeout.
 
-## Updates and troubleshooting
+## ADB setup · optional, emulators only
 
-Stop/close the old app before updating. Extract the new ZIP into a new folder and
-preserve your old runtime settings, CSV history and locally prepared recognition
-images. No updater or automatic transfer between release folders exists. When a new
-session is recorded in an older CSV history, its schema is migrated with the original preserved in
-`ShopRefreshHistory/schema-backups`. Back up anything you want to
-keep before deleting an extracted app folder.
+ADB is for emulators only; Steam and STOVE players can skip this section.
+Use [Google Play Games on PC Developer Emulator](https://developer.android.com/games/playgames/emulator),
+English Epic Seven and a **landscape 16:9 game view of at least 640 × 360**. Native STOVE Mouse mode also accepts its wider maximized client area. ADB calibration requires 1920 × 1080. STOVE and visible emulator windows can also use Mouse mode;
+other emulators are unverified. Different home-screen artwork is fine.
+Enable/authorize ADB debugging in the emulator. ADB is the connection that lets
+the tool interact with the game while leaving your PC mouse free.
+The main screen shows an amber reminder until you dismiss it with ×; that ADB
+acknowledgement is saved. The hidden-UI reminder returns when the app restarts.
 
-- **Recognition needs help:** reveal the game controls or manually open Secret
-  Shop. If startup recognition fails, use the offered helper and press Start again.
-- **Setup cannot verify the screen:** check English UI, a supported landscape 16:9 Android
-  resolution, visible home controls and a normal unobstructed shop list.
-- **No backgrounds:** use the included **EXE** with the complete extracted folder.
-  Older shortcuts and source launches can use a different Python installation.
-- **Engine unavailable:** keep `runtime` beside the GUI, with its engine and ADB
-  files. Do not replace the bundled engine with a different EXE.
-- **No device:** use Scan and the connection commands above.
+Select the connected emulator in the app. Google's documented endpoint is
+`localhost:6520`; see the [official connection guide](https://developer.android.com/games/playgames/pg-emulator#installing-a-game).
+Start checks the selected connection and can connect the entered ADB endpoint.
+With no usable connection, a red banner explains how to fix it; the engine does
+not launch. Start remains available to retry. Idle scans update every 10 seconds
+and do not connect or send game actions. An open emulator still needs ADB enabled
+and authorized; `offline` and `unauthorized` devices are not ready.
+Open Epic Seven inside the emulator. For Google Play Games, keep its game window
+open too: its ADB connection can remain alive after you close the window. The app
+checks that window and Epic Seven's current Android activity before starting.
+You may keep using other PC windows; the tool does not take keyboard/mouse focus.
+If needed, run PowerShell inside the included `runtime` folder:
 
-## Source and credits
+```powershell
+.\adb-assets\platform-tools\adb.exe connect localhost:6520
+.\adb-assets\platform-tools\adb.exe devices
+```
 
-GUI/enhancements: **NitrogenSulfide (Blue Natto)**. Original engine: **Solunium**,
-GNU GPL-3.0. GUI Python source and engine source/build instructions are included.
-The optional full Source ZIP also includes builders and tests. Dependency notices
-are under `runtime/third-party-licenses`; ADB notices are in
-`runtime/adb-assets/platform-tools/NOTICE.txt`. About & Credits remains available
-through the app's information button. Game/artwork and audio credits remain
-preserved; the software GPL does not relicense third-party artwork.
+Continue only when its actual identifier is listed as `device`, rather than
+`offline` or `unauthorized`. Choose that identifier in the app.
 
-## Quickstart and tested clients
+## Recognition helper — only if needed
 
-About & Credits contains Quickstart and bundled Release notes tabs. The main
-screen’s Buy me a coffee button opens https://ko-fi.com/bluenatto only when clicked.
+Follow the two capture buttons if automatic recognition could not verify your UI:
 
-Testing has been limited to Google Play
-Games on PC Developer Emulator and the official STOVE client of Epic Seven.
-Other emulators and methods have not been tested. Both modes buy Covenant
-Bookmarks and Mystic Medals by default. Optionally enable **Also buy Friendship
-Points** for the current heart item (50 points for 18,000 gold per buy), using
-this trial's matching engine. Calibration excludes Friendship. Friendship has
-offline recognition and fake-engine verification; live purchase remains unverified.
+1. Open the game's home screen and close popups. Click once inside the game if
+   its home controls have faded. Choose **Capture home menu**.
+2. Open **Secret Shop manually** and leave its normal item list visible.
+   Choose **Capture shop & finish**.
+3. After the recognition checks pass, close setup. Check the budget and stop key,
+   then press **Start refresh** again when you are ready.
+
+Setup reads two ADB screenshots and runs the matching engine's offline image
+utility. It sends no taps, refreshes or purchases. Screenshots stay private under
+`runtime/setup-captures`; recognition images stay in `runtime/adb-assets/gui-navigation`.
+Any replaced calibration folder is preserved as a backup. Keep these files private.
+Completing this helper never starts refreshing automatically. Close it and press
+Start again when ready. Built-in templates are kept separate from these private files.
 
 ## BlueStacks 5
 
@@ -297,3 +238,80 @@ your shop wallpaper does not need to match the supplied example. Rc8 also handle
 that row at the bottom of the scrolled list. Rc9 also works with warm display tints such as f.lux or Night light.
 Use the whole rc9 folder with its matching runtime. Enable Also buy Friendship Points if you
 want new Friendship purchases; its default remains off.
+
+## Optional detailed diagnostics
+
+In **Diagnostics**, enable **Log click coordinates and timing** before starting
+to see applied click offsets, mapped screen/device coordinates, sampled tap
+pacing and measured waits. It works in Mouse and ADB, independently of calibration.
+Cycle totals include scanning, purchases, settling and pauses; initial/final
+scans and interrupted intervals are labelled separately. Coordinates labelled
+1920 × 1080 refer to the recognition frame, not your monitor resolution.
+
+Use the release's matching bundled engine. Detailed events and saved logs have
+size limits; reaching one does not stop the session. Logs stay local. **Copy
+Diagnostics** copies the retained output for a report you choose to share.
+
+## Remaining time and session shortcuts (0.1.4 trial)
+
+**Time remaining** starts with “Estimating…” until three intervals between
+confirmed refreshes are available. It then uses the latest eight intervals to
+show an approximate countdown. Purchases and recognition speed can change the
+estimate. Startup is excluded, and focus pauses freeze the countdown. At the
+last budgeted refresh it shows “Finishing final scan…” while the engine checks
+the remaining items. Calibration and older engines without live refresh
+counters do not receive a time estimate. Detailed logging can remain off.
+
+**Open Logs Folder** in Diagnostics opens the current or last session's saved
+log folder, otherwise the selected mode's folder. For Mouse it becomes available
+after the session ends, so opening Explorer cannot cover the running game.
+ADB logs are saved when detailed diagnostics are enabled.
+
+Excel export suggests a name such as
+`E7-sessions-2026-10-07_09-15-04-a1b2c3d4.xlsx`. The date/time use the PC's local
+clock; the suffix distinguishes exports even within the same second. You can
+still choose your own filename in the save dialog.
+
+## Updates and troubleshooting
+
+Stop/close the old app before updating. Extract the new ZIP into a new folder and
+preserve your old runtime settings, CSV history and locally prepared recognition
+images. No updater or automatic transfer between release folders exists. When a new
+session is recorded in an older CSV history, its schema is migrated with the original preserved in
+`ShopRefreshHistory/schema-backups`. Back up anything you want to
+keep before deleting an extracted app folder.
+
+- **Recognition needs help:** reveal the game controls or manually open Secret
+  Shop. If startup recognition fails, use the offered helper and press Start again.
+- **Setup cannot verify the screen:** check English UI, a supported landscape 16:9 Android
+  resolution, visible home controls and a normal unobstructed shop list.
+- **No backgrounds:** use the included **EXE** with the complete extracted folder.
+  Older shortcuts and source launches can use a different Python installation.
+- **Engine unavailable:** keep `runtime` beside the GUI, with its engine and ADB
+  files. Do not replace the bundled engine with a different EXE.
+- **No device:** use Scan and the connection commands above.
+
+## Quickstart and tested clients
+
+About & Credits contains Quickstart and bundled Release notes tabs. The main
+screen’s Buy me a coffee button opens https://ko-fi.com/bluenatto only when clicked.
+
+Testing has been limited to Epic Seven on Steam (Background mode, Windows 11 and
+Linux), the official STOVE client (Background since 0.2.1: a live refresh is tested,
+a STOVE purchase not yet seen; and Mouse) and Google Play Games on PC Developer
+Emulator (Mouse and ADB).
+Other emulators and methods have not been tested. Both modes buy Covenant
+Bookmarks and Mystic Medals by default. Optionally enable **Also buy Friendship
+Points** for the current heart item (50 points for 18,000 gold per buy), using
+this trial's matching engine. Calibration excludes Friendship. Friendship
+purchases have been verified live in Background mode on Steam.
+
+## Source and credits
+
+GUI/enhancements: **NitrogenSulfide (Blue Natto)**. Original engine: **Solunium**,
+GNU GPL-3.0. GUI Python source and engine source/build instructions are included.
+The optional full Source ZIP also includes builders and tests. Dependency notices
+are under `runtime/third-party-licenses`; ADB notices are in
+`runtime/adb-assets/platform-tools/NOTICE.txt`. About & Credits remains available
+through the app's information button. Game/artwork and audio credits remain
+preserved; the software GPL does not relicense third-party artwork.

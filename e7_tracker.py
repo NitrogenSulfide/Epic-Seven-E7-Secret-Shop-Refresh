@@ -60,6 +60,11 @@ class CompactTracker:
         self.expand_button = ttk.Button(frame, text='⤢', width=3, command=self.restore, padding=(dp(6), dp(4)))
         self.expand_button.grid(row=0, column=column, sticky='e')
         ThemeHint(self.expand_button, lambda: 'Show the full window')
+        # Red line under the bar while the pointer pauses a Background run.
+        self.alert = ttk.Label(frame, textvariable=root.pointer_alert, style='Alert.TLabel', font=root.heading_font)
+        self.alert.grid(row=1, column=0, columnspan=column+1, sticky='w', pady=(dp(4), 0))
+        self.alert.grid_remove()
+        root.pointer_alert.trace_add('write', lambda *_: self.alert.grid() if root.pointer_alert.get() else self.alert.grid_remove())
 
     def enter(self, *, friendship):
         root = self.root
