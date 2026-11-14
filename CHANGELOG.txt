@@ -20,6 +20,16 @@
   automatic stop at 10 seconds. It clears once the pointer is still or off
   the game. A still pointer over the game on Windows does not pause.
 • The Quickstart covers Background mode first.
+• The Windows app now always opens as administrator (shield icon; Windows
+  asks for permission on each launch). Steam and STOVE run Epic Seven as
+  administrator, so the restart-then-press-Start-again step is gone. The
+  restart offer remains for unelevated source runs.
+• A confirmation dialog caught mid fade-in or still moving is read again
+  within the same 5-second wait instead of stopping the run; a click still
+  needs two agreeing captures, and a settled dialog whose text changed still
+  stops at once. Seen on Linux, where captures are faster.
+• A stop caused by a confirmation dialog already open before the Refresh or
+  Buy click now says so.
 • 0.2.1 is the first published 0.2 release; it includes every 0.2.0 change
   below.
 

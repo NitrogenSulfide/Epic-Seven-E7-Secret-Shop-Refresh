@@ -17,8 +17,9 @@ Windows 11 and on Linux (Proton). It sends clicks to the game window directly an
 reads frames from the window itself, so your mouse pointer and keyboard focus are
 never used and other windows may cover the game. You can keep using your PC:
 input waits while the pointer is moving over the game and resumes once it has been
-still for a second. Steam's E7 runs as administrator on Windows, so the first
-start offers the administrator restart. The Stop key works from any window. The
+still for a second. The Windows app now always opens as administrator (shield
+icon; Windows asks once per launch), so Steam's elevated E7 no longer needs the
+restart-and-press-Start-again step. The Stop key works from any window. The
 app refuses to start when more than one Epic Seven window is open.
 
 **Linux** runs from source. `e7-shop-refresh-linux.sh` checks system packages
@@ -33,6 +34,9 @@ delay is now the minimum gap between clicks, and the final dialog check comes af
 it, just before the click. Windows text recognition keeps one reader running
 instead of starting one per read. Measured on Windows Steam at 2560 × 1440, a
 refresh takes about 5–6.5 seconds, down from about 8.5. ADB keeps its fixed waits.
+If a confirmation dialog is still fading in when it is read, the app now reads it
+again instead of stopping, and still clicks only when two captures agree. A dialog
+left open by an earlier stopped run is now named in the stop message.
 
 **Compact tracker.** Once the engine starts, the window shrinks in place to a small
 always-on-top bar showing purchases, Skystones spent, time left and a Stop button.

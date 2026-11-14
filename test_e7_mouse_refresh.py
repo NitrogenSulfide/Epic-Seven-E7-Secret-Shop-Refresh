@@ -930,6 +930,55 @@ class NativeEngineTests(unittest.TestCase):
         self.assertEqual(app.mouse.click.call_args_list[1].args,(1165,695))
         self.assertEqual(app.refresh_count,0)  # Only the shared loop increments.
 
+    def test_fading_confirmation_is_read_again_and_clicked_once_settled(self):
+        # Fast captures can catch the dialog half transparent (seen live on Linux):
+        # the button is found but looks different in the next capture.
+        grown=dialog();grown[740:762,1040:1290]=(20,110,40)  # live crop: bottom edge 22px lower mid-fade
+        dim=dialog();dim[650:740,1040:1290]=(12,66,24)        # same outline, still fading
+        for name,faded in (('outline',grown),('pixels',dim)):
+            with self.subTest(fade=name):
+                app=self.make_engine()
+                app.mouse.screenshot.side_effect=[Image.fromarray(f) for f in (shop(),faded,dialog(),dialog(),dialog(),shop())]
+                with patch('e7_mouse_refresh.time.sleep'):
+                    self.assertTrue(app.clickRefresh())
+                self.assertEqual(app.mouse.click.call_count,2)  # Refresh, then one Confirm
+                self.assertEqual(app.mouse.click.call_args_list[1].args,(1165,695))
+                self.assertEqual(app.mouse.screenshot.call_count,6)  # the faded read was not clicked
+
+    def test_confirmation_that_never_settles_stops_without_confirm_click(self):
+        import itertools
+        faded=dialog();faded[650:740,1040:1290]=(12,66,24)
+        frames=itertools.cycle((faded,dialog()))
+        app=self.make_engine();clock=itertools.count(0,.05)
+        app.mouse.screenshot.side_effect=lambda:Image.fromarray(next(frames))
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                self.assertRaisesRegex(MouseStopped,'kept changing while being read. No confirmation click sent'):
+            app._confirm('refresh',shop())
+        app.mouse.click.assert_not_called()
+        self.assertIsNotNone(app._save_confirmation_failure.call_args.kwargs['validated'])
+
+    def test_dialog_already_open_before_refresh_is_named_in_the_stop(self):
+        app=self.make_engine()
+        app.read_confirmation_text=lambda rgb:'Use Skystone to refresh? Cancel Confirm' if rgb[700,1100,1]==110 else ''
+        app.mouse.screenshot.return_value=Image.fromarray(dialog())
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,1,6]), \
+                self.assertRaisesRegex(MouseStopped,'refresh confirmation was already open before the refresh click'):
+            app._confirm('refresh',dialog())
+        app.mouse.click.assert_not_called()
+        # A shop frame before the click still reports an unrecognized confirmation.
+        app.mouse.screenshot.return_value=Image.fromarray(shop())
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=[0,0,1,6]), \
+                self.assertRaisesRegex(MouseStopped,'The refresh confirmation was not recognized'):
+            app._confirm('refresh',shop())
+
+    def test_button_settled_compares_only_the_button(self):
+        from e7_shop_flow import button_settled
+        moving=dialog();moving[300:600,550:1400]=200  # animated artwork elsewhere
+        self.assertTrue(button_settled(dialog(),moving,(1040,650,1290,740)))
+        faded=dialog();faded[650:740,1040:1290]=(12,66,24)
+        self.assertFalse(button_settled(faded,dialog(),(1040,650,1290,740)))
+        self.assertFalse(button_settled(dialog(),dialog(),(1040,650,1040,740)))
+
     def test_refresh_offset_is_small_bounded_and_respects_randomization_setting(self):
         for enabled in (False,True):
             for offset in (-75,75):
@@ -1374,12 +1423,14 @@ class NativeEngineTests(unittest.TestCase):
         app.mouse.click.assert_not_called()
 
     def test_confirmation_changing_during_ocr_is_not_clicked(self):
-        app = self.make_engine()
-        app.mouse.screenshot.side_effect = [Image.fromarray(image) for image in (shop(),dialog(),shop())]
-        with patch('e7_mouse_refresh.time.sleep'):
-            with self.assertRaisesRegex(MouseStopped,'changed while'):
+        import itertools
+        app = self.make_engine();clock=itertools.count(0,.05)
+        frames = itertools.chain((shop(),dialog()),itertools.repeat(shop()))  # dialog vanishes after one read
+        app.mouse.screenshot.side_effect = lambda:Image.fromarray(next(frames))
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)):
+            with self.assertRaisesRegex(MouseStopped,'kept changing while'):
                 app.clickRefresh()
-        self.assertEqual(app.mouse.click.call_count,1)
+        self.assertEqual(app.mouse.click.call_count,1)  # Refresh only
 
     def test_consecutive_refreshes_accept_animated_background_and_small_button_jitter(self):
         app=self.make_engine();app.budget=6
@@ -1426,8 +1477,11 @@ class NativeEngineTests(unittest.TestCase):
 
     def test_large_confirmation_button_movement_is_not_clicked(self):
         app=self.make_engine();app.mouse.screenshot.return_value=Image.fromarray(dialog())
-        with patch('e7_shop_flow.confirmation_button',side_effect=[(1040,650,1290,740),(1060,650,1310,740)]),patch('e7_mouse_refresh.time.sleep'):
-            with self.assertRaisesRegex(MouseStopped,'changed while'):
+        import itertools
+        boxes=itertools.cycle(((1040,650,1290,740),(1060,650,1310,740)));clock=itertools.count(0,.05)
+        with patch('e7_shop_flow.confirmation_button',side_effect=lambda *a:next(boxes)),patch('e7_mouse_refresh.time.sleep'), \
+                patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)):
+            with self.assertRaisesRegex(MouseStopped,'kept changing while'):
                 app._confirm('refresh',shop())
         app.mouse.click.assert_not_called()
 

@@ -19,8 +19,9 @@ automatic shop recognition. A guided recognition helper is offered only when
 startup recognition fails. The optional Source ZIP is for developers.
 
 **Steam or STOVE (most players):** keep **Control mode → Background** (the
-default), select the game and press **Start Refresh**. The game runs as administrator, so Start offers the
-administrator restart the first time; accept it and press Start again. You can keep
+default), select the game and press **Start Refresh**. The app always opens as
+administrator (the game runs as administrator too), so Windows asks for permission
+each time you open it; choose Yes. You can keep
 using the PC: input waits while the pointer moves over the game and resumes once it
 has been still for a second. Don't minimize or resize the game during a run. Only
 one Epic Seven window may be open.
@@ -33,10 +34,8 @@ briefly, then locate the Secret Shop icon. No saved wallpaper is required;
 animation and incidental artwork lettering are accepted. Known dialog/loading
 controls and blank captures block the attempt. Start from home or Secret Shop.
 Your budget, delay, randomized offsets, counters and Stop key apply.
-Open the app normally: if the selected game is elevated,
-Start offers to save settings and restart through Windows' administrator prompt.
-After reopening, select the game and press Start again. Cancelling keeps the app
-open without sending Mouse input. ADB and non-elevated games need no restart.
+The app opens as administrator, so elevated games and emulators need no extra
+restart.
 Leave the PC alone until it stops. Focus or coverage changes pause input for up to 10 seconds;
 a changed window or an unrecognized confirmation stops the session. The game keeps its current size. Use normal settings; Debug
 remains an ADB feature. Saving settings also saves your control mode without

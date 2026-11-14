@@ -372,6 +372,17 @@ def confirmation_button(rgb, operation, before):
     return None
 
 
+BUTTON_SETTLED = 6  # mean change of the confirm button between two captures; ~19 mid fade-in, 0 at rest
+
+
+def button_settled(prior, current, box):
+    """True when the confirmation button looks the same in two captures."""
+    left,top,right,bottom = (int(v) for v in box)
+    if right <= left or bottom <= top:
+        return False
+    return float(np.mean(cv2.absdiff(prior[top:bottom,left:right],current[top:bottom,left:right]))) < BUTTON_SETTLED
+
+
 def recheck_mouse_action(action):
     """Retry only undelivered input, through the action's full recognition path."""
     @wraps(action)
@@ -754,6 +765,7 @@ class ObservedShopFlow:
     def _confirm(self,operation,before):
         deadline = time.monotonic()+5
         text_rejected = False
+        changed = None
         visibility_rechecks = 0
         while self.loop_active and time.monotonic()<deadline:
             self._poll_wait(operation+' dialog')
@@ -787,11 +799,21 @@ class ObservedShopFlow:
                 if not self.loop_active:
                     return False
                 current = confirmation_button(self._rgb,operation,before)
-                same_button = current is not None and all(abs(a-b)<=8 for a,b in zip(current,box))
+                same_button = (current is not None and all(abs(a-b)<=8 for a,b in zip(current,box))
+                               and button_settled(prior,self._rgb,current))
                 fresh_text = self.read_confirmation_text(self._rgb) if same_button else ''
                 if not self.loop_active:
                     return False
-                if not same_button or not confirmation_matches(fresh_text,operation,self._item_name):
+                if not same_button:
+                    # Usually the dialog is still fading in: fast captures can
+                    # catch it half transparent. Read it again within the same
+                    # bounded wait; only two agreeing captures lead to a click.
+                    changed = prior
+                    self._trace_retry()
+                    continue
+                if not confirmation_matches(fresh_text,operation,self._item_name):
+                    # A settled button whose dialog now names another action,
+                    # item or cost is not a fade: stop at once.
                     saved = self._save_confirmation_failure(operation,before,validated=prior)
                     detail = ' A private dialog crop was saved for diagnosis.' if saved else ''
                     raise MouseStopped('The confirmation changed while being read. No confirmation click sent.'+detail)
@@ -812,8 +834,15 @@ class ObservedShopFlow:
         else:
             if not self.loop_active:
                 return False
-            saved = self._save_confirmation_failure(operation,before)
+            saved = self._save_confirmation_failure(operation,before,validated=changed)
             detail = ' A private dialog crop was saved for diagnosis.' if saved else ''
+            if changed is not None:
+                raise MouseStopped('The confirmation kept changing while being read. No confirmation click sent.'+detail)
+            # Diagnosis only: a dialog left open (e.g. by an earlier stopped run)
+            # hides the new one from the change check above.
+            if confirmation_matches(self.read_confirmation_text(before),operation,self._item_name):
+                raise MouseStopped(f'A {operation} confirmation was already open before the {operation} click. '
+                                   'No confirmation click sent.'+detail)
             if text_rejected:
                 raise MouseStopped('The confirmation does not match the intended shop action. No confirmation click sent.'+detail)
             raise MouseStopped(f'The {operation} confirmation was not recognized. No confirmation click sent.'+detail)

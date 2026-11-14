@@ -23,8 +23,9 @@ Most players use Epic Seven on **Steam** or **STOVE**. Keep **Control mode →
 Background** (the default for new settings), select the game window and press
 **Start Refresh**. Clicks go to the game window directly and frames are read
 from it, so your pointer is never moved and other windows may cover the game.
-The game runs as administrator, so Start offers the administrator restart the
-first time; accept it and press Start again. You can keep using the PC: input
+The app always opens as administrator, because the game runs as administrator
+and Windows blocks normal apps from controlling it. Windows asks for permission
+each time you open the app; choose Yes. You can keep using the PC: input
 waits while the pointer moves over the game, and a red line counts down to an
 automatic stop if it stays there. Park the pointer elsewhere or on the taskbar.
 Don't minimize or resize the game during a run. Only one Epic Seven window may
@@ -95,15 +96,12 @@ Shop scrolling uses a short upward mouse drag. The same checkbox adds small
 position and timing variations while keeping the vertical travel consistent.
 Stop or lost focus releases the drag button immediately. Begin with a small
 supervised run to verify the new drag reaches the bottom shop items.
-Open the app normally. If the selected game or emulator runs as administrator,
-**Start Refresh** offers to restart the app through Windows' administrator prompt.
-Choose Yes and accept Windows' prompt. Settings are saved first; after reopening,
-select your game and press Start Refresh again. Restarting does not start a session.
-Cancelling the prompt leaves the original app open without sending Mouse input;
-press Start Refresh to retry. You can also right-click the EXE and choose **Run as
-administrator**. The permission check happens before bringing the game forward.
-ADB and non-elevated games do not need this restart. The app checks the selected
-process rather than assuming every STOVE installation runs as administrator.
+The app always opens as administrator (Windows asks each time you open it), so
+games and emulators that run as administrator need no extra restart. If an older
+copy or a source run is not elevated, **Start Refresh** offers to save settings and
+restart through Windows' administrator prompt; after reopening, select your game
+and press Start Refresh again. The permission check happens before bringing the
+game forward.
 Start from the English home screen or an already open Secret Shop. If no home
 controls are recognized, Mouse mode can click the game center once, wait briefly,
 then find the Secret Shop icon. No saved wallpaper is required. Animation,
