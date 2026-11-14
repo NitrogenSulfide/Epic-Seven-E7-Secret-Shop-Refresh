@@ -31,6 +31,20 @@ automatic stop if it stays there. Park the pointer elsewhere or on the taskbar.
 Don't minimize or resize the game during a run. Only one Epic Seven window may
 be open.
 
+**Tips for a smooth Background run**
+
+- **Two monitors work best:** game on one, everything else on the other.
+- **One monitor:** leave the game open behind your other windows. Covering it is
+  fine, but **never minimize it**; a minimized game stops drawing and the run stops.
+- Keep your pointer off the game window (park it on the other monitor or the
+  taskbar). A pointer moving over the game pauses input.
+- Start from the home screen or an open Secret Shop, with no Refresh or Buy dialog
+  left open.
+- Don't resize the game, switch it to or from fullscreen, or open a second Epic
+  Seven window during a run.
+- Keep the PC awake: don't let it sleep or lock during a run.
+- Try a small budget first. The Stop key (default `` ` ``) works from any window.
+
 For an emulator, including Google Play Games Developer Emulator, use **Mouse**
 (it takes over your pointer) or the optional **ADB** setup below; when Background
 finds one of those, its banner offers **Switch to Mouse**.

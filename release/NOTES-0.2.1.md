@@ -12,6 +12,20 @@ the compact tracker shows that input is paused and counts down to the automatic 
 This is the first published 0.2 release and includes everything below, which was
 tagged as 0.2.0 but not released on its own.
 
+**Tips for a smooth Background run**
+
+- **Two monitors work best:** game on one, everything else on the other.
+- **One monitor:** leave the game open behind your other windows. Covering it is
+  fine, but **never minimize it**; a minimized game stops drawing and the run stops.
+- Keep your pointer off the game window (park it on the other monitor or the
+  taskbar). A pointer moving over the game pauses input.
+- Start from the home screen or an open Secret Shop, with no Refresh or Buy dialog
+  left open.
+- Don't resize the game, switch it to or from fullscreen, or open a second Epic
+  Seven window during a run.
+- Keep the PC awake: don't let it sleep or lock during a run.
+- Try a small budget first. The Stop key (default `` ` ``) works from any window.
+
 **Background mode** is a new control mode for Epic Seven on **Steam**, on
 Windows 11 and on Linux (Proton). It sends clicks to the game window directly and
 reads frames from the window itself, so your mouse pointer and keyboard focus are
