@@ -334,6 +334,20 @@ def currency_button(result, boxes, item_name):
     raise UnclearShopRow(f'The {item_name} name was recognized, but its price and Buy button could not be verified on the same row. Stopped before scrolling or refreshing.')
 
 
+def row_dimmed(rgb, center):
+    """True when the shop row whose Buy button is centred at `center` has a
+    greyed-out name, as the game draws an item already bought, while the rest
+    of the list is still bright (so a dimming overlay never counts). Measured
+    on Windows 11 STOVE, 2026-11-14: a bought Covenant name peaks at 139, names
+    for sale at 245-255. A name band cut off by the list edge is not judged."""
+    top, bottom = round(center-80), round(center-20)
+    if top < 110 or bottom > 1080:
+        return False
+    name = rgb[top:bottom,1030:1480].max()
+    page = rgb[110:1080,1030:1480].max()
+    return int(name) < 190 and int(page) >= 230
+
+
 def green_buttons(rgb, region, *, max_width=450):
     left,top,right,bottom = region
     hsv = cv2.cvtColor(rgb[top:bottom,left:right],cv2.COLOR_RGB2HSV)
@@ -725,6 +739,11 @@ class ObservedShopFlow:
             if box is None:
                 return None
             method = 'name-price'
+        if row_dimmed(self._rgb,(box[1]+box[3])/2):
+            # The stock inset can be unreadable; a greyed row is bought already.
+            if not getattr(self,'_quiet_items',False):
+                print(f'Navigation: The {item_name} row is greyed out (already bought); skipping it.',flush=True)
+            return None
         self._item = template
         self._item_name = item_name
         self._item_button = box

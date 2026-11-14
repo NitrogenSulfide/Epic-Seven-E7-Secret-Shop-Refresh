@@ -47,6 +47,11 @@ drags once more if it did not. If it still did not, it drags the other way (a sh
 left scrolled to the bottom then shows its top rows), and if the list never moves the
 run stops before Refresh. A drag spends nothing.
 
+**Fix for items you already bought before starting.** If you bought a Covenant or
+Mystic from the current shop by hand and then started a run, the app could try to buy
+it again and stop at the Buy dialog. It now also recognizes the greyed-out row the
+game shows for a bought item and skips it.
+
 **Tap delay is now at least 0.3 seconds**, the default. Lower values, including ones
 saved by older versions, are raised to 0.3, because the game ignores faster clicks.
 

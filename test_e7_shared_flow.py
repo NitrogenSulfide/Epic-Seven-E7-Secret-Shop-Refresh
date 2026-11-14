@@ -76,6 +76,11 @@ class SharedFlowTests(unittest.TestCase):
             if screen=='shop' and state['page']==2:
                 # The scrolled list shows other rows; keep item and Buy areas.
                 rgb=rgb.copy();rgb[110:1080,1330:1480]=np.clip(rgb[110:1080,1330:1480].astype(np.int16)+60,0,255).astype(np.uint8)
+            if screen=='shop' and items and state.get('name_text'):
+                # Item names as the game draws them: white, greyed once bought.
+                rgb=rgb.copy()
+                for name,_,_,y in ITEM_ROWS:
+                    rgb[y:y+30,1040:1300]=135 if name in state['bought'] else 255
             if screen=='shop' and items:
                 for name,_,_,y in ITEM_ROWS:
                     if name in state['bought'] and not state.get('keep_purchased_controls'):
@@ -295,6 +300,26 @@ class SharedFlowTests(unittest.TestCase):
                     self.assertEqual(state['refreshes'],1)
                     self.assertEqual(sum(event[0]=='buy' for event in state['events']),sum(expected))
                     self.assertEqual(app.storage.getTotalCost(),sum(price*count for (_,_,price,_),count in zip(ITEM_ROWS,expected)))
+
+    def test_prebought_row_greyed_out_is_skipped_when_its_stock_is_unreadable(self):
+        # Reported 2026-11-14 (W11 STOVE): a Covenant row bought before the
+        # session kept its icon and green Buy button, the 0/1 inset was not
+        # read, and the run clicked Buy and stopped at the confirmation.
+        names=('Covenant bookmark','Mystic medal')
+        for mode in ('adb','mouse-google','mouse-stove'):
+            for prebought in names:
+                with self.subTest(mode=mode,prebought=prebought):
+                    app,state=self.make_app(mode,items=True,offered=(names,names))
+                    app.budget=3;state['screen']='shop';state['bought'].add(prebought)
+                    state['keep_purchased_controls']=True;state['name_text']=True
+                    out=io.StringIO()
+                    with patch('e7_shop_flow.read_ui_text',return_value=dict(words=[])),patch('e7_shop_flow.time.sleep'),contextlib.redirect_stdout(out):
+                        app.refreshShop()
+                    expected=[1 if name==prebought else 2 for name in names]
+                    self.assertEqual([item.count for item in app.storage.inventory.values()],expected)
+                    self.assertEqual(state['refreshes'],1)
+                    self.assertIn(f'The {prebought} row is greyed out',out.getvalue())
+                    app._save_confirmation_failure.assert_not_called()
 
     def test_friendship_is_ignored_when_not_selected_even_in_mixed_lists(self):
         names=tuple(row[0] for row in ITEM_ROWS)

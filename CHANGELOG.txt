@@ -39,6 +39,8 @@
   ones saved by older versions, are raised to 0.3: faster clicking makes the
   game ignore clicks.
 • Copy report also hides short Windows user names in profile paths.
+• An item bought by hand before the run started could be tried again, stopping
+  at the Buy dialog. The app now also skips a row the game shows greyed out.
 
 0.2.3 · A refresh dialog the game ignored no longer stops the run
 
