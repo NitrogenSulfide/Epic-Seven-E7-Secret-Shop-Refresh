@@ -40,6 +40,11 @@ the first, the app looked for the second while the list was still moving and sto
 with "The selected item changed before Buy". It now waits for the list to come to
 rest after each purchase before looking for the next item.
 
+**Fix for skipped items in windowed mode.** A mouse crossing the game during the
+app's scroll could cancel it, so the second half of the shop was never checked and a
+wanted item there was skipped. The app now checks that the list actually moved and
+drags once more if it did not. A drag spends nothing.
+
 Settings and history carry over: extract **E7ShopRefresh-0.2.4.zip** into a fresh
 folder and copy `runtime/ShopRefreshGUI.ini`, `runtime/ADBconfig.ini` and
 `runtime/ShopRefreshHistory/` from your old folder if you want them.

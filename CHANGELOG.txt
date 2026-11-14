@@ -29,6 +29,10 @@
   for the second while the list was still moving and stopped with "The
   selected item changed before Buy". It now waits for the list to come to rest
   after each purchase before looking for the next item.
+• Windowed games: a mouse crossing the game during the app's scroll could
+  cancel it, so the second half of the shop was never checked and a wanted
+  item there was skipped. The app now checks that the list moved and drags
+  once more if it did not. A drag spends nothing.
 
 0.2.3 · A refresh dialog the game ignored no longer stops the run
 

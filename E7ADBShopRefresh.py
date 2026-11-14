@@ -14,7 +14,7 @@ import configparser
 import json
 import math
 from e7_shop_navigation import create_navigator, NavigationSetupRequired, prepare_references
-from e7_shop_flow import ObservedShopFlow, UnclearShopRow
+from e7_shop_flow import ObservedShopFlow, UnclearShopRow, list_view, LIST_MOVED
 from e7_mouse_confirmation import read_confirmation_text,read_ui_text
 from e7_native_mouse import MouseStopped
 from e7_frame import normalize_game_frame
@@ -270,6 +270,13 @@ class E7ADBShopRefresh(ObservedShopFlow):
         settled = self._settled_screenshot(1, 'purchase settle')
         return screenshot if settled is None else settled
 
+    def _scroll_missed(self, page_one):
+        """True when the list still shows page one after a drag (fast transports)."""
+        current = getattr(self, '_rgb', None)
+        if page_one is None or current is None or not self.loop_active:
+            return False
+        return float(np.mean(np.abs(list_view(current)-list_view(page_one)))) < LIST_MOVED
+
     def refreshShop(self):
         if not self.clickShop():
             return
@@ -320,6 +327,13 @@ class E7ADBShopRefresh(ObservedShopFlow):
             self.swipe(x1+xoff,y1+yoff,x1+xoff,y2+yoff)
             #wait for action to complete
             screenshot = self._settled_screenshot(1, 'scroll settle', changed_from=page_one)
+            if self._scroll_missed(page_one):
+                # A pointer crossing a windowed game can cancel the drag;
+                # page two would then be page one again and its items missed.
+                print('Navigation: The list did not scroll; dragging once more.', flush=True)
+                xoff, yoff = self.generateSwipeOffset()
+                self.swipe(x1+xoff,y1+yoff,x1+xoff,y2+yoff)
+                screenshot = self._settled_screenshot(1, 'scroll retry settle', changed_from=page_one)
 
             if not self.loop_active: break
             #look at shop (page 2)

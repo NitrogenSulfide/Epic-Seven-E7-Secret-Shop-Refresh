@@ -35,6 +35,13 @@ def shop():
     return np.full((1080,1920,3),30,dtype=np.uint8)
 
 
+def scrolled(frame=None):
+    """The shop after a drag: the item list shows other rows."""
+    frame = shop() if frame is None else frame.copy()
+    frame[110:1080,760:1480] = 60
+    return frame
+
+
 def dialog(operation='refresh',centered=False):
     frame = shop()
     frame[300:920,550:1400] = 90
@@ -1518,9 +1525,9 @@ class NativeEngineTests(unittest.TestCase):
 
     def test_shared_loop_buys_both_currencies_before_drag_and_refresh(self):
         app=self.make_engine();self.add_real_currencies(app);app.budget=3
-        bought=set();pending=[None];stage=['shop'];events=[]
+        bought=set();pending=[None];stage=['shop'];events=[];dragged=[False]
         def scene():
-            frame=shop()
+            frame=scrolled() if dragged[0] else shop()
             for name,top in (('Covenant bookmark',220),('Mystic medal',650)):
                 if name not in bought:frame[top:top+80,1550:1810]=(20,110,40)
             return frame
@@ -1546,7 +1553,8 @@ class NativeEngineTests(unittest.TestCase):
             else:
                 self.assertEqual((x,y),(1165,765))
                 bought.add(pending[0]);stage[0]='shop';events.append('confirm '+pending[0])
-        app.mouse.click.side_effect=click;app.mouse.drag.side_effect=lambda *args,**kw:events.append('drag')
+        def drag(*args,**kw):dragged[0]=True;events.append('drag')
+        app.mouse.click.side_effect=click;app.mouse.drag.side_effect=drag
         def refresh():events.append('refresh');app.loop_active=False;return True
         app.clickRefresh=Mock(side_effect=refresh)
         with patch('e7_mouse_refresh.time.sleep'),patch.object(adb_engine.subprocess,'run') as adb:
@@ -1568,7 +1576,7 @@ class NativeEngineTests(unittest.TestCase):
     def test_currencies_revealed_by_drag_are_bought_before_refresh(self):
         app=self.make_engine();self.add_real_currencies(app);app.budget=3
         exposed=[False];events=[]
-        page=shop();page[220:300,1550:1810]=(20,110,40);page[650:730,1550:1810]=(20,110,40)
+        page=scrolled();page[220:300,1550:1810]=(20,110,40);page[650:730,1550:1810]=(20,110,40)
         app.mouse.screenshot.side_effect=lambda:Image.fromarray(page if exposed[0] else shop())
         self.ui_ocr.side_effect=lambda rgb,region,**kwargs:dict(words=(currency_words('Covenant bookmark')+currency_words('Mystic medal',430)) if exposed[0] else [])
         def drag(*args,**kw):exposed[0]=True;events.append('drag')
@@ -1607,13 +1615,31 @@ class NativeEngineTests(unittest.TestCase):
             app.refreshShop()
         self.assertEqual(events[:2],[('Covenant bookmark',260),('Mystic medal',690)])
 
+    def test_a_drag_the_game_cancelled_is_sent_once_more_before_page_two(self):
+        # Orlando 2026-11-14, windowed: a pointer crossing the game cancelled
+        # the drag, page two was page one again and its Friendship was missed.
+        app=self.make_engine();self.add_real_currencies(app);app.budget=3
+        drags=[0];events=[]
+        page=scrolled();page[650:730,1550:1810]=(20,110,40)
+        app.mouse.screenshot.side_effect=lambda:Image.fromarray(page if drags[0]>=2 else shop())
+        self.ui_ocr.side_effect=lambda rgb,region,**kwargs:dict(words=currency_words('Mystic medal',430) if drags[0]>=2 else [])
+        def drag(*args,**kw):drags[0]+=1;events.append('drag')
+        def buy(pos):events.append('buy '+app._item_name);return True
+        def refresh():events.append('refresh');app.loop_active=False;return True
+        app.mouse.drag.side_effect=drag;app.clickBuy=Mock(side_effect=buy);app.clickRefresh=Mock(side_effect=refresh)
+        with patch('e7_mouse_refresh.time.sleep'),contextlib.redirect_stdout(io.StringIO()) as output:
+            app.refreshShop()
+        self.assertEqual(events,['drag','drag','buy Mystic medal','refresh'])
+        self.assertIn('The list did not scroll; dragging once more.',output.getvalue())
+
     def test_shared_loop_enforces_four_refreshes_for_twelve_skystones(self):
         app = self.make_engine()
-        state = ['shop']
-        def screenshot(): return Image.fromarray(dialog() if state[0]=='confirm' else shop())
-        def click(x,y): state[0] = 'confirm' if y>900 else 'shop'
+        state = ['shop']; dragged = [False]
+        def screenshot(): return Image.fromarray(dialog() if state[0]=='confirm' else scrolled() if dragged[0] else shop())
+        def click(x,y): state[0] = 'confirm' if y>900 else 'shop'; dragged[0] = False
         app.mouse.screenshot.side_effect = screenshot
         app.mouse.click.side_effect = click
+        app.mouse.drag.side_effect = lambda *args,**kw: dragged.__setitem__(0,True)
         with patch.object(adb_engine.time,'sleep'),patch.object(adb_engine.subprocess,'run') as adb, \
                 contextlib.redirect_stdout(io.StringIO()) as output:
             app.refreshShop()
