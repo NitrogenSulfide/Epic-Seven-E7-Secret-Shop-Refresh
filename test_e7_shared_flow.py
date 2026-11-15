@@ -435,4 +435,40 @@ class RowRecheckTests(unittest.TestCase):
         with self.assertRaises(MouseStopped):app._find_item_rechecked('first','template')
         app.takeScreenshot.assert_not_called()
 
+    def shop_recheck_app(self,visible,fast=True):
+        app=E7ADBShopRefresh.__new__(E7ADBShopRefresh)
+        app.loop_active,app.fast_waits=True,fast
+        app.navigation=Mock();app.navigation.shop_visible=Mock(side_effect=lambda frame:frame in visible)
+        app._settled_screenshot=Mock(side_effect=['fresh1','fresh2'])
+        app.takeScreenshot=Mock(side_effect=['fresh1','fresh2'])
+        app._wait_observed=Mock()
+        return app
+
+    def test_unverified_shop_frame_is_reread_before_the_page_scan(self):
+        # Windows windowed 2026-11-14: a pointer pause during the page-two
+        # scroll settle left one frame without the shop title (title=0.199).
+        app=self.shop_recheck_app({'fresh1'})
+        with patch('builtins.print') as printed:
+            self.assertEqual(app._shop_rechecked('first'),'fresh1')
+        self.assertIn('checking again',printed.call_args.args[0])
+        app._settled_screenshot.assert_called_once_with(1,'shop recheck')
+        app.navigation.require_shop.assert_not_called()
+        app=self.shop_recheck_app({'first'})
+        self.assertEqual(app._shop_rechecked('first'),'first')
+        app._settled_screenshot.assert_not_called()
+        app=self.shop_recheck_app({'fresh2'},fast=False)
+        with patch('builtins.print'):self.assertEqual(app._shop_rechecked('first'),'fresh2')
+        self.assertEqual(app._wait_observed.call_count,2)
+
+    def test_shop_missing_on_every_reread_still_stops_with_details(self):
+        app=self.shop_recheck_app(set())
+        app.navigation.require_shop=Mock(side_effect=RuntimeError('Secret Shop screen could not be verified (test).'))
+        with patch('builtins.print'),self.assertRaisesRegex(RuntimeError,'could not be verified'):
+            app._shop_rechecked('first')
+        self.assertEqual(app._settled_screenshot.call_count,2)
+        app.navigation.require_shop.assert_called_once_with('fresh2')
+        app=self.shop_recheck_app(set());app._settled_screenshot=Mock(return_value=None)
+        with patch('builtins.print'):self.assertIsNone(app._shop_rechecked('first'))
+        app.navigation.require_shop.assert_not_called()
+
 if __name__=='__main__':unittest.main()

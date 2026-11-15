@@ -268,6 +268,32 @@ class E7ADBShopRefresh(ObservedShopFlow):
                 return None
             screenshot = self.takeScreenshot()
 
+    def _shop_rechecked(self, screenshot, attempts=3):
+        """Return a frame showing the verified shop, re-reading before a stop.
+
+        A settle that a pointer pause interrupted (Windows Steam/STOVE
+        windowed, 2026-11-14) handed back one frame without the shop title
+        right after the page-two drag. No input has been sent since that
+        frame, so look again from fresh captures; stop with the usual details
+        only when none of them shows the verified shop.
+        """
+        for attempt in range(attempts):
+            if self.navigation.shop_visible(screenshot):
+                return screenshot
+            if attempt == attempts-1 or not self.loop_active:
+                break
+            if attempt == 0:
+                print('Navigation: The shop was not recognized on this frame; waiting and checking again.', flush=True)
+            if self.fast_waits:
+                screenshot = self._settled_screenshot(1, 'shop recheck')
+            else:
+                self._wait_observed(.4, 'shop recheck')
+                screenshot = self.takeScreenshot() if self.loop_active else None
+            if screenshot is None or not self.loop_active:
+                return None
+        self.navigation.require_shop(screenshot)
+        return screenshot
+
     def _after_purchase(self, screenshot):
         """Search the next wanted item only on a list at rest.
 
@@ -316,7 +342,8 @@ class E7ADBShopRefresh(ObservedShopFlow):
             if not self.loop_active: break
             #look at shop (page 1)
             self._scan_page = 1
-            self.navigation.require_shop(screenshot)
+            screenshot = self._shop_rechecked(screenshot)
+            if screenshot is None: break
             #print(len(self.storage.inventory.items()))
             for key, value in self.storage.inventory.items():
                 pos = self._find_item_rechecked(screenshot, value.image)
@@ -363,7 +390,8 @@ class E7ADBShopRefresh(ObservedShopFlow):
             if not self.loop_active: break
             #look at shop (page 2)
             self._scan_page = 2
-            self.navigation.require_shop(screenshot)
+            screenshot = self._shop_rechecked(screenshot)
+            if screenshot is None: break
             for key, value in self.storage.inventory.items():
                 if key in brought:
                     continue
