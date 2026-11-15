@@ -903,9 +903,16 @@ class ObservedShopFlow:
                     saved = self._save_confirmation_failure(operation,before,validated=prior)
                     detail = ' A private dialog crop was saved for diagnosis.' if saved else ''
                     raise MouseStopped('The confirmation changed while being read. No confirmation click sent.'+detail)
+                # From here the game may charge. Until the shop is seen again
+                # the session record counts this confirmation as unverified.
+                # Set it before the click: a Stop during the click itself can
+                # raise after the input went out. Only a recheck is known to
+                # come before any input.
+                self._confirm_sent = (operation,self._item_name)
                 try:
                     self._click_button(current, action=operation+' confirm')
                 except MouseRecheckRequired:
+                    self._confirm_sent = None
                     if not self.loop_active:
                         return False
                     visibility_rechecks += 1
@@ -943,6 +950,7 @@ class ObservedShopFlow:
                 if self._capture_resumed:
                     deadline = time.monotonic()+5
                 if confirmation_button(self._rgb,operation,before) is None and self.navigation.shop_visible(frame):
+                    self._confirm_sent = None  # seen; the caller counts it
                     return True
                 self._trace_retry()
             if not self.loop_active:

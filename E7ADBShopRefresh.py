@@ -183,7 +183,10 @@ class E7ADBShopRefresh(ObservedShopFlow):
     def record_session(self, outcome, reason='', duration=None):
         if getattr(self, '_session_recorded', False):
             return
-        trace = getattr(self, 'input_trace', None)
+        note = self._count_sent_confirmation()
+        if note:
+            reason = (reason+' '+note).strip()
+        trace =getattr(self, 'input_trace', None)
         if trace is not None and trace.enabled:
             trace.finish(sum(item.count for item in self.storage.inventory.values()),
                          'final scan' if outcome == 'completed' else 'interrupted')
@@ -195,6 +198,32 @@ class E7ADBShopRefresh(ObservedShopFlow):
             duration = max(0, time.monotonic() - getattr(self, '_session_clock', time.monotonic()))
         self.storage.writeToCSV(duration=duration, skystone_spent=self.refresh_count * 3, session=metadata)
         self._session_recorded = True
+
+    def _count_sent_confirmation(self):
+        """Count a Confirm click that was sent but whose result was never seen.
+
+        A Stop, or a shop that did not return, right after the Confirm click
+        left the refresh or purchase out of the totals although the game may
+        have charged it. Count it, so the record never shows less than was
+        spent, and say that it could not be verified.
+        """
+        sent, self._confirm_sent = getattr(self, '_confirm_sent', None), None
+        if sent is None:
+            return ''
+        operation, item_name = sent
+        if operation == 'refresh':
+            self.refresh_count += 1
+            what = 'refresh'
+        else:
+            item = self.storage.inventory.get(item_name)
+            if item is None:
+                return ''
+            item.count += 1
+            what = item_name+' purchase'
+        note = f'A Confirm click for the last {what} may have reached the game just before stopping. It is counted, but its result was not seen; check it in the game.'
+        print('Navigation: '+note, flush=True)
+        self.reportLiveStats()
+        return note
 
     #threads
     def checkKeyPress(self):
@@ -277,6 +306,8 @@ class E7ADBShopRefresh(ObservedShopFlow):
         frame, so look again from fresh captures; stop with the usual details
         only when none of them shows the verified shop.
         """
+        if screenshot is None:
+            return None
         for attempt in range(attempts):
             if self.navigation.shop_visible(screenshot):
                 return screenshot
@@ -366,15 +397,19 @@ class E7ADBShopRefresh(ObservedShopFlow):
             page_one = page_one.copy() if self.fast_waits and page_one is not None else None
             self.swipe(x1+xoff,y1+yoff,x1+xoff,y2+yoff)
             #wait for action to complete
-            screenshot = self._settled_screenshot(1, 'scroll settle', changed_from=page_one)
-            if self._scroll_missed(page_one):
+            # Judge the scroll only on a frame verified as the shop. A pointer
+            # pause can both cancel the drag and hand back one odd frame; that
+            # frame differs from page one and would pass for a scrolled list,
+            # so page two would be page one again and Refresh would follow.
+            screenshot = self._shop_rechecked(self._settled_screenshot(1, 'scroll settle', changed_from=page_one))
+            if screenshot is not None and self._scroll_missed(page_one):
                 # A pointer crossing a windowed game can cancel the drag;
                 # page two would then be page one again and its items missed.
                 print('Navigation: The list did not scroll; dragging once more.', flush=True)
                 xoff, yoff = self.generateSwipeOffset()
                 self.swipe(x1+xoff,y1+yoff,x1+xoff,y2+yoff)
-                screenshot = self._settled_screenshot(1, 'scroll retry settle', changed_from=page_one)
-                if self._scroll_missed(page_one):
+                screenshot = self._shop_rechecked(self._settled_screenshot(1, 'scroll retry settle', changed_from=page_one))
+                if screenshot is not None and self._scroll_missed(page_one):
                     # Still unmoved: either the list already sat at the bottom
                     # (shop left scrolled) or the game ignores drags. Dragging
                     # up tells them apart; from the bottom it reveals the top
@@ -382,16 +417,14 @@ class E7ADBShopRefresh(ObservedShopFlow):
                     print('Navigation: The list still did not move; dragging the other way.', flush=True)
                     xoff, yoff = self.generateSwipeOffset()
                     self.swipe(x1+xoff,y2+yoff,x1+xoff,y1+yoff)
-                    screenshot = self._settled_screenshot(1, 'scroll reverse settle', changed_from=page_one)
-                    if self._scroll_missed(page_one):
+                    screenshot = self._shop_rechecked(self._settled_screenshot(1, 'scroll reverse settle', changed_from=page_one))
+                    if screenshot is not None and self._scroll_missed(page_one):
                         raise MouseStopped('The shop list did not move after three drags, so not every item '
                                            'could be checked. Stopped before Refresh; nothing was spent on this page.')
 
-            if not self.loop_active: break
-            #look at shop (page 2)
+            if screenshot is None or not self.loop_active: break
+            #look at shop (page 2); the frame was verified as the shop above
             self._scan_page = 2
-            screenshot = self._shop_rechecked(screenshot)
-            if screenshot is None: break
             for key, value in self.storage.inventory.items():
                 if key in brought:
                     continue
@@ -426,7 +459,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
         self.end_of_refresh = True
         self.loop_active = False
         self.reportLiveStats()
-        completed = self.budget is not None and self.refresh_count >= self.budget // 3
+        completed =self.budget is not None and self.refresh_count >= self.budget // 3
         if completed: print('100%')
         duration = time.time()-start_time
         self.record_session('completed' if completed else 'stopped',

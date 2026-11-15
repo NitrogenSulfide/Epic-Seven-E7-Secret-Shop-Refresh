@@ -1262,6 +1262,50 @@ class NativeEngineTests(unittest.TestCase):
             app._confirm('refresh',shop())
         self.assertEqual(app.mouse.click.call_count,2)
 
+    def test_confirmation_sent_before_a_stop_is_counted_as_unverified(self):
+        # The game may have charged a Confirm whose result was never seen; the
+        # record must not show less than was spent.
+        app,clock=self._paused_confirm_app([dialog()]*60,pause_at=0)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                self.assertRaisesRegex(MouseStopped,'shop did not return after confirmation'):
+            app._confirm('refresh',shop())
+        self.assertEqual(app._confirm_sent,('refresh',None))
+        app.storage.writeToCSV=Mock()
+        with patch('builtins.print') as printed:
+            app.record_session('failed','The shop did not return after confirmation.')
+        record=app.storage.writeToCSV.call_args.kwargs
+        self.assertEqual((app.refresh_count,record['skystone_spent']),(1,3))
+        self.assertIn('It is counted, but its result was not seen',record['session']['Reason'])
+        self.assertTrue(any('E7GUI_STATS' in str(c.args[0]) for c in printed.call_args_list))
+        # A purchase is counted the same way, once.
+        app=self.make_engine();self.add_real_currencies(app);app.storage.writeToCSV=Mock()
+        app._confirm_sent=('buy','Covenant bookmark')
+        with patch('builtins.print'):
+            app.record_session('stopped','Stop key pressed.');app.record_session('stopped','again')
+        self.assertEqual(app.storage.inventory['Covenant bookmark'].count,1)
+        self.assertEqual(app.refresh_count,0)
+        # A confirmation whose shop return was seen leaves nothing pending, and nothing sent counts nothing.
+        app,clock=self._paused_confirm_app([dialog()]*4+[shop()]*10,pause_at=0)
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)):
+            self.assertTrue(app._confirm('refresh',shop()))
+        self.assertIsNone(app._confirm_sent)
+        self.assertEqual(app._count_sent_confirmation(),'')
+        self.assertEqual(app.refresh_count,0)
+        # Codex review: a Stop during the click can raise after the input went out, so that counts too.
+        app,clock=self._paused_confirm_app([dialog()]*60,pause_at=0)
+        app.mouse.click.side_effect=MouseStopped('Mouse session stopped.')
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                self.assertRaisesRegex(MouseStopped,'session stopped'):
+            app._confirm('refresh',shop())
+        self.assertEqual(app._confirm_sent,('refresh',None))
+        # A recheck comes before any input: nothing is pending.
+        app,clock=self._paused_confirm_app([dialog()]*60,pause_at=0)
+        app.mouse.click.side_effect=MouseRecheckRequired('recheck')
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                patch('builtins.print'),self.assertRaisesRegex(MouseStopped,'No confirmation click sent'):
+            app._confirm('refresh',shop())
+        self.assertIsNone(app._confirm_sent)
+
     def test_refresh_waits_once_after_a_scrolled_purchase(self):
         app=self.make_engine();app._bought_scrolled=True
         waits=[]
@@ -1830,6 +1874,32 @@ class NativeEngineTests(unittest.TestCase):
         app.mouse.screenshot.side_effect=lambda:Image.fromarray(page if drags[0]>=2 else shop())
         self.ui_ocr.side_effect=lambda rgb,region,**kwargs:dict(words=currency_words('Mystic medal',430) if drags[0]>=2 else [])
         def drag(*args,**kw):drags[0]+=1;events.append('drag')
+        def buy(pos):events.append('buy '+app._item_name);return True
+        def refresh():events.append('refresh');app.loop_active=False;return True
+        app.mouse.drag.side_effect=drag;app.clickBuy=Mock(side_effect=buy);app.clickRefresh=Mock(side_effect=refresh)
+        with patch('e7_mouse_refresh.time.sleep'),contextlib.redirect_stdout(io.StringIO()) as output:
+            app.refreshShop()
+        self.assertEqual(events,['drag','drag','buy Mystic medal','refresh'])
+        self.assertIn('The list did not scroll; dragging once more.',output.getvalue())
+
+    def test_odd_frame_after_a_cancelled_drag_does_not_pass_for_a_scrolled_list(self):
+        # A pointer pause can cancel the drag and hand back one frame that is
+        # not the shop. That frame differs from page one; judged as it is, the
+        # list would count as scrolled and Refresh would follow an unchecked
+        # page two. The scroll is judged on the verified shop frame instead.
+        app=self.make_engine();self.add_real_currencies(app);app.budget=3
+        drags=[0];events=[];odd=[False]
+        page=scrolled();page[650:730,1550:1810]=(20,110,40)
+        blank=np.full((1080,1920,3),200,dtype=np.uint8)
+        app.mouse.screenshot.side_effect=lambda:Image.fromarray(blank if odd[0] else page if drags[0]>=2 else shop())
+        def visible(frame):
+            if frame.mean()>150:
+                odd[0]=False;return False
+            return True
+        app.navigation.shop_visible.side_effect=visible
+        self.ui_ocr.side_effect=lambda rgb,region,**kwargs:dict(words=currency_words('Mystic medal',430) if drags[0]>=2 else [])
+        def drag(*args,**kw):
+            drags[0]+=1;events.append('drag');odd[0]=drags[0]==1
         def buy(pos):events.append('buy '+app._item_name);return True
         def refresh():events.append('refresh');app.loop_active=False;return True
         app.mouse.drag.side_effect=drag;app.clickBuy=Mock(side_effect=buy);app.clickRefresh=Mock(side_effect=refresh)
