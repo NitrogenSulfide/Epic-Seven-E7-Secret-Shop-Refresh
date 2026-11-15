@@ -19,3 +19,13 @@ checking again") are expected and not failures.
 
 Optional after all five pass: one Mouse-mode run on STOVE (nothing may cover
 the game), and one run with an item bought by hand before starting.
+
+Optional runs, 2026-11-14 (Orlando, STOVE windowed 1119×629, build 0.2.4i / 504a995):
+
+- Mouse mode: bought Mystic and Friendship, then stopped at the Covenant Buy
+  dialog with "The confirmation kept changing while being read" (no click).
+- Background mode: same stop on the same Covenant dialog.
+- Cause: the dialog differed between every two captures 70 ms apart for the
+  whole 5 s, although its button never moved. Fixed in be36ea7 (a button
+  held in place for 1 s counts as settled; text still checked). Rerun both
+  with 0.2.4j (be36ea7) pending.
