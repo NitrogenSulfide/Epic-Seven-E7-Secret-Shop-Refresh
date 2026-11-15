@@ -45,5 +45,12 @@ and no Stop key:
 
 This covers the optional Mouse rerun and confirms the Covenant Buy dialog
 now reaches Confirm on STOVE windowed (9 Covenant across the Background runs,
-11 in all). Still open: maximized STOVE (1920×1009) stops at the shop title
-check, safely, with nothing spent; no full 300-Skystone run yet.
+11 in all). 
+Full run, 2026-11-15 01:08 (Orlando, 0.2.4l, Background, maximized 1920×1009,
+the size that earlier stopped at the shop title check): 100 refreshes /
+300 Skystones in 8 min 40 s, budget reached, no stop, no Stop key, no
+recovery messages; 3 Covenant and 1 Mystic (832,000 gold, matching 3 × 184,000
++ 280,000). Shop title verified on the first look. Whether any Covenant or
+Mystic was skipped could only be judged by watching the game; none was
+reported. The title match at this size is still marginal (0.873 against 0.90
+in the earlier stop), so maximized STOVE stays a known risk, not a fix.
