@@ -7,7 +7,7 @@ in the Activity tab matches what the game shows.
 
 | # | Platform | Client | Window | Result | Notes |
 |---|----------|--------|--------|--------|-------|
-| 1 | Linux Mint | Steam | windowed (as used on 2026-11-14) | | |
+| 1 | Linux Mint | Steam | windowed (as used on 2026-11-14) | Pass (short) | 2026-11-14: 20 refreshes / 60 Skystones (low on Skystones), stopped by hand; no stop, one expected "item moved before Buy" recheck; 15 Friendship bought |
 | 2 | Windows 11 | Steam | fullscreen | | |
 | 3 | Windows 11 | Steam | windowed | | |
 | 4 | Windows 11 | STOVE | fullscreen | | |
