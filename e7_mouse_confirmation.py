@@ -240,6 +240,10 @@ def confirmation_matches(text,operation,item_name=None):
     others = [prefix for prefix,_,_ in expected.values() if prefix != item]
     if re.search(r'\b(?:'+'|'.join(others)+r'|refresh)\b',text):return False
     if not re.search(r'\b'+item+r'\s+'+noun+r'\b',text):return False
-    numbers=[re.sub(r'[, .\u00a0]','',number) for number in re.findall(r'\b\d[\d,.\u00a0]*\b',text)]
-    amounts=[number for number in numbers if int(number)>=1000]
-    return bool(amounts) and all(number==price for number in amounts)
+    # Compare amounts as numbers. Windows OCR can read the gold-coin icon
+    # beside the price as a leading 0 ("0184,000"; STOVE windowed Covenant
+    # dialog, 2026-11-14); a leading zero never changes the price, while any
+    # other extra digit still does and is rejected.
+    numbers=[int(re.sub(r'[, .\u00a0]','',number)) for number in re.findall(r'\b\d[\d,.\u00a0]*\b',text)]
+    amounts=[number for number in numbers if number>=1000]
+    return bool(amounts) and all(number==int(price) for number in amounts)

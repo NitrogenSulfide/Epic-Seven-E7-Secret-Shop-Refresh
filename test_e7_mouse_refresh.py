@@ -2184,6 +2184,14 @@ class NativeEngineTests(unittest.TestCase):
         self.assertTrue(confirmation_matches('Cancel Confirm Covenant Bookmark 184,000','buy','Covenant bookmark'))
         self.assertFalse(confirmation_matches('Cancel Confirm Mystic Medal 184,000','buy','Covenant bookmark'))
         self.assertFalse(confirmation_matches('Cancel Confirm Covenant Bookmark 280,000','buy','Covenant bookmark'))
+        # Windows OCR on the STOVE windowed Covenant dialog (Orlando, 2026-11-14)
+        # reads the gold coin as a leading 0. The price is unchanged; any other
+        # extra digit still changes it and is rejected.
+        self.assertTrue(confirmation_matches('would you like to purchase this product? cancel summon covenant bookmarks 0184,000 buy','buy','Covenant bookmark'))
+        self.assertTrue(confirmation_matches('Cancel Buy Mystic Medals 0280,000','buy','Mystic medal'))
+        for text in ('Cancel Buy Covenant Bookmarks 8184,000','Cancel Buy Covenant Bookmarks 1840,000',
+                     'Cancel Buy Covenant Bookmarks 0280,000','Cancel Buy Covenant Bookmarks 0184,000 0280,000'):
+            self.assertFalse(confirmation_matches(text,'buy','Covenant bookmark'),text)
 
 
 def cv_gray(rgb):
