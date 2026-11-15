@@ -29,3 +29,21 @@ Optional runs, 2026-11-14 (Orlando, STOVE windowed 1119×629, build 0.2.4i / 504
   whole 5 s, although its button never moved. Fixed in be36ea7 (a button
   held in place for 1 s counts as settled; text still checked). Rerun both
   with 0.2.4j (be36ea7) pending.
+
+Low-budget runs, 2026-11-14/15 (Orlando, build 0.2.4l / 27791e7, which has
+the be36ea7 confirm hold, the f9d4eaf verified-scroll check and the 27791e7
+numeric price compare). All eight reached their Skystone budget with no stop
+and no Stop key:
+
+- 23:50 Mouse: 13 refreshes / 39 Skystones; 1 Covenant.
+- 23:53 Background, 1778×1000 windowed: 13 / 39; 2 Covenant; one "list did
+  not scroll" redrag recovered.
+- 00:24, 00:28, 00:32, 00:40, 00:45 Background, STOVE 1119×629 windowed:
+  13 / 39, 33 / 99, 33 / 99, 33 / 99 and 32 / 96; 0, 1, 1, 1 and 2 Covenant;
+  one redrag recovered in each of the three 33-refresh runs.
+- 00:59 Background, 1122×631 windowed: 16 / 48; 3 Covenant.
+
+This covers the optional Mouse rerun and confirms the Covenant Buy dialog
+now reaches Confirm on STOVE windowed (9 Covenant across the Background runs,
+11 in all). Still open: maximized STOVE (1920×1009) stops at the shop title
+check, safely, with nothing spent; no full 300-Skystone run yet.
