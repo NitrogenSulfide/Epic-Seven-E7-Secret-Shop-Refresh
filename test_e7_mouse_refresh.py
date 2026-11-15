@@ -1168,8 +1168,8 @@ class NativeEngineTests(unittest.TestCase):
 
     def test_confirmation_that_never_settles_stops_without_confirm_click(self):
         import itertools
-        faded=dialog();faded[650:740,1040:1290]=(12,66,24)
-        frames=itertools.cycle((faded,dialog()))
+        grown=dialog();grown[740:762,1040:1290]=(20,110,40)  # bottom edge keeps moving
+        frames=itertools.cycle((grown,dialog()))
         app=self.make_engine();clock=itertools.count(0,.05)
         app.mouse.screenshot.side_effect=lambda:Image.fromarray(next(frames))
         with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
@@ -1177,6 +1177,51 @@ class NativeEngineTests(unittest.TestCase):
             app._confirm('refresh',shop())
         app.mouse.click.assert_not_called()
         self.assertIsNotNone(app._save_confirmation_failure.call_args.kwargs['validated'])
+
+    def test_confirmation_changing_in_place_is_clicked_after_holding_its_place(self):
+        # STOVE windowed 2026-11-14: the Covenant Buy dialog differed between
+        # every two captures for 5 s while its button never moved.
+        import itertools
+        faded=dialog();faded[650:740,1040:1290]=(12,66,24)  # same outline, other pixels
+        frames=itertools.cycle((faded,dialog()))
+        app=self.make_engine();clock=itertools.count(0,.05)
+        app.mouse.screenshot.side_effect=lambda:Image.fromarray(next(frames))
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                patch('builtins.print') as printed,self.assertRaisesRegex(MouseStopped,'shop did not return'):
+            app._confirm('refresh',shop())
+        self.assertEqual(app.mouse.click.call_args_list[0].args,(1165,695))  # one Confirm, on the held button
+        self.assertTrue(any('stays in place' in c.args[0] for c in printed.call_args_list))
+        # The text is still checked: a held button naming another action is never clicked.
+        app=self.make_engine();clock=itertools.count(0,.05);frames=itertools.cycle((faded,dialog()))
+        app.mouse.screenshot.side_effect=lambda:Image.fromarray(next(frames))
+        # First reads see the faded frame; the fresh read before the click sees the other one.
+        app.read_confirmation_text=lambda rgb:('Use Skystone to refresh? Cancel Confirm' if rgb[700,1100,1]==66
+                                              else 'Cancel Buy Mystic Medals 280,000')
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=lambda:next(clock)), \
+                patch('builtins.print'),self.assertRaisesRegex(MouseStopped,'changed while being read'):
+            app._confirm('refresh',shop())
+        app.mouse.click.assert_not_called()
+
+    def test_in_place_hold_restarts_when_the_button_disappears(self):
+        # Codex review: a dialog that vanished and came back must hold its place a full second again.
+        import itertools
+        faded=dialog();faded[650:740,1040:1290]=(12,66,24)
+        seq=[faded,dialog()]*6+[shop(),shop()]+[faded,dialog()]*40
+        app=self.make_engine();clock=itertools.count(0,.05);now=[0]
+        def monotonic():
+            now[0]=next(clock);return now[0]
+        captures=iter(seq);seen=[];clicked=[]
+        def capture():
+            frame=shop() if clicked else next(captures)  # the shop returns after the one Confirm
+            seen.append(now[0]);return Image.fromarray(frame)
+        app.mouse.screenshot.side_effect=capture
+        app.mouse.click.side_effect=lambda *a,**k:clicked.append(now[0])
+        with patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=monotonic), \
+                patch('builtins.print'):
+            self.assertTrue(app._confirm('refresh',shop()))
+        back=seen[14]  # first capture after the two dialog-free frames
+        self.assertEqual(len(clicked),1)
+        self.assertGreaterEqual(clicked[0]-back,1.0)
 
     def _paused_confirm_app(self,frames,pause_at):
         """Captures from `frames`; the pointer-pause counter rises at capture `pause_at`."""

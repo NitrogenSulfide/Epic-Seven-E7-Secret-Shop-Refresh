@@ -391,6 +391,7 @@ def confirmation_button(rgb, operation, before):
 
 
 BUTTON_SETTLED = 6  # mean change of the confirm button between two captures; ~19 mid fade-in, 0 at rest
+CONFIRM_IN_PLACE_SECONDS = 1.0  # a confirm button found in the same place this long counts as settled even while its pixels change
 
 
 def button_settled(prior, current, box):
@@ -830,6 +831,7 @@ class ObservedShopFlow:
         text_rejected = False
         changed = None
         visibility_rechecks = 0
+        in_place = None  # (button box, first time seen there) while it keeps changing in place
         while self.loop_active and time.monotonic()<deadline:
             self._poll_wait(operation+' dialog')
             if not self.loop_active:
@@ -837,10 +839,14 @@ class ObservedShopFlow:
             self.takeScreenshot()
             if self._capture_resumed:
                 deadline = time.monotonic()+5
+                in_place = None
             box = confirmation_button(self._rgb,operation,before)
-            if box is not None:
+            if box is None:
+                in_place = None  # the hold must be unbroken
+            else:
                 text = self.read_confirmation_text(self._rgb)
                 if not confirmation_matches(text,operation,self._item_name):
+                    in_place = None
                     # Buttons can become readable before the prompt finishes
                     # appearing. Re-capture within the same bounded wait; never
                     # weaken item/cost validation or reuse a rejected OCR result.
@@ -862,8 +868,25 @@ class ObservedShopFlow:
                 if not self.loop_active:
                     return False
                 current = confirmation_button(self._rgb,operation,before)
-                same_button = (current is not None and all(abs(a-b)<=8 for a,b in zip(current,box))
-                               and button_settled(prior,self._rgb,current))
+                placed = current is not None and all(abs(a-b)<=8 for a,b in zip(current,box))
+                same_button = placed and button_settled(prior,self._rgb,current)
+                if self._capture_resumed:
+                    in_place = None
+                elif placed and not same_button:
+                    # The STOVE windowed Covenant dialog (2026-11-14, Mouse and
+                    # Background) kept changing between captures 70 ms apart
+                    # for the whole 5 s although the button never moved. A
+                    # button held in one place for CONFIRM_IN_PLACE_SECONDS
+                    # counts as settled; the dialog text is still read from
+                    # this capture and must name the intended action.
+                    now = time.monotonic()
+                    if in_place is None or any(abs(a-b)>8 for a,b in zip(current,in_place[0])):
+                        in_place = (current,now)
+                    elif now-in_place[1] >= CONFIRM_IN_PLACE_SECONDS:
+                        print('Navigation: The confirmation keeps animating but stays in place; reading it before clicking.',flush=True)
+                        same_button = True
+                elif not placed:
+                    in_place = None
                 fresh_text = self.read_confirmation_text(self._rgb) if same_button else ''
                 if not self.loop_active:
                     return False
