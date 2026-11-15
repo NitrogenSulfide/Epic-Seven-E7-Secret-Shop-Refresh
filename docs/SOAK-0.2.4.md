@@ -11,7 +11,7 @@ in the Activity tab matches what the game shows.
 | 2 | Windows 11 | Steam | fullscreen | Pass (short) | 0.2.4h, 19:49: 16 refreshes / 48 Skystones, no stop; 1 Mystic, 10 Friendship |
 | 3 | Windows 11 | Steam | windowed | Pass (short) | 0.2.4h, 19:53 (1778×1000): 16 refreshes / 48 Skystones, no stop; one "list did not scroll" redrag and two pointer pauses recovered; 2 Covenant, 8 Friendship. A 19:50 start stopped because the pointer stayed on the game over 10 s (setup) |
 | 4 | Windows 11 | STOVE | fullscreen | Pass (short) | 0.2.4h, 19:58: 16 refreshes / 48 Skystones, no stop; 1 Covenant, 11 Friendship |
-| 5 | Windows 11 | STOVE | windowed | Pass on rerun (short); rerun with e6c179d build pending | 0.2.4h, 20:05 (1119×629): stopped at 0 refreshes, "Secret Shop screen could not be verified" (title 0.199) after a pointer pause during the page-two scroll settle; one-frame check, fixed in e6c179d (re-read). 20:08 rerun: 16 refreshes / 48 Skystones, no stop; 11 Friendship |
+| 5 | Windows 11 | STOVE | windowed | Pass (short) | 0.2.4h, 20:05 (1119×629): stopped at 0 refreshes, "Secret Shop screen could not be verified" (title 0.199) after a pointer pause during the page-two scroll settle; one-frame check, fixed in e6c179d (re-read). 20:08 rerun: 16 refreshes / 48 Skystones, no stop; 11 Friendship. 0.2.4i (504a995) 20:30 rerun: 16 refreshes / 48 Skystones, no stop, four pointer pauses recovered; 8 Friendship. The re-read path was not triggered in that run. A 20:27 start stopped at once with the game minimized (0×0, "window was resized"), as designed |
 
 On any stop: press Copy report and paste it, and keep the session log. The
 app's own wait-and-look-again messages ("waiting for the list to settle and
