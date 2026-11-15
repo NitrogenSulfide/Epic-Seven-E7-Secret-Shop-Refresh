@@ -67,6 +67,8 @@ Random timing never goes below 0.3 either.
 
 **Fewer stops from a single unlucky frame.** Each of these happens before any click, so waiting is safe: right before Buy the app looks up to three times, settling in between, before stopping; a frame where a fade or toast hides the shop title is read again; a Refresh button covered by a toast gets 5 seconds instead of 2.5; a momentarily blank game capture is taken again once.
 
+**Fixes found in testing.** A Confirm dialog with an animated glow no longer stops the run while its button stays put (its item and price are still checked). On STOVE, Windows OCR read the coin icon beside the Covenant price as an extra 0, and the dialog was rejected as the wrong price; prices are now compared as numbers. In windowed mode, a scroll cancelled by a passing pointer could be mistaken for a scrolled list; the app now confirms it is looking at the shop before deciding. If a run stops just after a Confirm click, that refresh or purchase is counted and the log says to check it in the game.
+
 Settings and history carry over: extract **E7ShopRefresh-0.2.4.zip** into a fresh
 folder and copy `runtime/ShopRefreshGUI.ini`, `runtime/ADBconfig.ini` and
 `runtime/ShopRefreshHistory/` from your old folder if you want them.

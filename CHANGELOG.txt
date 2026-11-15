@@ -57,6 +57,20 @@
   stopping; a frame where a fade or toast hides the shop title is read again
   instead of stopping; a Refresh button covered by a toast gets 5 seconds
   instead of 2.5; a momentarily blank game capture is taken again once.
+• A Confirm dialog whose pixels keep changing (an animated glow) while its
+  button stays in place no longer stops the run with "The confirmation kept
+  changing while being read". A button held still for 1 second counts as
+  settled; the dialog's item and price are still checked before Confirm.
+• STOVE: Windows OCR read the coin icon beside the Covenant price as a
+  leading 0 ("0184,000"), so the dialog was rejected as the wrong price and
+  the run stopped. Prices are now compared as numbers; any other extra or
+  different digit is still rejected.
+• Windowed games: if a passing pointer cancelled the scroll, one odd frame
+  could pass for a scrolled list, so page two was really page one again. The
+  app now confirms the frame is the shop before judging whether it scrolled.
+• If a run stops right after a Confirm click was sent but before the shop came
+  back, that refresh or purchase is counted once, and the log says its result
+  was not seen, so you can check it in the game.
 
 0.2.3 · A refresh dialog the game ignored no longer stops the run
 
