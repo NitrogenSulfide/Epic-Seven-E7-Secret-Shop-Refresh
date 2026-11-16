@@ -19,8 +19,8 @@ two seconds. Background repaint work is reduced, though 4K resizing and theme
 repaint can still lag; further rendering work is deferred.
 
 The owner reports passing live Mouse and ADB regression runs on the rc3 candidate.
-Saved Mouse evidence includes 133 refreshes (399 Skystones), four Covenant buys
-and one Mystic buy. Saved ADB evidence includes a cooperative Stop at 81 Skystones.
+Saved Mouse evidence includes a completed run with Covenant and Mystic buys.
+Saved ADB evidence includes a cooperative Stop.
 The final stable package has matching source with release metadata changes and
 separate offline verification; it has not had an additional live currency run.
 Testing remains limited to native STOVE Mouse and Google Play Games Developer

@@ -77,7 +77,7 @@ live session with the matching packaged engine.
   final random-generator states with detailed logging enabled and disabled.
 - Automated checks used fake inputs. Separately, the owner reports passing live
   Mouse and ADB regressions with the matching rc3 package. Saved evidence includes
-  a completed 399-Skystone Mouse run and an ADB run stopped at 81 Skystones.
+  a completed Mouse run and an ADB run ended with Stop.
   Calibration and insufficient-currency stopping were not live-tested for this release.
 
 Evidence is in ignored `scratch/input-trace/`; packaged checks are recorded with
