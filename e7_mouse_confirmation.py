@@ -112,11 +112,22 @@ def _failure_reason(text):
     return ''
 
 
+def _json_error(stdout):
+    for line in reversed((stdout or '').splitlines()):
+        try:
+            result = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(result,dict) and result.get('error'):
+            return _failure_reason(str(result['error']))
+    return ''
+
+
 def _windows_ocr(path):
     """Built-in Windows OCR through the bundled PowerShell helper."""
     global _ocr_server
     command = _powershell_command()
-    reason = ''
+    helper_reason = stopped_reason = ''
     with _ocr_server_lock:
         try:
             if _ocr_server is None and os.environ.get('E7_OCR_SERVER','1') != '0':
@@ -124,8 +135,12 @@ def _windows_ocr(path):
             if _ocr_server:
                 return _ocr_server.read(path)
         except (OSError, ValueError) as error:
-            # Fall back to the one-shot read below and keep using it.
-            reason = _failure_reason(str(error))
+            # Fall back to the one-shot read below and keep using it. A
+            # ValueError is the helper's own JSON reply, the best reason.
+            if isinstance(error, ValueError):
+                helper_reason = _failure_reason(str(error))
+            else:
+                stopped_reason = _failure_reason(str(error))
             if _ocr_server:
                 _ocr_server.close()
             _ocr_server = False
@@ -136,7 +151,10 @@ def _windows_ocr(path):
                            encoding='utf-8',errors='replace',timeout=10,
                            creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
     if child.returncode:
-        reason = _failure_reason(child.stderr) or reason
+        # Prefer the helper's JSON reasons over PowerShell's own error text,
+        # which is localized and wrapped to the console width.
+        reason = (_json_error(child.stdout) or helper_reason or
+                  _failure_reason(child.stderr) or stopped_reason)
         detail = f': {reason}' if reason else ''
         raise ValueError(f'Windows text recognition failed{detail}. No confirmation click sent.')
     return json.loads(child.stdout)

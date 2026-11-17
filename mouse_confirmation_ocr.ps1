@@ -74,5 +74,8 @@ if ($env:E7_MOUSE_OCR_SERVE -eq '1') {
     }
 }
 else {
-    Read-Frame $env:E7_MOUSE_OCR_FRAME
+    # Report failures as one JSON line: PowerShell's own error text is
+    # localized, wrapped to the console width and may be CLIXML.
+    try { Read-Frame $env:E7_MOUSE_OCR_FRAME }
+    catch { @{ error = "$_" } | ConvertTo-Json -Compress; exit 1 }
 }

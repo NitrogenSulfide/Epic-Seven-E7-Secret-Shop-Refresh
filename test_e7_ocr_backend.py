@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import unittest
@@ -109,6 +110,18 @@ class WindowsOcrFailureTest(unittest.TestCase):
     def test_server_reason_kept_when_one_shot_is_silent(self):
         message = self.read_with(server_error=ValueError(self.REASON), stderr='')
         self.assertIn(self.REASON, message)
+
+    def test_one_shot_json_reason_beats_wrapped_stderr(self):
+        # Orlando check: PowerShell wrapped the thrown text at the console width.
+        full = self.REASON + '. Add English in Settings > Time & language > Language & region, then restart the app'
+        server = mock.Mock(); server.read.side_effect = OSError('The OCR process stopped answering.')
+        failed = subprocess.CompletedProcess([], 1, stdout=json.dumps({'error': full}) + '\r\n',
+                                             stderr=full[:110] + '\r\n' + full[110:] + '\r\n')
+        with mock.patch.object(ocr, '_OcrServer', return_value=server), \
+                mock.patch.object(ocr.subprocess, 'run', return_value=failed):
+            with self.assertRaises(ValueError) as caught:
+                ocr.read_ui_text(self.rgb, (0, 0, 100, 100))
+        self.assertIn('then restart the app. No confirmation click sent.', str(caught.exception))
 
     def test_cp850_output_does_not_crash_the_reader(self):
         # Real pipes: the bytes a Portuguese PowerShell writes ('ó' is 0xa2 in cp850).
