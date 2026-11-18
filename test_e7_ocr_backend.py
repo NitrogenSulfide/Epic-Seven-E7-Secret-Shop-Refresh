@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import unittest
@@ -63,6 +64,78 @@ class TesseractBackendTest(unittest.TestCase):
             self.assertEqual(ocr.ocr_backend(), 'tesseract')
         with mock.patch.object(ocr.os, 'name', 'posix'):
             self.assertEqual(ocr.ocr_backend(), 'tesseract')
+
+
+class WindowsOcrFailureTest(unittest.TestCase):
+    """GitHub #2/#3: a Windows without English OCR stopped with a generic
+    message, and PowerShell's cp850 error text crashed the UTF-8 reader."""
+
+    REASON = 'English Windows OCR is not installed (OCR languages: pt-BR)'
+
+    def setUp(self):
+        self.rgb = np.full((200, 200, 3), 80, dtype=np.uint8)
+        ocr.close_ocr_server()
+        self.addCleanup(ocr.close_ocr_server)
+        self.addCleanup(setattr, ocr, '_ocr_server', None)
+        patches = [mock.patch.object(ocr, 'ocr_backend', return_value='windows'),
+                   mock.patch.object(ocr, '_powershell_command', return_value=['powershell'])]
+        for patch in patches:
+            patch.start(); self.addCleanup(patch.stop)
+
+    def read_with(self, *, server_error, stderr):
+        server = mock.Mock(); server.read.side_effect = server_error
+        failed = subprocess.CompletedProcess([], 1, stdout='', stderr=stderr)
+        with mock.patch.object(ocr, '_OcrServer', return_value=server), \
+                mock.patch.object(ocr.subprocess, 'run', return_value=failed) as run:
+            with self.assertRaises(ValueError) as caught:
+                ocr.read_ui_text(self.rgb, (0, 0, 100, 100))
+        self.assertEqual(run.call_args.kwargs['errors'], 'replace')
+        return str(caught.exception)
+
+    def test_helper_reason_reaches_the_user(self):
+        stderr = self.REASON + '. Add English in Settings\r\nAt line:58 char:5\r\n+ throw ...\r\n'
+        message = self.read_with(server_error=ValueError(self.REASON), stderr=stderr)
+        self.assertIn(self.REASON, message)
+        self.assertNotIn('At line', message)
+        self.assertTrue(message.endswith('No confirmation click sent.'))
+
+    def test_clixml_error_is_decoded(self):
+        stderr = ('#< CLIXML\r\n<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04">'
+                  '<S S="Error">English Windows OCR is not installed &amp; more_x000D__x000A_</S>'
+                  '<S S="Error">At line:58 char:5_x000D__x000A_</S></Objs>')
+        message = self.read_with(server_error=OSError('The OCR process stopped answering.'), stderr=stderr)
+        self.assertIn('English Windows OCR is not installed & more', message)
+        self.assertNotIn('CLIXML', message)
+
+    def test_server_reason_kept_when_one_shot_is_silent(self):
+        message = self.read_with(server_error=ValueError(self.REASON), stderr='')
+        self.assertIn(self.REASON, message)
+
+    def test_one_shot_json_reason_beats_wrapped_stderr(self):
+        # Orlando check: PowerShell wrapped the thrown text at the console width.
+        full = self.REASON + '. Add English in Settings > Time & language > Language & region, then restart the app'
+        server = mock.Mock(); server.read.side_effect = OSError('The OCR process stopped answering.')
+        failed = subprocess.CompletedProcess([], 1, stdout=json.dumps({'error': full}) + '\r\n',
+                                             stderr=full[:110] + '\r\n' + full[110:] + '\r\n')
+        with mock.patch.object(ocr, '_OcrServer', return_value=server), \
+                mock.patch.object(ocr.subprocess, 'run', return_value=failed):
+            with self.assertRaises(ValueError) as caught:
+                ocr.read_ui_text(self.rgb, (0, 0, 100, 100))
+        self.assertIn('then restart the app. No confirmation click sent.', str(caught.exception))
+
+    def test_cp850_output_does_not_crash_the_reader(self):
+        # Real pipes: the bytes a Portuguese PowerShell writes ('ó' is 0xa2 in cp850).
+        import sys
+        script = "import sys; sys.stderr.buffer.write(b'Exce\\xa2o: falhou\\n'); sys.exit(1)"
+        real_run = subprocess.run
+        def run(command, **options):
+            options.pop('creationflags', None)
+            return real_run([sys.executable, '-c', script], **{k: v for k, v in options.items() if k != 'env'})
+        server = mock.Mock(); server.read.side_effect = OSError('The OCR process stopped answering.')
+        with mock.patch.object(ocr, '_OcrServer', return_value=server), \
+                mock.patch.object(ocr.subprocess, 'run', side_effect=run):
+            with self.assertRaisesRegex(ValueError, r'Exce�o: falhou\. No confirmation click sent\.'):
+                ocr.read_ui_text(self.rgb, (0, 0, 100, 100))
 
 
 if __name__ == '__main__':

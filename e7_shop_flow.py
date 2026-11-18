@@ -238,12 +238,53 @@ class UnclearShopRow(MouseStopped):
     """Row text could not be verified on this capture; a fresh one may differ."""
 
 
+def stock_words(result):
+    """OCR words, plus stock fractions OCR split into touching pieces.
+
+    Whole-list OCR can return "1/1" as "1" and "/1" (or "1", "/", "1"). Only
+    runs of two or three words that touch on one text line are rejoined, and
+    only when the joined text is a literal stock fraction; the caller still
+    applies every position check to the joined bounds.
+    """
+    words=[dict(text=str(word['text']).strip(),box=tuple(word['box']))
+           for word in result.get('words',[])]
+    middle=lambda box:(box[1]+box[3])/2
+    def touching(a,b):
+        height=max(a[3]-a[1],b[3]-b[1],1)
+        return (-2<=b[0]-a[2]<=max(4,height*.4)
+                and abs(middle(a)-middle(b))<=height*.3)
+    # Only digit/slash fragments can be pieces, so a nearby "Buy" or name
+    # never joins or blocks a group, and an intact "1/1" costs almost nothing.
+    pieces=[word for word in words if re.fullmatch(r'[01/]+',word['text'])
+            and not re.fullmatch(r'[01]\s*/\s*1',word['text'])]
+    after=lambda word:[other for other in pieces if other is not word and touching(word['box'],other['box'])]
+    joined=[]
+    for first in pieces:
+        # Join whole touching groups only: never the "1/1" inside "1/11".
+        if any(first in after(other) for other in pieces):continue
+        run=[first]
+        while len(run)<4:
+            following=after(run[-1])
+            if len(following)!=1:break
+            run.append(following[0])
+        if not 2<=len(run)<=3 or after(run[-1]):continue
+        # Every piece on the first piece's line, not a pairwise drift.
+        line=middle(first['box']); height=max(first['box'][3]-first['box'][1],1)
+        if any(abs(middle(word['box'])-line)>height*.3 for word in run[1:]):continue
+        text=''.join(word['text'] for word in run)
+        if re.fullmatch(r'[01]\s*/\s*1',text):
+            boxes=[word['box'] for word in run]
+            joined.append(dict(text=text,box=(min(b[0] for b in boxes),min(b[1] for b in boxes),
+                                              max(b[2] for b in boxes),max(b[3] for b in boxes))))
+    return words+joined
+
+
 def button_stock(result,label,button=None):
     """Read the stock inset paired with this Buy label, independent of artwork."""
     middle=lambda box:(box[1]+box[3])/2
     height=label[3]-label[1]
     ratios=[]
-    for word in result.get('words',[]):
+    for word in stock_words(result):
         # Keep the slash: normal name/price normalization discards it. Only
         # literal stock fractions qualify, never a lone zero or price digit.
         match=re.fullmatch(r'([01])\s*/\s*1',str(word['text']).strip())
@@ -274,7 +315,8 @@ def retain_row_stock(original,row,label):
         if before!=after:
             raise UnclearShopRow('The shop button stock is ambiguous. Stopped before scrolling or refreshing.')
         return row
-    words=[word for word in original.get('words',[])
+    # Joined split fractions count too, so a "0/1" read in pieces is kept.
+    words=[word for word in stock_words(original)
            if button_stock(dict(words=[word]),labels[0])==before]
     return dict(row,words=[*row.get('words',[]),*words])
 

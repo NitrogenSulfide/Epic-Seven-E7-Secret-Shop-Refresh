@@ -17,9 +17,30 @@ function Await-Ocr($Operation, $ResultType) {
     $task.Wait()
     $task.Result
 }
-$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new('en-US'))
-if ($null -eq $engine) { throw 'English Windows OCR is unavailable.' }
+function New-OcrEngine {
+    # The game text is English. Windows only ships OCR for the languages
+    # installed on the PC, so a Portuguese or Spanish Windows may have no en-US
+    # recognizer. Prefer en-US, then any English, then any Latin-script
+    # recognizer (it reads "Buy", "Cancel" and prices; the caller's strict
+    # matching refuses anything it misreads).
+    $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new('en-US'))
+    if ($null -ne $engine) { return $engine }
+    $available = @([Windows.Media.Ocr.OcrEngine]::AvailableRecognizerLanguages)
+    $ordered = @($available | Where-Object { $_.LanguageTag -like 'en*' }) +
+               @($available | Where-Object { $_.LanguageTag -notlike 'en*' -and $_.Script -eq 'Latn' })
+    foreach ($language in $ordered) {
+        $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($language)
+        if ($null -ne $engine) { return $engine }
+    }
+    $installed = ($available | ForEach-Object { $_.LanguageTag }) -join ', '
+    if (-not $installed) { $installed = 'none' }
+    throw "English Windows OCR is not installed (OCR languages: $installed). Add English in Settings > Time & language > Language & region, then restart the app"
+}
+# Keep the reason: the persistent mode reports it per request instead of exiting silently.
+$engine = $null; $engineError = $null
+try { $engine = New-OcrEngine } catch { $engineError = "$_" }
 function Read-Frame($Path) {
+    if ($null -ne $engineError) { throw $engineError }
     $file = Await-Ocr ([Windows.Storage.StorageFile]::GetFileFromPathAsync($Path)) ([Windows.Storage.StorageFile])
     $stream = Await-Ocr ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
     try {
@@ -53,5 +74,8 @@ if ($env:E7_MOUSE_OCR_SERVE -eq '1') {
     }
 }
 else {
-    Read-Frame $env:E7_MOUSE_OCR_FRAME
+    # Report failures as one JSON line: PowerShell's own error text is
+    # localized, wrapped to the console width and may be CLIXML.
+    try { Read-Frame $env:E7_MOUSE_OCR_FRAME }
+    catch { @{ error = "$_" } | ConvertTo-Json -Compress; exit 1 }
 }

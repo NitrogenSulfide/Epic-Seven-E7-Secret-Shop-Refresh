@@ -134,8 +134,7 @@ moves and resizes still stop input. Restored Google windows with a thin light
 frame above the header are supported. Set the window size before pressing Start;
 you can begin directly in the open Secret Shop.
 The owner regression-tested Mouse and ADB with the rc3 candidate used for v0.1.3.
-The saved Mouse run completed 133 refreshes (399 Skystones), buying four Covenant
-items and one Mystic item. This does not establish reliability for every setup
+The saved Mouse run completed its budget, buying Covenant and Mystic items. This does not establish reliability for every setup
 or arbitrarily long runs.
 
 The app checks each confirmation before clicking it and stops on unexpected text

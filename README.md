@@ -55,10 +55,9 @@ window, or click **Stop Session**.
 
 ## What it looks like
 
-The main window after a real 500-Skystone run on Steam: 12 Covenant, 5 Mystic and
-116 Friendship buys in about 16 minutes.
+The main window after a finished Background run on Steam. Run history is blurred.
 
-<img src="docs/media/v0.2.1-full-window.png" alt="Main window after a finished Background run on Steam: 498 of 500 Skystones spent, 12 Covenant, 5 Mystic and 116 Friendship buys" width="800">
+<img src="docs/media/v0.2.1-full-window.png" alt="Main window after a finished Background run on Steam" width="800">
 
 While it runs, the app can shrink to a small always-on-top bar with purchases,
 Skystones spent, time left and a Stop button:

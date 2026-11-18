@@ -52,7 +52,7 @@ class _OcrServer:
     def __init__(self, command, *, popen=subprocess.Popen):
         environment = dict(os.environ); environment['E7_MOUSE_OCR_SERVE'] = '1'
         self.process = popen(command,env=environment,stdin=subprocess.PIPE,stdout=subprocess.PIPE,
-                             stderr=subprocess.DEVNULL,text=True,encoding='utf-8',bufsize=1,
+                             stderr=subprocess.DEVNULL,text=True,encoding='utf-8',errors='replace',bufsize=1,
                              creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         self.replies = queue.Queue()
         def pump(stream=self.process.stdout, replies=self.replies):
@@ -97,26 +97,66 @@ def close_ocr_server():
 atexit.register(close_ocr_server)
 
 
+def _failure_reason(text):
+    """First line of a PowerShell error, without PowerShell's location lines."""
+    text = text or ''
+    if text.lstrip().startswith('#< CLIXML'):
+        # powershell.exe -EncodedCommand writes redirected errors as CLIXML.
+        import html
+        text = ''.join(html.unescape(part) for part in re.findall(r'<S S="Error">(.*?)</S>',text,re.S))
+        text = re.sub(r'_x([0-9A-Fa-f]{4})_',lambda match: chr(int(match.group(1),16)),text)
+    for line in text.splitlines():
+        line = line.strip().rstrip('.')
+        if line:
+            return line[:300]
+    return ''
+
+
+def _json_error(stdout):
+    for line in reversed((stdout or '').splitlines()):
+        try:
+            result = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(result,dict) and result.get('error'):
+            return _failure_reason(str(result['error']))
+    return ''
+
+
 def _windows_ocr(path):
     """Built-in Windows OCR through the bundled PowerShell helper."""
     global _ocr_server
     command = _powershell_command()
+    helper_reason = stopped_reason = ''
     with _ocr_server_lock:
         try:
             if _ocr_server is None and os.environ.get('E7_OCR_SERVER','1') != '0':
                 _ocr_server = _OcrServer(command)
             if _ocr_server:
                 return _ocr_server.read(path)
-        except (OSError, ValueError):
-            # Fall back to the one-shot read below and keep using it.
+        except (OSError, ValueError) as error:
+            # Fall back to the one-shot read below and keep using it. A
+            # ValueError is the helper's own JSON reply, the best reason.
+            if isinstance(error, ValueError):
+                helper_reason = _failure_reason(str(error))
+            else:
+                stopped_reason = _failure_reason(str(error))
             if _ocr_server:
                 _ocr_server.close()
             _ocr_server = False
     environment = dict(os.environ); environment['E7_MOUSE_OCR_FRAME'] = str(path)
+    # PowerShell writes its own errors in the console code page (cp850 on a
+    # Portuguese or Spanish Windows), so never let decoding hide the reason.
     child = subprocess.run(command,env=environment,capture_output=True,text=True,
-                           encoding='utf-8',timeout=10,creationflags=subprocess.CREATE_NO_WINDOW)
+                           encoding='utf-8',errors='replace',timeout=10,
+                           creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
     if child.returncode:
-        raise ValueError('Windows could not read the confirmation. No confirmation click sent.')
+        # Prefer the helper's JSON reasons over PowerShell's own error text,
+        # which is localized and wrapped to the console width.
+        reason = (_json_error(child.stdout) or helper_reason or
+                  _failure_reason(child.stderr) or stopped_reason)
+        detail = f': {reason}' if reason else ''
+        raise ValueError(f'Windows text recognition failed{detail}. No confirmation click sent.')
     return json.loads(child.stdout)
 
 
