@@ -145,6 +145,42 @@ class CurrencyRowTests(unittest.TestCase):
             with self.subTest(name=name),self.assertRaisesRegex(MouseStopped,'stock is ambiguous'):
                 currency_button(dict(words=words),[(1500,220,1810,300)],name)
 
+    def test_stock_split_into_touching_pieces_is_read_as_one_fraction(self):
+        from e7_shop_flow import button_stock
+        label=(1711,244,1757,276)
+        splits={'1':[('1',[1580,243,1592,276]),('/1',[1594,243,1628,276])],
+                '1 three':[('1',[1580,243,1592,276]),('/',[1594,243,1604,276]),('1',[1606,243,1628,276])],
+                '0':[('0',[1580,243,1592,276]),('/1',[1594,243,1628,276])],
+                '0 trailing':[('0/',[1580,243,1606,276]),('1',[1608,243,1628,276])],
+                '1 near buy':[('1',[1660,243,1672,276]),('/1',[1674,243,1701,276])]}  # 10 px from Buy
+        for key,pieces in splits.items():
+            stock=int(key[0])
+            for name in ('Covenant bookmark','Mystic medal','Friendship points'):
+                words=currency_words(name)+[dict(text=text,box=box) for text,box in pieces]
+                with self.subTest(split=key,name=name):
+                    self.assertEqual(button_stock(dict(words=words),label),stock)
+                    result=currency_button(dict(words=words),[(1550,220,1810,300)],name)
+                    self.assertEqual(result,None if stock==0 else label)
+
+    def test_stock_pieces_that_do_not_touch_on_one_line_are_not_joined(self):
+        from e7_shop_flow import button_stock
+        label=(1711,244,1757,276)
+        for pieces in ([('1',[1520,243,1532,276]),('/1',[1594,243,1628,276])],   # wide gap
+                       [('1',[1580,213,1592,246]),('/1',[1594,243,1628,276])],   # other line
+                       [('1',[1580,243,1592,276]),('/2',[1594,243,1628,276])],   # not x/1
+                       [('1',[1580,243,1592,276]),('/1',[1594,243,1628,276]),('1',[1630,243,1640,276])],  # "1/11"
+                       [('0',[1580,225,1592,258]),('/',[1594,234,1604,267]),('1',[1606,243,1618,276])]):  # drifts off one line
+            words=currency_words('Friendship points')+[dict(text=text,box=box) for text,box in pieces]
+            with self.subTest(pieces=pieces):
+                self.assertIsNone(button_stock(dict(words=words),label))
+
+    def test_row_retry_keeps_a_split_zero_stock_from_the_whole_list(self):
+        from e7_shop_flow import retain_row_stock
+        original=dict(words=[*currency_words('Friendship points'),dict(text='0',box=[1580,243,1592,276]),
+                             dict(text='/1',box=[1594,243,1628,276])])
+        merged=retain_row_stock(original,dict(words=currency_words('Friendship points')),(1711,244,1757,276))
+        self.assertIsNone(currency_button(merged,[(1550,220,1810,300)],'Friendship points'))
+
     def test_row_retry_retains_stock_only_for_matching_buy_and_rejects_conflicts(self):
         from e7_shop_flow import retain_row_stock
         for name in ('Covenant bookmark','Mystic medal','Friendship points'):
@@ -1695,6 +1731,25 @@ class NativeEngineTests(unittest.TestCase):
                 self.assertEqual(self.ui_ocr.call_count,2 if index<2 else 4)
             retry=self.ui_ocr.call_args_list[1]
             self.assertEqual(retry.kwargs,dict(scale=2,contrast=True))
+            app.mouse.click.assert_not_called()
+        self.ui_ocr.side_effect=None
+
+    def test_split_stock_uses_whole_list_row_when_row_retry_loses_category(self):
+        # Mac Phase 4 run 2: whole-list OCR read the row but split "1/1"; the
+        # enlarged row re-read garbled the small "Currency" label.
+        for stock in ('0','1'):
+            app=self.make_engine();app.storage.inventory['Friendship points']=adb_engine.E7Item(price=18000)
+            app._rgb[220:300,1550:1810]=(20,110,40)
+            self.ui_ocr.reset_mock()
+            whole=dict(words=currency_words('Friendship points')+[dict(text=stock,box=[1580,243,1592,276]),
+                                                                   dict(text='/1',box=[1594,243,1628,276])])
+            garbled=dict(words=[dict(text='if' if word['text']=='currency' else word['text'],box=word['box'])
+                                for word in currency_words('Friendship points')]+[dict(text=stock+'/1',box=[1580,243,1628,276])])
+            self.ui_ocr.side_effect=[whole,garbled]
+            with self.subTest(stock=stock):
+                point=app.findItemPosition(cv_gray(app._rgb),None)
+                self.assertEqual(point,None if stock=='0' else (1734,260))
+                self.assertEqual(self.ui_ocr.call_count,1)
             app.mouse.click.assert_not_called()
         self.ui_ocr.side_effect=None
 
