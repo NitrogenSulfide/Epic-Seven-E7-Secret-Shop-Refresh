@@ -1,0 +1,9 @@
+# Python packages for the GUI and engine on macOS (Mac mode, Epic Seven iPad app).
+# Installed into .venv by ./e7-shop-refresh-macos.sh setup. Python 3.13, Tk
+# (python-tk@3.13) and Tesseract come from Homebrew, not pip.
+numpy>=1.26,<3
+opencv-python-headless>=4.9,<5
+Pillow>=10.3
+pyobjc-framework-Quartz>=11
+pyobjc-framework-ScreenCaptureKit>=11
+pyobjc-framework-Cocoa>=11

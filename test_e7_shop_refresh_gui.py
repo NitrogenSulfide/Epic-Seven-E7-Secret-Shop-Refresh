@@ -48,7 +48,8 @@ class ProtocolTests(unittest.TestCase):
             seen.add(name)
             todo += re.findall(r'^\s*(?:from|import)\s+(e7_[a-z_]+)', (repo/f'{name}.py').read_text(encoding='utf-8'), re.M)
         # e7_sound is the Linux sound fallback; Windows uses winsound.
-        self.assertEqual(seen - staged - {'e7_sound'}, set())
+        # e7_macos is imported only on macOS (Mac mode); never on Windows.
+        self.assertEqual(seen - staged - {'e7_sound', 'e7_macos'}, set())
 
     def test_navigation_evidence_is_shown_without_starting_a_gui(self):
         details, events = [], []
@@ -1058,6 +1059,7 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(self.app.stop_key.get(), "esc")
         self.assertEqual(self.app._settings().stop_key, "esc")
 
+    @unittest.skipIf(sys.platform == 'darwin', 'Mac keyboards have no Num Lock; Tk state 0x10 is Option there')
     def test_stop_key_click_then_key_with_num_lock(self):
         self.app.deiconify()
         self.app.update()

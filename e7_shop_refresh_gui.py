@@ -31,6 +31,10 @@ from e7_tracker import CompactTracker
 from e7_report import build_report, anonymize, latest_failure, system_name
 from e7_setup import missing_references, has_builtin_references, RecognitionSetup, verify_setup_engine
 from e7_native_mouse import activate_native_target, release_native_button, MouseElevationRequired
+# Mac (iPad app) mode: its own transport and pointer release; see e7_macos.
+MACOS = sys.platform == 'darwin'
+if MACOS:
+    from e7_macos import release_pointer_button as release_native_button  # noqa: F811
 from e7_elevation import restart_as_administrator, ElevationCancelled
 from e7_connection import check_connection, ConnectionCheck, endpoint_key
 from e7_windows_capture import WindowsCapture
@@ -41,10 +45,11 @@ DEFAULT_ENGINE_DIR = Path.home() / "Downloads" / "E7 Secret Shop Refresh" if os.
 ENGINE_NAME = "E7ADBShopRefresh.exe" if os.name == "nt" else "E7ADBShopRefresh.py"
 # Control modes this platform supports. Background drives Epic Seven on Steam
 # (directly on Windows, under Proton on Linux) without the real pointer.
-CONTROL_MODES = ('Background', 'Mouse', 'ADB') if os.name == "nt" else ('Background',)
+CONTROL_MODES = ('Background', 'Mouse', 'ADB') if os.name == "nt" else ('Mac',) if MACOS else ('Background',)
 # Background is the default everywhere: most players run Steam or STOVE, and it
-# leaves the pointer free. Emulators get a one-click switch to Mouse.
-DEFAULT_CONTROL_MODE = 'Background'
+# leaves the pointer free. Emulators get a one-click switch to Mouse. macOS has
+# only the iPad app, which accepts real pointer input only (Mac mode).
+DEFAULT_CONTROL_MODE = 'Mac' if MACOS else 'Background'
 # A Background pause that the pointer causes; the engine (e7_background.PAUSE_LIMIT)
 # stops the session if it has not cleared after this many seconds.
 POINTER_PAUSE_LIMIT = 10
@@ -99,6 +104,7 @@ def mode_label(mode):
     return {'Background': ('Background · Steam / STOVE (recommended)' if os.name == "nt"
                            else 'Background · Steam (recommended)'),
             'Mouse': 'Mouse · emulators, takes over your pointer',
+            'Mac': 'Mac · iPad app, takes over your pointer',
             'ADB': 'ADB · emulators'}.get(mode, mode)
 ENGINE_LOCATION_FILE = PROJECT_DIR / "engine-location.ini"
 APP_DIR = DEFAULT_ENGINE_DIR
@@ -124,7 +130,9 @@ STOP_KEY_CHARACTERS = "0123456789abcdefghijklmnopqrstuvwxyz/.,';[]`"
 # Tk event.state bits that mean Control or Alt. Windows Tk: Control=0x4,
 # Alt=0x10 (also ALT_MASK=0x20000); Mod1=0x8 is Num Lock there. X11: Control=0x4,
 # Alt=Mod1=0x8; Mod2=0x10 is Num Lock. Lock states must not reject input.
-STOP_KEY_REJECT_MASK = 0x4 | 0x10 | 0x20000 if os.name == "nt" else 0x4 | 0x8
+# macOS Tk: Control=0x4, Command=Mod1=0x8, Option=Mod2=0x10.
+STOP_KEY_REJECT_MASK = (0x4 | 0x10 | 0x20000 if os.name == "nt" else
+                        0x4 | 0x8 | 0x10 if sys.platform == "darwin" else 0x4 | 0x8)
 
 
 def captured_stop_key(keysym, character, state=0):
@@ -188,7 +196,8 @@ def configure_engine_directory(directory):
 
 
 def session_log_folder(mode):
-    return {'Mouse': 'mouse-session-logs', 'Background': 'background-session-logs'}.get(mode, 'input-session-logs')
+    return {'Mouse': 'mouse-session-logs', 'Background': 'background-session-logs',
+            'Mac': 'mac-session-logs'}.get(mode, 'input-session-logs')
 
 
 @dataclass(frozen=True)
@@ -218,6 +227,14 @@ def list_background_games():
         return [BackgroundTarget('Epic Seven (Steam)', 'Epic Seven (Steam)', window.window.id, 0, (0, 0, width, height))]
     finally:
         window.display.close()
+
+
+def list_mac_games():
+    """Read-only, Mac mode: the Epic Seven iPad app's window. No input."""
+    from e7_macos import scan_game_window
+    window = scan_game_window()
+    width, height = round(window.bounds[2]), round(window.bounds[3])
+    return [BackgroundTarget('Epic Seven (Mac)', 'Epic Seven (Mac)', window.id, window.pid, (0, 0, width, height))]
 
 
 def suggested_mode(background, windows, error):
@@ -620,6 +637,8 @@ class RefreshGui(tk.Tk):
             reminder = 'Mouse uses your pointer · leave the PC alone.'
         elif self.control_mode.get() == 'Background':
             reminder = 'Background never uses your pointer · keep it off the game window.'
+        elif self.control_mode.get() == 'Mac':
+            reminder = 'Mac mode uses your pointer · keep the game in front and leave the Mac alone.'
         suggestion = self.mode_suggestion
         if suggestion == 'Background' and not self.connection_warning:
             reminder = ('Epic Seven on Steam or STOVE found. Background mode runs it without your pointer, '
@@ -1386,6 +1405,8 @@ class RefreshGui(tk.Tk):
         self.status.set('Ready')
         self.detail.set('Press Start Refresh to automate the shop in the background. You can keep using your PC.'
                         if self.control_mode.get() == 'Background' else
+                        'Press Start Refresh to run the shop with your pointer. Keep Epic Seven in front, '
+                        'in a 16:9 window, and leave the Mac alone.' if self.control_mode.get() == 'Mac' else
                         'Press Start Refresh to bring the selected game window forward and automate the shop.' if mouse else
                         'Open Epic Seven’s Secret Shop, then start a session.')
         if mouse:
@@ -1410,6 +1431,9 @@ class RefreshGui(tk.Tk):
             left, top, right, bottom = target.rectangle
             next_step = ('Press Start Refresh to open the shop and run.\nBackground mode never moves your pointer; '
                          'the game may be covered.' if self.control_mode.get() == 'Background' else
+                         'Press Start Refresh to open the shop and run.\nMac mode takes over your pointer; keep the '
+                         'game in front, uncovered, in a 16:9 window, and leave the Mac alone.'
+                         if self.control_mode.get() == 'Mac' else
                          'Press Start Refresh to open the shop and run.\nMouse mode takes over your pointer; leave '
                          'the PC alone. On Steam or STOVE, Background lets you keep using it.')
             self.device_notice.set(f'Selected: {target.title} · {right-left} × {bottom-top}\n'+next_step)
@@ -1475,9 +1499,11 @@ class RefreshGui(tk.Tk):
         if not self._background_scan:
             self.device_notice.set('Looking for game windows…')
         background = self.control_mode.get() == 'Background'  # read Tk state on this thread only
+        mac = self.control_mode.get() == 'Mac'
         def scan():
             try:
-                windows, error = (list_background_games() if background
+                # Mac mode finds its one game window itself, like Background.
+                windows, error = (list_mac_games() if mac else list_background_games() if background
                                   else WindowsCapture().list_windows()), ''
             except Exception as exc:  # e.g. Xlib BadWindow when the game closes mid-scan
                 windows, error = [], str(exc) or type(exc).__name__
@@ -1554,7 +1580,7 @@ class RefreshGui(tk.Tk):
         if self.control_mode.get() == 'Mouse':
             self._start_mouse_refresh()
             return
-        if self.control_mode.get() == 'Background':
+        if self.control_mode.get() in ('Background', 'Mac'):
             self._start_background_refresh()
             return
         if self._checking_connection or (self.process and self.process.poll() is None):
@@ -1611,10 +1637,18 @@ class RefreshGui(tk.Tk):
             settings = self._settings()
             if settings.debug:
                 raise ValueError('Turn off Debug / calibration for Background mode.')
+            mac = self.control_mode.get() == 'Mac'
             if target is None:
-                raise ValueError('Start Epic Seven on Steam or STOVE, then Scan to find it.')
+                raise ValueError('Open Epic Seven, then Scan to find it.' if mac else
+                                 'Start Epic Seven on Steam or STOVE, then Scan to find it.')
             if not ENGINE_EXE.is_file():
                 raise ValueError(f'Could not find the engine: {ENGINE_EXE}')
+            if mac:
+                # No input helper on macOS; the engine checks permissions,
+                # the 16:9 window and Tesseract before any input.
+                self._set_connection_warning('')
+                self._begin_refresh(settings, mouse_target=target)
+                return
             from e7_background import HELPER_NAME, require_background_permissions
             helper = Path(os.environ.get('E7_WINE_INPUT') or APP_DIR/HELPER_NAME)
             if not helper.is_file():
@@ -1690,7 +1724,10 @@ class RefreshGui(tk.Tk):
         self._report_since = time.time()-1
         self._show_report_actions()
         background = self.control_mode.get() == 'Background' and mouse_target is not None
-        self._background_run = background
+        # Mac: starts like Background (no window choice) but takes the pointer
+        # like Mouse (graceful STOP, button release, no always-on-top tracker).
+        mac = self.control_mode.get() == 'Mac' and mouse_target is not None
+        self._background_run = background or mac
         self._clear_pointer_alert()
         self._set_compact_hint("")
         self._native_mouse_run = mouse_target is not None and not background
@@ -1743,6 +1780,14 @@ class RefreshGui(tk.Tk):
                           '--tap-jitter',str(settings.tap_jitter)]
             arguments += ['--trace-input'] if settings.trace_input else []
             arguments += ['--buy-friendship'] if settings.buy_friendship else []
+        elif mac:
+            arguments += ['--macos-session','--budget',str(settings.budget),'--delay',str(settings.tap_sleep),
+                          '--stop-key',settings.stop_key,'--random-offset','yes' if settings.random_offset else 'no',
+                          '--tap-jitter',str(settings.tap_jitter)]
+            arguments += ['--trace-input'] if settings.trace_input else []
+            arguments += ['--buy-friendship'] if settings.buy_friendship else []
+            # E7_DRY_RUN=1: navigation only; Refresh and Buy are recognized, never sent.
+            arguments += ['--dry-run'] if os.environ.get('E7_DRY_RUN') == '1' else []
         elif mouse_target is not None:
             arguments += ['--mouse-session',json.dumps(dict(handle=mouse_target.handle,pid=mouse_target.pid,
                           title=mouse_target.title,rectangle=mouse_target.rectangle,render_handle=mouse_target.render_handle,

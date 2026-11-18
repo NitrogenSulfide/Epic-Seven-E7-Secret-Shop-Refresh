@@ -393,7 +393,8 @@ class BackgroundGuiTests(unittest.TestCase):
 
 class SuggestedModeTest(unittest.TestCase):
     def test_background_is_the_default_on_every_platform(self):
-        self.assertEqual(gui.DEFAULT_CONTROL_MODE, 'Background')
+        # macOS has no Background mode: only the iPad app, driven by Mac mode.
+        self.assertEqual(gui.DEFAULT_CONTROL_MODE, 'Mac' if sys.platform == 'darwin' else 'Background')
 
     def test_windows_suggestions(self):
         steam_only = 'Background mode supports Epic Seven on Steam and STOVE. Use Mouse mode for this game client.'

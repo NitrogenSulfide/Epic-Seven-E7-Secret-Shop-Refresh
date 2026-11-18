@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 import subprocess
 import time
 import unittest
@@ -22,7 +23,7 @@ class X11KeyNameTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 x11_stop_key(key)
 
-    @unittest.skipIf(os.name == 'nt', 'Linux only')
+    @unittest.skipIf(os.name == 'nt' or sys.platform == 'darwin', 'Linux only')
     def test_no_display_is_refused(self):
         env = {k: v for k, v in os.environ.items() if k not in ('DISPLAY', 'WAYLAND_DISPLAY', 'XDG_SESSION_TYPE')}
         with patch.dict(os.environ, env, clear=True):
@@ -30,7 +31,7 @@ class X11KeyNameTests(unittest.TestCase):
                 stop_key_monitor('`')
 
 
-    @unittest.skipIf(os.name == 'nt', 'Linux only')
+    @unittest.skipIf(os.name == 'nt' or sys.platform == 'darwin', 'Linux only')
     def test_wayland_session_is_refused(self):
         for env in ({'WAYLAND_DISPLAY': 'wayland-0'}, {'XDG_SESSION_TYPE': 'wayland'}):
             with self.subTest(env=env), patch.dict(os.environ, {'DISPLAY': ':0', **env}):

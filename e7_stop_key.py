@@ -3,6 +3,7 @@ import ctypes
 from ctypes import wintypes as w
 import os
 import re
+import sys
 
 WM_HOTKEY = 0x0312
 HOTKEY_ID = 0x7E7
@@ -274,6 +275,9 @@ class X11StopKey:
 
 def stop_key_monitor(key):
     if os.name=='nt':return WindowsStopKey(key)
+    if sys.platform=='darwin':
+        from e7_macos_stop_key import MacStopKey
+        return MacStopKey(key)
     if os.environ.get('WAYLAND_DISPLAY') or os.environ.get('XDG_SESSION_TYPE','').lower()=='wayland':
         # Under XWayland, RECORD only sees keys typed into X applications.
         raise ValueError('The global Stop key needs an X11 session; Wayland is not supported yet. '

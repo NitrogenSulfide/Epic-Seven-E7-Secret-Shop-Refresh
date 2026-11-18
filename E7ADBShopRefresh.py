@@ -779,6 +779,9 @@ if __name__ == '__main__':
     if sys.argv[1:2] == ['--mouse-session']:
         from e7_mouse_refresh import run_mouse_session
         sys.exit(run_mouse_session(sys.argv[1:]))
+    if sys.argv[1:2] == ['--macos-session']:
+        from e7_macos_refresh import run_macos_session
+        sys.exit(run_macos_session(sys.argv[1:]))
     if sys.argv[1:2] == ['--preview-mouse-frame']:
         import argparse
         from pathlib import Path
