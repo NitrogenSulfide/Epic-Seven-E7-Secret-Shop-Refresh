@@ -316,6 +316,30 @@ spending are separate gates (AGENTS.md).
      the Linux machine (`work/linux-steam`) with the full corpus. Candidate
      fix: when the row re-read loses words the whole-list read had for the
      same row (category or price), keep the whole-list words.
+   - Fixed on `work/linux-steam` in d51f079: `button_stock` now rejoins a
+     stock fraction that OCR split into touching pieces ("1" + "/1"), so
+     the row re-read is not needed. Every refusal and the one-category,
+     one-price, one-Buy rule are unchanged. It was merged into `work/macos`
+     (fdddd13). The Mac corpus is now 39/39 with tints, including
+     `11_shop_friendship_top_row.png`.
+
+5. **Longer live run with purchases.** *Run 1 (2026-11-18, owner
+   approved 30 Skystones with Friendship purchases):* `--budget 30 --delay
+   0.5 --stop-key ` --random-offset yes --buy-friendship`. Window
+   1299 × 760 pt (game aspect 1.784) on the second monitor. A screenshot was
+   taken about once a second (99 frames plus a final one).
+   - Completed all 10 refreshes with no pause, recheck or unclear-row stop.
+   - Engine result: Covenant 0, Mystic 0, Friendship 9, Skystones spent 30.
+     No bookmark or medal was offered, so a bookmark purchase is still
+     untested on the Mac.
+   - The game's own counters agree. Before the first Buy: gold 20,703,851,
+     Skystones 2,075. After: gold 20,541,851 (−162,000 = 9 × 18,000),
+     Skystones 2,045 (−30 = 10 × 3). No extra or repeated purchase.
+   - Friendship rows were bought both at the top of the list and after a
+     scroll.
+   - The game had hung earlier that day (one process at 100% CPU, no window
+     on screen). Opening the app again did nothing until the owner force
+     quit that process; then it started normally.
 
 Phase 0 needs nothing built and decides whether the rest is worth doing, so it
 comes first.
