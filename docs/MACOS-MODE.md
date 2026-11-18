@@ -243,8 +243,79 @@ spending are separate gates (AGENTS.md).
 3. **Live dry run.** Navigation clicks only (open shop, reveal home controls).
    Scrolls run; refresh and buy are blocked and logged. Owner present.
    Checks drag on the iPad app.
+   *Run 1 (2026-11-17, owner present):* the window was set to 1131 × 665 pt
+   (game aspect 1.787) with spoken guidance. Command:
+   `--macos-session --budget 3 --delay 0.5 --stop-key ` --dry-run`.
+   - The engine log shows: Stop key ready (macOS tap); a click to reveal the
+     hidden lobby menus; a click to open the Secret Shop; "Secret Shop screen
+     verified"; one **drag** (the first sent to the iPad app); "would click
+     refresh … not sent"; then "Dry run complete: home, shop, both pages and
+     the Refresh button were recognized … nothing was spent."
+   - 0 Skystones spent; a capture afterwards shows Skystones still 2,013.
+   - **Visual evidence incomplete:** the owner took the game back to the
+     lobby after the run finished, before the capture, so no screenshot shows
+     the shop or the scrolled list. The scroll is confirmed only by the
+     engine's own page check.
+   - Found while resizing: the iPad app briefly shows a second "Epic Seven"
+     window during a live resize. Sessions correctly refuse it (and a resize
+     stops a session anyway); the sizing helper now waits it out.
+
+   *Run 2 (2026-11-17, with a screenshot every second):* same window and
+   command; the same three inputs and the same clean stop before Refresh.
+   **Visual evidence complete:**
+   - Frames show, in order: lobby with menus hidden → menus revealed (click
+     1) → shop opening (click 2) → page 1 → mid-scroll → page 2 (the drag
+     scrolled the list) → still page 2 when the engine stopped.
+   - Skystones 2,013 and gold 19,249,981 in every frame. The "54m left until
+     refresh" timer was unchanged, so no refresh happened.
+   - This shop offered **Friendship Points** (Currency, 18,000 gold). Pages 1
+     and 2 were added to the private corpus labelled "Friendship row
+     present": 6/6 pass with tints (Friendship recognized as buyable;
+     Covenant and Mystic correctly absent). Whole corpus passes.
+   - **Gate passed.** Still untested on Mac: a Covenant or Mystic row, any
+     purchase or refresh confirmation dialog for a currency item, and a
+     real (non-dry) click on Refresh or Buy.
+
 4. **Live minimum run.** Budget 3 (one refresh), owner watching. Then the
    `SOAK-0.2.4.md` style: several short runs, then a full run, each recorded.
+
+   *Run 1 (2026-11-17, owner watching, explicit approval for one refresh):*
+   window 1131 × 665 pt; `--macos-session --budget 3 --delay 0.5
+   --stop-key ` --random-offset yes` (Friendship off); a screenshot every
+   second (18 frames).
+   - Inputs in order: reveal menus, open shop, drag (page 2), **Refresh**,
+     **Confirm** ("Use Skystone to refresh?"), drag on the new shop. Engine:
+     `refreshes 1, skystone_spent 3`, "100%".
+   - Screenshots: the refresh dialog read and confirmed; afterwards the shop
+     timer reset (51m → 59m), the items changed, and Skystones went
+     **2,013 → 2,010**. Gold stayed 19,249,981: neither shop had a Covenant
+     or Mystic item, and the Friendship row was rightly skipped (off).
+   - **First live spend on Mac: correct.** Still untested on Mac: a real
+     Buy and its currency confirmation dialog (needs a Covenant or Mystic
+     row, or Friendship switched on), and longer runs.
+
+   *Run 2 (2026-11-17, owner approved one refresh plus Friendship
+   purchases):* `--buy-friendship` added. The engine opened the shop, found
+   Friendship Points as the **top** row, and **stopped safely**: "The
+   Friendship points name was recognized, but its price and Buy button could
+   not be verified on the same row. Stopped before scrolling or refreshing."
+   No Buy, no refresh: Skystones 2,010, gold 19,249,981.
+   - Cause (reproduced offline on the saved frame):
+     - Whole-list OCR read the stock "1/1" as two words ("1", "/1"), so the
+       engine re-read that single row (`_stock_row_text`, scaled ×2 with
+       contrast).
+     - The re-read garbled the small blue "Currency" label into "u"/"if".
+     - `currency_button` requires that category word, so the row could not
+       be proven.
+   - This is the **shared** row check in `e7_shop_flow.py`, not Mac code.
+     The frame was added to the private corpus as
+     `11_shop_friendship_top_row.png` (expected: buyable). It fails untinted
+     and passes warm and candle; the corpus is 38/39.
+   - Not fixed here. A fix to shared recognition must pass every client's
+     frames, and this Mac's corpus only has Mac frames, so it belongs on
+     the Linux machine (`work/linux-steam`) with the full corpus. Candidate
+     fix: when the row re-read loses words the whole-list read had for the
+     same row (category or price), keep the whole-list words.
 
 Phase 0 needs nothing built and decides whether the rest is worth doing, so it
 comes first.
