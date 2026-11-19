@@ -845,6 +845,7 @@ class ObservedShopFlow:
         labels=[tuple(word['box']) for word in result.get('words',[])
                 if str(word['text']).lower()=='buy' and 1480<=word['box'][0]<word['box'][2]<=1880
                 and -20<=(word['box'][1]+word['box'][3])/2-center<=90]
+        result=self._with_category(result,names[0],item_name)
         if len(labels)==1 and button_stock(result,labels[0]) is not None:
             try:
                 currency_button(result,green_buttons(self._rgb,(1480,110,1880,1080)),item_name)
@@ -855,8 +856,36 @@ class ObservedShopFlow:
                 if 'could not be verified on the same row' not in str(error):raise
         if len(labels)==1:
             row=self._stock_row_text((labels[0][1]+labels[0][3])/2,labels[0][2]+70)
-            return retain_row_stock(result,row,labels[0])
-        return self._stock_row_text(center+40)
+            return self._with_category(retain_row_stock(result,row,labels[0]),names[0],item_name)
+        return self._with_category(self._stock_row_text(center+40),names[0],item_name)
+
+    def _with_category(self,result,name,item_name):
+        """Add the row's category word when OCR lost it from a wider read.
+
+        The small blue "Currency" label above a top-row name can be misread
+        in whole-list and row reads alike ("ancy", "cc", nothing), while a
+        tight enlarged read of only that strip reads it. Only an exact
+        category word inside currency_button's own window is added, so every
+        existing refusal (including two category words) still applies.
+        """
+        category='currency' if item_name=='Friendship points' else 'summon'
+        middle=lambda box:(box[1]+box[3])/2
+        center=middle(name)
+        found=lambda words:[word for word in words
+                            if re.sub(r'[^a-z0-9]','',str(word['text']).lower())==category
+                            and TEXT_LEFT<=word['box'][0]<word['box'][2]<=1480
+                            and 25<=center-middle(word['box'])<=80]
+        if found(result.get('words',[])):
+            return result
+        # Stop just above the name: any of its letters in the strip garble
+        # both words.
+        region=(TEXT_LEFT,max(110,round(name[1]-52)),1480,round(name[1]-2))
+        if region[3]-region[1]<30:
+            return result
+        if region not in self._stock_rows:
+            self._stock_rows[region]=read_ui_text(self._rgb,region,scale=2,contrast=True)
+        words=found(self._stock_rows[region].get('words',[]))
+        return dict(result,words=[*result.get('words',[]),*words]) if words else result
 
 
     def _click_button(self,box, action='buy'):
