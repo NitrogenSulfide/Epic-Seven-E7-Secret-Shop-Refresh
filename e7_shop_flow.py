@@ -321,14 +321,20 @@ def retain_row_stock(original,row,label):
     return dict(row,words=[*row.get('words',[]),*words])
 
 
-def currency_button(result, boxes, item_name):
-    """Associate currency category/name, gold price and Buy text on one row."""
-    expected = {'Covenant bookmark':('covenant','bookmark','184000'),
-                'Mystic medal':('mystic','medal','280000'),
-                'Friendship points':('friendship','point','18000')}
-    if item_name not in expected:
+CURRENCY_ROWS = {'Covenant bookmark':('covenant','bookmark','184000'),
+                 'Mystic medal':('mystic','medal','280000'),
+                 'Friendship points':('friendship','point','18000')}
+
+
+def currency_row(result, item_name):
+    """Find this item's name and the category/price/Buy words in its row windows.
+
+    None when the item is unknown or its name is absent; the windows here are
+    the only ones currency_button and row_is_ambiguous use.
+    """
+    if item_name not in CURRENCY_ROWS:
         return None
-    prefix,noun,price = expected[item_name]
+    prefix,noun,price = CURRENCY_ROWS[item_name]
     words = [(re.sub(r'[^a-z0-9]','',word['text'].lower()),tuple(word['box']))
              for word in result.get('words',[])]
     middle = lambda box:(box[1]+box[3])/2
@@ -341,20 +347,41 @@ def currency_button(result, boxes, item_name):
     text,name = names[0]; y = middle(name)
     suffixes = [box for word,box in words if word in (noun,noun+'s')
                 and name[2]<=box[0]<=name[2]+60 and box[2]<=1480 and abs(middle(box)-y)<=20]
-    complete = text!=prefix or len(suffixes)==1
+    category = 'currency' if item_name=='Friendship points' else 'summon'
+    return dict(
+        words=words, name=name, y=y, complete=text!=prefix or len(suffixes)==1,
+        summons=[box for word,box in words if word==category and TEXT_LEFT<=box[0]<box[2]<=1480
+                 and 25<=y-middle(box)<=80],
+        prices=[box for word,box in words if word==price and 1480<=box[0]<box[2]<=1880
+                and -80<=middle(box)-y<=10],
+        labels=[label for word,label in words if word=='buy' and 1480<=label[0]<label[2]<=1880
+                and 0<=middle(label)-y<=90])
+
+
+def row_is_ambiguous(result, item_name):
+    """True when one read shows two category, price or Buy words for this row.
+
+    A later, narrower read that shows only one of each must not erase this:
+    the conflict is evidence, not noise to retry past.
+    """
+    row = currency_row(result,item_name)
+    return row is not None and max(len(row['summons']),len(row['prices']),len(row['labels']))>1
+
+
+def currency_button(result, boxes, item_name):
+    """Associate currency category/name, gold price and Buy text on one row."""
+    row = currency_row(result,item_name)
+    if row is None:
+        return None
+    words,name,y,complete = row['words'],row['name'],row['y'],row['complete']
+    summons,prices,labels = row['summons'],row['prices'],row['labels']
+    middle = lambda box:(box[1]+box[3])/2
     # Purchased status can replace the button on the right, rather than the
     # availability text beneath the name. Require the status on this row;
     # missing Buy/price alone must never silently discard an available item.
     row_words = [word for word,box in sorted(words,key=lambda pair:pair[1][0])
                  if TEXT_LEFT<=box[0]<box[2]<=1880 and -20<=middle(box)-y<=90]
     unavailable = complete and re.search(r'\bsold\s*out\b|\bpurchased\b|\bonly\s+0\s+available\b',' '.join(row_words))
-    category = 'currency' if item_name=='Friendship points' else 'summon'
-    summons = [box for word,box in words if word==category and TEXT_LEFT<=box[0]<box[2]<=1480
-               and 25<=y-middle(box)<=80]
-    prices = [box for word,box in words if word==price and 1480<=box[0]<box[2]<=1880
-              and -80<=middle(box)-y<=10]
-    labels = [label for word,label in words if word=='buy' and 1480<=label[0]<label[2]<=1880
-              and 0<=middle(label)-y<=90]
     # A bought row retains "Only 1 available", its price, and a dim green Buy
     # button; the inset changes to 0/1. Require the complete item/category/price
     # association before accepting that fraction even if color detection fails.
@@ -846,6 +873,14 @@ class ObservedShopFlow:
                 if str(word['text']).lower()=='buy' and 1480<=word['box'][0]<word['box'][2]<=1880
                 and -20<=(word['box'][1]+word['box'][3])/2-center<=90]
         result=self._with_category(result,names[0],item_name)
+        def unambiguous(read):
+            # Two category, price or Buy words for this row in any read stop
+            # the run; a narrower re-read showing one of each must not erase
+            # what the whole-list read (or the category strip) saw.
+            if row_is_ambiguous(read,item_name):
+                raise UnclearShopRow(f'The {item_name} row is ambiguous. Stopped before scrolling or refreshing.')
+            return read
+        unambiguous(result)
         if len(labels)==1 and button_stock(result,labels[0]) is not None:
             try:
                 currency_button(result,green_buttons(self._rgb,(1480,110,1880,1080)),item_name)
@@ -856,8 +891,8 @@ class ObservedShopFlow:
                 if 'could not be verified on the same row' not in str(error):raise
         if len(labels)==1:
             row=self._stock_row_text((labels[0][1]+labels[0][3])/2,labels[0][2]+70)
-            return self._with_category(retain_row_stock(result,row,labels[0]),names[0],item_name)
-        return self._with_category(self._stock_row_text(center+40),names[0],item_name)
+            return unambiguous(self._with_category(retain_row_stock(result,row,labels[0]),names[0],item_name))
+        return unambiguous(self._with_category(self._stock_row_text(center+40),names[0],item_name))
 
     def _with_category(self,result,name,item_name):
         """Add the row's category word when OCR lost it from a wider read.

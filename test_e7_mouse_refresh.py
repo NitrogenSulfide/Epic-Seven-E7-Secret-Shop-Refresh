@@ -1782,6 +1782,49 @@ class NativeEngineTests(unittest.TestCase):
             app.mouse.click.assert_not_called()
         self.ui_ocr.side_effect=None
 
+    def friendship_engine(self,top=220):
+        app=self.make_engine();app.storage.inventory['Friendship points']=adb_engine.E7Item(price=18000)
+        app._rgb[top:top+80,1550:1810]=(20,110,40)
+        self.ui_ocr.reset_mock()
+        return app
+
+    def test_ambiguity_in_one_read_is_not_erased_by_a_cleaner_reread(self):
+        def lost(offset=0,extra=()):
+            return [dict(text='ancy' if word['text']=='currency' else word['text'],box=word['box'])
+                    for word in currency_words('Friendship points',offset)]+[dict(text='1/1',box=[1580,243+offset,1628,276+offset]),*extra]
+        clean=lost()+[dict(text='currency',box=[1035,155,1135,180])]
+        currency=dict(text='currency',box=[1035,155,1135,180])
+        cases=(('two prices in the whole list',[dict(words=lost(extra=[dict(text='18,000',box=[1684,140,1786,165])])),dict(words=[currency])]),
+               ('two category words in the strip',[dict(words=lost()),dict(words=[currency,dict(text='currency',box=[1240,155,1340,180])])]),
+               ('two Buy words in the re-read',[dict(words=lost()),dict(words=[]),
+                                                 dict(words=clean+[dict(text='buy',box=[1500,250,1540,282])])]))
+        for case,reads in cases:
+            app=self.friendship_engine()
+            self.ui_ocr.side_effect=reads
+            with self.subTest(case=case),self.assertRaisesRegex(MouseStopped,'ambiguous'):
+                app.findItemPosition(cv_gray(app._rgb),None)
+            app.mouse.click.assert_not_called()
+        self.ui_ocr.side_effect=None
+
+    def test_category_strip_is_clamped_to_the_list_top_and_skipped_when_too_short(self):
+        def lost(offset):
+            return [dict(text='ancy' if word['text']=='currency' else word['text'],box=word['box'])
+                    for word in currency_words('Friendship points',offset)]+[dict(text='1/1',box=[1580,243+offset,1628,276+offset])]
+        # Name top 150: the strip starts at the list top (110), not above it.
+        app=self.friendship_engine(165)
+        self.ui_ocr.side_effect=[dict(words=lost(-55)),dict(words=[dict(text='currency',box=[1035,115,1135,140])])]
+        self.assertEqual(app.findItemPosition(cv_gray(app._rgb),None),(1734,205))
+        self.assertEqual(self.ui_ocr.call_args_list[1].args[1],(960,110,1480,148))
+        # Name top 139: under 30 px of strip is left, so it is not read and the
+        # row still has to prove itself from the other reads.
+        app=self.friendship_engine(154)
+        self.ui_ocr.side_effect=[dict(words=lost(-66)),dict(words=lost(-66))]
+        with self.assertRaisesRegex(MouseStopped,'could not be verified on the same row'):
+            app.findItemPosition(cv_gray(app._rgb),None)
+        self.assertFalse([call for call in self.ui_ocr.call_args_list if call.args[1][2]==1480])
+        app.mouse.click.assert_not_called()
+        self.ui_ocr.side_effect=None
+
     def test_readable_category_needs_no_strip_read(self):
         app=self.make_engine();app.storage.inventory['Friendship points']=adb_engine.E7Item(price=18000)
         app._rgb[220:300,1550:1810]=(20,110,40)
