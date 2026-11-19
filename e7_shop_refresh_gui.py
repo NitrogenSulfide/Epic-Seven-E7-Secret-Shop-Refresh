@@ -411,7 +411,14 @@ class RefreshGui(tk.Tk):
             if os.name == "nt":
                 import ctypes
                 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("E7.SecretShopRefresh.GUI")
-            frames = sorted((ASSET_DIR / "window-icons").glob("*.png"), key=lambda p: int(p.stem))
+            if MACOS and (ASSET_DIR / "shopkeeper.png").is_file():
+                # Tk on macOS gives the Dock only one image from iconphoto, so
+                # the small-first list below shows a blurry 16 pt icon. Use the
+                # same icon's 1024 px original instead.
+                self._icon_image = tk.PhotoImage(master=self, data=(ASSET_DIR / "shopkeeper.png").read_bytes())
+                self.iconphoto(True, self._icon_image)
+                return
+            frames =sorted((ASSET_DIR / "window-icons").glob("*.png"), key=lambda p: int(p.stem))
             if frames:
                 self._icon_images = [tk.PhotoImage(master=self, data=frame.read_bytes()) for frame in frames]
                 self.iconphoto(True, *self._icon_images)
