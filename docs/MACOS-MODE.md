@@ -335,11 +335,37 @@ spending are separate gates (AGENTS.md).
    - The game's own counters agree. Before the first Buy: gold 20,703,851,
      Skystones 2,075. After: gold 20,541,851 (−162,000 = 9 × 18,000),
      Skystones 2,045 (−30 = 10 × 3). No extra or repeated purchase.
-   - Friendship rows were bought both at the top of the list and after a
-     scroll.
+   - Friendship rows were bought on the first page (second row) and after a
+     scroll. None was the top row.
    - The game had hung earlier that day (one process at 100% CPU, no window
      on screen). Opening the app again did nothing until the owner force
      quit that process; then it started normally.
+
+   *Run 2 (2026-11-18, from the GUI, budget 12, Friendship on):* the run
+   stopped safely after 2 of 4 refreshes, with one Friendship purchase:
+   "The Friendship points name was recognized, but its price and Buy button
+   could not be verified on the same row." Friendship was the **top** row
+   and fully visible. The counters agree: Skystones 2,045 → 2,039, gold down
+   one 18,000 purchase.
+   - This is a different cause from Phase 4 run 2. The stock "1/1" read
+     fine, but OCR lost the small blue "Currency" label above the name: the
+     whole-list read gave "ancy", "cc" or nothing depending on tint, and the
+     enlarged row re-read lost it in every tint. A tight read of only the
+     strip above the name read "currency" in all three tints.
+   - Fixed here in the shared row check (`_item_text` in `e7_shop_flow.py`).
+     When no category word sits in `currency_button`'s window, the strip
+     from 52 to 2 px above the name's top is re-read at scale 2 with
+     contrast. Only an exact category word inside that same window is
+     added, so every refusal still applies, including two category words.
+     The strip must stop above the name: any of its letters in the strip
+     garbled both words.
+   - Evidence: the stop screen is `12_shop_friendship_top_row_category.png`
+     in the private corpus. The Mac corpus passes 42/42 with tints. Across
+     all 83 shop frames from run 1 the fix changes no decision. New unit
+     tests cover the strip reading it, losing it, two category words and a
+     word outside the row window. They fail without the fix.
+   - Checked on Mac frames only. The Steam and Windows corpus is on the
+     Linux machine and still needs a run there.
 
 Phase 0 needs nothing built and decides whether the rest is worth doing, so it
 comes first.

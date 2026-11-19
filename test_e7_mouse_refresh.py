@@ -1753,6 +1753,44 @@ class NativeEngineTests(unittest.TestCase):
             app.mouse.click.assert_not_called()
         self.ui_ocr.side_effect=None
 
+    def test_unreadable_category_is_reread_from_its_own_strip_only(self):
+        # Mac, 2026-11-18: whole-list and row OCR both lost the top row's small
+        # "Currency" label ("ancy"); a tight read of only that strip read it.
+        def lost(label):
+            return [dict(text=label if word['text']=='currency' else word['text'],box=word['box'])
+                    for word in currency_words('Friendship points')]+[dict(text='1/1',box=[1580,243,1628,276])]
+        currency=dict(text='currency',box=[1035,155,1135,180])
+        cases=(('strip reads it',[currency],(1734,260)),
+               ('strip loses it',[dict(text='ancy',box=[1080,155,1135,180])],None),
+               ('two category words',[currency,dict(text='currency',box=[1240,155,1340,180])],None),
+               ('outside the row window',[dict(text='currency',box=[1035,120,1135,140])],None))
+        for case,strip,expected in cases:
+            app=self.make_engine();app.storage.inventory['Friendship points']=adb_engine.E7Item(price=18000)
+            app._rgb[220:300,1550:1810]=(20,110,40)
+            self.ui_ocr.reset_mock()
+            self.ui_ocr.side_effect=[dict(words=lost('ancy')),dict(words=strip),dict(words=lost('if'))]
+            with self.subTest(case=case):
+                if expected is None:
+                    with self.assertRaisesRegex(MouseStopped,'could not be verified on the same row|ambiguous'):
+                        app.findItemPosition(cv_gray(app._rgb),None)
+                else:
+                    self.assertEqual(app.findItemPosition(cv_gray(app._rgb),None),expected)
+                    self.assertEqual(self.ui_ocr.call_count,2)
+                strip_call=self.ui_ocr.call_args_list[1]
+                self.assertEqual(strip_call.args[1],(960,153,1480,203))  # name top 205: 52 to 2 px above
+                self.assertEqual(strip_call.kwargs,dict(scale=2,contrast=True))
+            app.mouse.click.assert_not_called()
+        self.ui_ocr.side_effect=None
+
+    def test_readable_category_needs_no_strip_read(self):
+        app=self.make_engine();app.storage.inventory['Friendship points']=adb_engine.E7Item(price=18000)
+        app._rgb[220:300,1550:1810]=(20,110,40)
+        self.ui_ocr.reset_mock()
+        self.ui_ocr.side_effect=[dict(words=currency_words('Friendship points')+[dict(text='1/1',box=[1580,243,1628,276])])]
+        self.assertEqual(app.findItemPosition(cv_gray(app._rgb),None),(1734,260))
+        self.assertEqual(self.ui_ocr.call_count,1)
+        self.ui_ocr.side_effect=None
+
     def test_scaled_row_ocr_maps_word_bounds_to_original_view(self):
         from e7_mouse_confirmation import read_ui_text
         rgb=shop();rgb[200:240,1500:1700]=80
