@@ -367,6 +367,19 @@ spending are separate gates (AGENTS.md).
    - Checked on Mac frames only. The Steam and Windows corpus is on the
      Linux machine and still needs a run there.
 
+   *Run 3 (2026-11-18, from the GUI with 8e434a6, budget 12, Friendship
+   on):* completed all 4 refreshes with 4 Friendship purchases. The first was
+   the **top** row (Buy at y 246), the case that stopped run 2. The others
+   were on row 2 and near the bottom of the list. The game's counters agree:
+   Skystones 2,039 → 2,027, gold 20,523,851 → 20,451,851 (−72,000 =
+   4 × 18,000).
+   - Starting the GUI from the Claude app's Terminal pane stopped before
+     input: "macOS has not granted Accessibility". Permissions belong to the
+     app that starts the tool. It ran when started from a shell whose app
+     had them.
+   - The log says "The session sound could not be played." Not looked into
+     yet.
+
 Phase 0 needs nothing built and decides whether the rest is worth doing, so it
 comes first.
 
