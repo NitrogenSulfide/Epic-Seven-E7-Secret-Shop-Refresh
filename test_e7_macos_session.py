@@ -70,6 +70,53 @@ class SessionEntryTest(unittest.TestCase):
         self.assertEqual(app._session_metadata['Control mode'], 'Mac (dry run)')
 
 
+class ScanRecorderTest(unittest.TestCase):
+    def make_app(self, root):
+        import numpy as np
+        app = mr.E7MacShopRefresh.__new__(mr.E7MacShopRefresh)
+        app._scan_root, app._scan_dir, app._scan_rgb, app._scan_file, app._scan_count = root, None, None, None, 0
+        app.refresh_count, app._scan_page = 2, 1
+        template = np.zeros((4, 4), dtype=np.uint8)
+        app.storage = mock.Mock(inventory={'Covenant bookmark': mock.Mock(image=template),
+                                           'Friendship points': mock.Mock(image=None)})
+        app._rgb = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        return app, template
+
+    def test_each_frame_is_saved_once_with_every_outcome(self):
+        import json
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            app, template = self.make_app(root)
+            parent = mr.E7BackgroundShopRefresh
+            with patch.object(parent, 'findItemPosition', side_effect=[(1, 2), None, mr.MouseStopped('unclear row')]):
+                self.assertEqual(app.findItemPosition(None, template), (1, 2))
+                self.assertIsNone(app.findItemPosition(None, None))
+                app._rgb = app._rgb.copy()
+                app._scan_page = 2
+                with self.assertRaises(mr.MouseStopped):
+                    app.findItemPosition(None, None)
+            [session] = list(root.iterdir())
+            self.assertEqual(sorted(path.name for path in session.glob('*.jpg')), ['001_r2_p1.jpg', '002_r2_p2.jpg'])
+            lines = [json.loads(line) for line in (session/'scans.jsonl').read_text().splitlines()]
+            self.assertEqual(lines, [dict(file='001_r2_p1.jpg', item='Covenant bookmark', outcome='buy'),
+                                     dict(file='001_r2_p1.jpg', item='Friendship points', outcome='none'),
+                                     dict(file='002_r2_p2.jpg', item='Friendship points', outcome='stop: unclear row')])
+
+    def test_old_sessions_are_pruned_and_save_errors_never_reach_the_session(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for index in range(7):
+                (root/f'20260101-00000{index}').mkdir()
+            app, template = self.make_app(root)
+            with patch.object(mr.E7BackgroundShopRefresh, 'findItemPosition', return_value=None):
+                app.findItemPosition(None, None)
+            self.assertEqual(len([path for path in root.iterdir() if path.is_dir()]), mr.SCAN_SESSIONS_KEPT)
+            app2, _ = self.make_app(root/'missing'/'x')
+            app2._scan_dir = root/'not-a-dir'/'nested'
+            with patch.object(mr.E7BackgroundShopRefresh, 'findItemPosition', return_value=None):
+                self.assertIsNone(app2.findItemPosition(None, None))
+
+
 MAC_GAME = gui.BackgroundTarget('Epic Seven (Mac)', 'Epic Seven (Mac)', 7561, 86053, (0, 0, 1680, 977))
 
 

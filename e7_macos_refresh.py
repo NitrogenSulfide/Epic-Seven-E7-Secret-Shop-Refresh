@@ -10,12 +10,20 @@ import math
 import shutil
 import sys
 import threading
+import time
+from pathlib import Path
 
 from e7_background_refresh import E7BackgroundShopRefresh
 from e7_macos import MacMouse
 from e7_native_mouse import MouseStopped
 from e7_session_control import listen_for_stop
 from e7_timing import validate_timing
+
+# Private, git-ignored evidence: every shop frame the engine checked for an
+# item, with each item's outcome. An item skipped without a log line (an
+# unread name, a dimmed row) can then be reproduced offline.
+SCAN_FRAMES = Path(__file__).resolve().parent/'.local-state'/'mac-scan-frames'
+SCAN_SESSIONS_KEPT = 5
 
 
 class E7MacShopRefresh(E7BackgroundShopRefresh):
@@ -25,6 +33,44 @@ class E7MacShopRefresh(E7BackgroundShopRefresh):
         transport = transport or MacMouse(lambda: self.loop_active and not self._stop_requested.is_set())
         super().__init__(transport=transport, dry_run=dry_run, **settings)
         self._session_metadata['Control mode'] = 'Mac (dry run)' if dry_run else 'Mac'
+        self._scan_root, self._scan_dir, self._scan_rgb, self._scan_file, self._scan_count = SCAN_FRAMES, None, None, None, 0
+
+    def findItemPosition(self, frame, template):
+        name = next((key for key, item in self.storage.inventory.items() if item.image is template), None)
+        outcome = 'error'
+        try:
+            point = super().findItemPosition(frame, template)
+            outcome = 'none' if point is None else 'buy'
+            return point
+        except Exception as error:
+            outcome = f'stop: {error}'
+            raise
+        finally:
+            self._record_scan(name, outcome)
+
+    def _record_scan(self, name, outcome):
+        """Save each checked frame once, and one outcome line per item check.
+        Never raises: evidence must not change what the session does."""
+        rgb = getattr(self, '_rgb', None)
+        if rgb is None or self._scan_root is None:
+            return
+        try:
+            from PIL import Image
+            if self._scan_dir is None:
+                self._scan_dir = self._scan_root/time.strftime('%Y%m%d-%H%M%S')
+                self._scan_dir.mkdir(parents=True, exist_ok=True)
+                sessions = sorted(path for path in self._scan_root.iterdir() if path.is_dir())
+                for old in sessions[:-SCAN_SESSIONS_KEPT]:
+                    shutil.rmtree(old, ignore_errors=True)
+            if rgb is not self._scan_rgb:
+                self._scan_rgb, self._scan_count = rgb, self._scan_count+1
+                self._scan_file = (f'{self._scan_count:03d}_r{getattr(self, "refresh_count", 0)}'
+                                   f'_p{getattr(self, "_scan_page", 0)}.jpg')
+                Image.fromarray(rgb).save(self._scan_dir/self._scan_file, quality=92)
+            with (self._scan_dir/'scans.jsonl').open('a', encoding='utf-8') as log:
+                log.write(json.dumps(dict(file=self._scan_file, item=name, outcome=outcome))+'\n')
+        except (OSError, ValueError, TypeError):
+            pass
 
 
 def require_ocr():
