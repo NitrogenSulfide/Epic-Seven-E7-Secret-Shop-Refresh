@@ -1,4 +1,5 @@
-"""winsound-compatible session sounds for Linux (PipeWire/PulseAudio or ALSA)."""
+"""winsound-compatible session sounds for Linux (PipeWire/PulseAudio or ALSA)
+and macOS (the built-in afplay)."""
 import shutil
 import subprocess
 
@@ -10,10 +11,10 @@ def PlaySound(sound, flags):
     equivalent and are ignored; the caller's own WAV files cover both events."""
     if not flags & SND_FILENAME:
         return
-    for player in ('paplay', 'pw-play', 'aplay'):
+    for player in ('paplay', 'pw-play', 'aplay', 'afplay'):
         path = shutil.which(player)
         if path:
             subprocess.Popen([path, *(['-q'] if player == 'aplay' else []), str(sound)],
                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return
-    raise OSError('No sound player (paplay, pw-play or aplay) was found.')
+    raise OSError('No sound player (paplay, pw-play, aplay or afplay) was found.')
