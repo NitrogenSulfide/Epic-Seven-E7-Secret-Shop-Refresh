@@ -1,4 +1,4 @@
-0.2.5 (beta) · Works on Windows without English text recognition; says why OCR failed
+0.2.5 (beta) · Works on Windows without English text recognition; maximized windows; says why OCR failed
 
 • Reported on GitHub (#2, #3): on a Windows set up in another language,
   Background stopped right away with "Windows could not read the
@@ -11,6 +11,16 @@
   reason, for example which OCR languages are installed and how to add English,
   instead of the generic message. Non-English Windows error text no longer
   crashes the reader.
+• Maximized or other windows wider than 16:9 (for example 1920 × 1009 or
+  3840 × 2019): the game keeps its buttons and labels the same shape in a wider
+  window, but the app squeezed the whole window into 16:9 and then compared it
+  with 16:9 pictures. The shop title only just passed, so the run could stop
+  with "The Secret Shop did not open" or "The shop did not return after
+  confirmation", and Covenant/Mystic icons were found only by their names. The
+  app now also compares against the squeezed shape, so these windows match as
+  well as 16:9 ones.
+• "The shop did not return after confirmation" now saves pictures of the shop
+  title, Refresh label and dialog area, and shows how well each matched.
 • Shop rows: a stock count read in pieces ("1" and "/1") is joined back
   together, and a small category label ("Currency") that OCR lost is read again
   from its own strip. A row that shows two category, price or Buy words in any

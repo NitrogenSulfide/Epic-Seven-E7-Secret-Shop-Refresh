@@ -7,6 +7,7 @@ import numpy as np
 from PIL import Image
 from e7_native_mouse import MouseStopped,MouseRecheckRequired
 from e7_mouse_confirmation import read_ui_text,confirmation_matches
+from e7_shop_navigation import template_widths
 
 def home_menu_target(result,rgb=None):
     """Locate the observed home menu text, including rescaled native layouts."""
@@ -772,6 +773,14 @@ class ObservedShopFlow:
         raise MouseStopped('The Secret Shop did not open after selecting its menu. No refresh or purchase sent.')
 
 
+    def _set_frame_squash(self,x_squash):
+        """Record how much the current frame's normalization narrowed the UI."""
+        self._x_squash = x_squash
+        navigation = getattr(self,'navigation',None)
+        if navigation is not None:
+            navigation.x_squash = x_squash
+
+
     def findItemPosition(self,frame,template):
         if not self.loop_active:
             return None
@@ -780,8 +789,9 @@ class ObservedShopFlow:
         region = cv2.cvtColor(self._rgb,cv2.COLOR_RGB2GRAY)[110:1080,760:1030]
         item_name = next((name for name,item in self.storage.inventory.items() if item.image is template),None)
         best = None
-        for scale in (np.linspace(.65,1.45,17) if template is not None else ()):
-            item = cv2.resize(template,None,fx=float(scale),fy=float(scale),interpolation=cv2.INTER_LINEAR)
+        widths = template_widths(getattr(self,'_x_squash',1.))
+        for scale,width in ((s,w) for s in (np.linspace(.65,1.45,17) if template is not None else ()) for w in widths):
+            item = cv2.resize(template,None,fx=float(scale)*width,fy=float(scale),interpolation=cv2.INTER_LINEAR)
             if item.shape[0] >= region.shape[0] or item.shape[1] >= region.shape[1]:
                 continue
             _,score,_,(_,y) = cv2.minMaxLoc(cv2.matchTemplate(region,item,cv2.TM_CCOEFF_NORMED))
@@ -1069,14 +1079,16 @@ class ObservedShopFlow:
             # a delivered click closes it, so this cannot charge twice.
             # Anything else, or a second miss, stops as before.
             if retried:
-                raise MouseStopped('The shop did not return after confirmation. Stopped before another action.')
+                raise MouseStopped('The shop did not return after confirmation. Stopped before another action.'
+                                   +self._shop_return_failure_detail(operation))
             retried = True
             paused = click_revision is not None and self._pause_revision() != click_revision
             box = self._same_confirmation_open(operation,before,clicked)
             if not self.loop_active:
                 return False
             if box is None:
-                raise MouseStopped('The shop did not return after confirmation. Stopped before another action.')
+                raise MouseStopped('The shop did not return after confirmation. Stopped before another action.'
+                                   +self._shop_return_failure_detail(operation))
             if paused:
                 print('Navigation: The pointer passed over the game and the same confirmation is still open; confirming once more.',flush=True)
             else:
@@ -1131,6 +1143,33 @@ class ObservedShopFlow:
             return True
         except OSError:
             return False
+
+
+    def _shop_return_failure_detail(self,operation):
+        """Save what the last frame showed when the shop did not come back.
+
+        Crops only: the shop title and Refresh label areas the check needs, and
+        the central dialog area. The account/currency header is excluded. The
+        match scores show whether the shop was there but not recognized.
+        """
+        try:
+            rgb = self._rgb
+            gray = cv2.cvtColor(rgb,cv2.COLOR_RGB2GRAY)
+            try:
+                details = self.navigation.verification_details(gray)
+            except Exception as error:  # diagnosis only; never hide the stop
+                details = f'unavailable: {error}'
+            folder = Path('mouse-failures')/uuid.uuid4().hex
+            folder.mkdir(parents=True)
+            Image.fromarray(rgb[0:110,75:410]).save(folder/'shop-title.png')
+            Image.fromarray(rgb[910:1060,250:555]).save(folder/'refresh-label.png')
+            Image.fromarray(rgb[260:1000,500:1450]).save(folder/'dialog.png')
+            (folder/'failure.json').write_text(json.dumps(dict(operation=operation+' shop return',
+                confirmation_clicked=True,normalized_size=[1920,1080],
+                x_squash=round(float(getattr(self,'_x_squash',1.)),4),recognition=details)),encoding='utf-8')
+            return f' Shop check: {details}. Private crops were saved for diagnosis.'
+        except (OSError,ValueError,cv2.error):
+            return ''
 
 
     BUY_LOOKS = 3  # pre-Buy looks; each after the first waits for the list to settle

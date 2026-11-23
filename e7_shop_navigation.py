@@ -36,10 +36,27 @@ def create_navigator(asset_directory):
     return ReferenceNavigator(navigators)
 
 
+def template_widths(x_squash):
+    """Horizontal template factors to try: the reference shape, and the frame's
+    narrowing when it came from a window wider than 16:9 (see
+    e7_frame.frame_x_squash). Both are tried because saved references captured
+    from that same wide window are already narrowed."""
+    return (1.,) if abs(x_squash-1.) < .01 else (1., float(x_squash))
+
+
 class ReferenceNavigator:
     """Require a complete matching shop pair from one reference set."""
     def __init__(self, navigators):
         self.navigators = navigators
+
+    @property
+    def x_squash(self):
+        return self.navigators[0][1].x_squash if self.navigators else 1.
+
+    @x_squash.setter
+    def x_squash(self, value):
+        for _, nav in self.navigators:
+            nav.x_squash = value
 
     def shop_visible(self, screenshot):
         return any(nav.shop_visible(screenshot) for _, nav in self.navigators)
@@ -96,6 +113,8 @@ REFERENCE_CONTRAST = {'shop-title.png': 88., 'refresh-label.png': 78.}
 
 
 class ShopNavigator:
+    x_squash = 1.  # set per frame by the session; see template_widths
+
     def __init__(self, reference_directory):
         self.references = {}
         for name in REFERENCE_BOXES:
@@ -126,8 +145,8 @@ class ShopNavigator:
         reference = self.references[name]
         best = None
         scales = (.94, .97, 1., 1.03, 1.06) if menu else (.94, .97, .98, .99, 1., 1.01, 1.02, 1.03, 1.06)
-        for scale in scales:
-            resized = cv2.resize(reference, None, fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
+        for scale, width in ((s, w) for s in scales for w in template_widths(self.x_squash)):
+            resized = cv2.resize(reference, None, fx=scale*width, fy=scale, interpolation=cv2.INTER_LINEAR)
             template = cv2.Canny(resized, 45, 110) if menu else resized
             if template.shape[0] > search.shape[0] or template.shape[1] > search.shape[1]:
                 continue

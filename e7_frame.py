@@ -11,12 +11,30 @@ class FrameGeometry:
     source_size: tuple[int,int]
     bounds: tuple[int,int,int,int]
 
+    @property
+    def x_squash(self):
+        return frame_x_squash(self.bounds)
+
     def point(self,x,y):
         if not all(math.isfinite(value) for value in (x,y)) or not (0<=x<1920 and 0<=y<1080):
             raise MouseStopped('Invalid game target. No input sent.')
         left,top,right,bottom=self.bounds
         return (min(right-1,round(left+x*(right-left)/1920)),
                 min(bottom-1,round(top+y*(bottom-top)/1080)))
+
+def frame_x_squash(bounds):
+    """Horizontal factor by which normalizing to 1920 x 1080 narrows the UI.
+
+    The game scales its UI with the window height and widens the scene for a
+    wider window. Stretching such a view (STOVE or Steam maximized, e.g.
+    3840 x 2019) into 1920 x 1080 narrows every label and icon by about 7 %,
+    so templates captured at 16:9 match it poorly. 16:9 views give 1.0.
+    """
+    left,top,right,bottom=bounds
+    width,height=right-left,bottom-top
+    if width<=0 or height<=0:
+        return 1.
+    return min(1.,(16/9)/(width/height))
 
 def normalize_game_frame(image,*,bounds=None,native_stove=False):
     source=image.size

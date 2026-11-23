@@ -26,7 +26,7 @@ import numpy as np
 from PIL import Image
 
 from E7ADBShopRefresh import E7Inventory, E7Item
-from e7_frame import game_view
+from e7_frame import frame_x_squash, game_view
 from e7_mouse_confirmation import confirmation_matches, read_confirmation_text, read_ui_text
 from e7_mouse_refresh import E7MouseShopRefresh
 from e7_native_mouse import MouseStopped
@@ -34,6 +34,15 @@ from e7_shop_flow import home_menu_target, native_home_control_target
 from e7_shop_navigation import create_navigator
 
 ITEMS = ('Covenant bookmark', 'Mystic medal', 'Friendship points')
+
+
+def frame_squash(path, offset=None):
+    """The live session's x_squash for this saved client frame."""
+    if offset is not None:
+        return 1.
+    with Image.open(path) as image:
+        _, bounds = game_view(image.convert('RGB'))
+    return frame_x_squash(bounds)
 
 
 def load_frame(path, offset=None):
@@ -57,15 +66,18 @@ def home_target(rgb):
     return None if target is None else [round(float(v), 1) for v in target]
 
 
-def shop_outcomes(rgb, assets):
+def shop_outcomes(rgb, assets, x_squash=1.):
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     try:
-        create_navigator(assets).require_shop(gray)
+        navigator = create_navigator(assets)
+        navigator.x_squash = x_squash
+        navigator.require_shop(gray)
         shop = True
     except Exception:
         shop = False
     app = E7MouseShopRefresh.__new__(E7MouseShopRefresh)
     app.loop_active, app._rgb, app._quiet_items, app._scan_page = True, rgb, True, 2
+    app._x_squash = x_squash
     app.storage = E7Inventory()
     for filename, name, price in (('cov.png', ITEMS[0], 184000), ('mys.png', ITEMS[1], 280000)):
         template = cv2.imdecode(np.frombuffer((Path(assets)/filename).read_bytes(), dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
@@ -99,7 +111,7 @@ def check(entry, root, assets, variant='original'):
             target is not None and box[0] <= target[0] <= box[2] and box[1] <= target[1] <= box[3])
         return ok, dict(target=target)
     if kind == 'shop':
-        shop, items = shop_outcomes(rgb, assets)
+        shop, items = shop_outcomes(rgb, assets, frame_squash(root/entry['file'], entry.get('offset')))
         wanted = {name: expect.get('items', {}).get(name, 'none') for name in ITEMS}
         ok = shop == expect.get('shop', True) and all(
             items[name] == want or (want == 'stop' and items[name].startswith('stop')) for name, want in wanted.items())

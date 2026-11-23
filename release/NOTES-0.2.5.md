@@ -1,4 +1,4 @@
-# v0.2.5 (beta) — Works on Windows without English text recognition; says why OCR failed
+# v0.2.5 (beta) — Works on Windows without English text recognition; maximized windows; says why OCR failed
 
 > ⚠️ **Beta, only tested on my own PCs.** Steam (Windows 11 and Linux), the STOVE client and
 > Google Play Games Developer Emulator work for me. Other PCs, emulators and settings
@@ -18,6 +18,18 @@ and buttons are still checked strictly, so a misread stops the run without a cli
 message now says why, for example which OCR languages Windows has and how to add
 English, instead of the generic message. Error text from a non-English Windows no
 longer crashes the reader.
+
+**Fix for maximized and other wide windows.** A maximized game window is wider than
+16:9 (for example 1920 × 1009 or 3840 × 2019). The game keeps its buttons and labels
+the same shape, but the app squeezed the whole window into 16:9 before comparing it
+with its 16:9 pictures, so the shop title only just passed. Runs could stop with "The
+Secret Shop did not open" or "The shop did not return after confirmation", and
+Covenant/Mystic icons were found only by their names. The app now also compares
+against the squeezed shape, so wide windows match as well as 16:9 ones.
+
+If "The shop did not return after confirmation" still happens, the app now saves
+pictures of the shop title, Refresh label and dialog area, and the stop message says
+how well each matched. **Open pictures** shows them.
 
 **Steadier shop rows.** A stock count that OCR reads in pieces ("1" and "/1") is
 joined back together, and a small category label ("Currency") that OCR lost is read

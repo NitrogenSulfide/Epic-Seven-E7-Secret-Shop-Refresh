@@ -669,6 +669,7 @@ class NativeEngineTests(unittest.TestCase):
         app.mouse = Mock()
         app._save_confirmation_failure=Mock(return_value=False)
         app._save_home_failure=Mock(return_value=False)
+        app._shop_return_failure_detail=Mock(return_value='')
         app.mouse.screenshot.return_value = Image.fromarray(shop())
         app.navigation = Mock()
         app.navigation.shop_visible.return_value = True

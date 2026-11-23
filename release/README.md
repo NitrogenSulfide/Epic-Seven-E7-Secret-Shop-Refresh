@@ -3,7 +3,7 @@
 Version **0.2.5** reads the shop on Windows installed without English text
 recognition (it uses another installed Latin-script OCR language) and says why when
 Windows OCR fails, instead of a generic "could not read the confirmation". It also
-reads shop rows more reliably when OCR splits or loses a small label. Version 0.2.4 pauses while the mouse rests on a windowed game (the game
+recognizes the shop in maximized windows wider than 16:9 and reads shop rows more reliably when OCR splits or loses a small label. Version 0.2.4 pauses while the mouse rests on a windowed game (the game
 cancels Background clicks then) and recovers when the game ignores a Buy, Refresh
 or Confirm click, seen after buying from the bottom row of the scrolled shop. Version 0.2.3 waits for a refresh
 dialog the game ignored to close instead of stopping with "The refresh confirmation
