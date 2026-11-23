@@ -28,8 +28,8 @@ Covenant/Mystic icons were found only by their names. The app now also compares
 against the squeezed shape, so wide windows match as well as 16:9 ones.
 
 If "The shop did not return after confirmation" still happens, the app now saves
-pictures of the shop title, Refresh label and dialog area, and the stop message says
-how well each matched. **Open pictures** shows them.
+pictures of the Refresh label and dialog area, and the stop message says how well the
+shop title and Refresh label matched. **Open pictures** shows them.
 
 **Steadier shop rows.** A stock count that OCR reads in pieces ("1" and "/1") is
 joined back together, and a small category label ("Currency") that OCR lost is read
