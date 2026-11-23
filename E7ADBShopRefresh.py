@@ -494,6 +494,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
         if previous is not None and previous!=geometry and self.loop_active:
             raise MouseStopped('The Android game viewport changed. Restart at the chosen resolution.')
         self._rgb,self._adb_geometry,self._capture_resumed=rgb,geometry,False
+        self._set_frame_squash(geometry.x_squash)
         return cv2.cvtColor(rgb,cv2.COLOR_RGB2GRAY)
 
     def findItemPosition(self,frame,template):

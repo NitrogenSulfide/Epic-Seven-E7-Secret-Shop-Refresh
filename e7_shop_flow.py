@@ -1148,9 +1148,10 @@ class ObservedShopFlow:
     def _shop_return_failure_detail(self,operation):
         """Save what the last frame showed when the shop did not come back.
 
-        Crops only: the shop title and Refresh label areas the check needs, and
-        the central dialog area. The account/currency header is excluded. The
-        match scores show whether the shop was there but not recognized.
+        Crops only: the Refresh label area and the central dialog area. No top
+        strip: if the game went back to the lobby, the title area shows the
+        account name and rank. The match scores (title included) show whether
+        the shop was there but not recognized.
         """
         try:
             rgb = self._rgb
@@ -1161,7 +1162,6 @@ class ObservedShopFlow:
                 details = f'unavailable: {error}'
             folder = Path('mouse-failures')/uuid.uuid4().hex
             folder.mkdir(parents=True)
-            Image.fromarray(rgb[0:110,75:410]).save(folder/'shop-title.png')
             Image.fromarray(rgb[910:1060,250:555]).save(folder/'refresh-label.png')
             Image.fromarray(rgb[260:1000,500:1450]).save(folder/'dialog.png')
             (folder/'failure.json').write_text(json.dumps(dict(operation=operation+' shop return',

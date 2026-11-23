@@ -145,20 +145,30 @@ class ShopNavigator:
         reference = self.references[name]
         best = None
         scales = (.94, .97, 1., 1.03, 1.06) if menu else (.94, .97, .98, .99, 1., 1.01, 1.02, 1.03, 1.06)
-        for scale, width in ((s, w) for s in scales for w in template_widths(self.x_squash)):
-            resized = cv2.resize(reference, None, fx=scale*width, fy=scale, interpolation=cv2.INTER_LINEAR)
-            template = cv2.Canny(resized, 45, 110) if menu else resized
-            if template.shape[0] > search.shape[0] or template.shape[1] > search.shape[1]:
+        for scale in scales:
+            # Every width of this scale competes for the ambiguity check: a
+            # second label seen at one width must not be ignored because the
+            # other width scored the first label higher.
+            variants = []
+            for width in template_widths(self.x_squash):
+                resized = cv2.resize(reference, None, fx=scale*width, fy=scale, interpolation=cv2.INTER_LINEAR)
+                template = cv2.Canny(resized, 45, 110) if menu else resized
+                if template.shape[0] > search.shape[0] or template.shape[1] > search.shape[1]:
+                    continue
+                variants.append((resized, template.shape, cv2.matchTemplate(search, template, cv2.TM_CCOEFF_NORMED)))
+            if not variants:
                 continue
-            scores = cv2.matchTemplate(search, template, cv2.TM_CCOEFF_NORMED)
+            resized, (h,w), scores = max(variants, key=lambda variant: float(variant[2].max()))
             _, score, _, location = cv2.minMaxLoc(scores)
             if best is None or score > best['score']:
                 # A second distant match makes selection ambiguous; don't guess.
                 tx,ty = location
-                other = scores.copy()
-                h,w = template.shape
-                other[max(0,ty-h):ty+h+1,max(0,tx-w):tx+w+1] = -1
-                second = float(other.max())
+                second = -1.
+                for _, (vh,vw), variant_scores in variants:
+                    other = variant_scores.copy()
+                    reach_y, reach_x = max(h,vh), max(w,vw)
+                    other[max(0,ty-reach_y):ty+reach_y+1,max(0,tx-reach_x):tx+reach_x+1] = -1
+                    second = max(second, float(other.max()))
                 # Correlation ignores brightness, so the shop dimmed behind an
                 # open dialog or reward overlay still matches its shape. Keep
                 # its contrast against the reference to tell the two apart.

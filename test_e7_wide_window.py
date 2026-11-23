@@ -70,6 +70,20 @@ class WideShopRecognitionTests(unittest.TestCase):
         navigator.x_squash = .9
         self.assertFalse(navigator.shop_visible(np.full((1080, 1920), 45, np.uint8)))
 
+    def test_a_second_label_at_the_other_width_stays_ambiguous(self):
+        reference = cv2.imread(str(Path(ASSETS)/'builtin-navigation'/'menu-secret-shop.png'), cv2.IMREAD_GRAYSCALE)
+        narrow = cv2.resize(reference, None, fx=.96, fy=1., interpolation=cv2.INTER_AREA)
+        def frame(labels):
+            image = np.full((1080, 1920), 40, np.uint8)
+            for label, y in labels:
+                image[y:y+label.shape[0], 12:12+label.shape[1]] = label
+            return image
+        navigator = create_navigator(ASSETS)
+        navigator.x_squash = .96
+        self.assertIsNotNone(navigator.menu_target(frame([(narrow, 650)])))
+        self.assertIsNone(navigator.menu_target(frame([(reference, 250), (reference, 450), (narrow, 650)])))
+        self.assertIsNone(navigator.menu_target(frame([(reference, 250), (narrow, 650)])))
+
     def test_session_forwards_the_squash_to_navigation(self):
         app = E7MouseShopRefresh.__new__(E7MouseShopRefresh)
         app.navigation = create_navigator(ASSETS)
@@ -91,13 +105,13 @@ class ShopReturnFailureTests(unittest.TestCase):
                 detail = E7MouseShopRefresh._shop_return_failure_detail(app, 'refresh')
                 folder = next(Path('mouse-failures').iterdir())
                 sizes = {}
-                for name in ('shop-title.png', 'refresh-label.png', 'dialog.png'):
-                    with Image.open(folder/name) as saved:
-                        sizes[name] = saved.size
+                for path in folder.glob('*.png'):
+                    with Image.open(path) as saved:
+                        sizes[path.name] = saved.size
                 record = json.loads((folder/'failure.json').read_text(encoding='utf-8'))
             finally:
                 os.chdir(previous)
-        self.assertEqual(sizes, {'shop-title.png': (335, 110), 'refresh-label.png': (305, 150), 'dialog.png': (950, 740)})
+        self.assertEqual(sizes, {'refresh-label.png': (305, 150), 'dialog.png': (950, 740)})
         self.assertIn('title=0.871', detail)
         self.assertEqual((record['operation'], record['confirmation_clicked'], record['x_squash']), ('refresh shop return', True, .9348))
 
