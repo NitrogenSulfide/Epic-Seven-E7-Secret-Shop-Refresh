@@ -1,6 +1,9 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.2.4** pauses while the mouse rests on a windowed game (the game
+Version **0.2.5** reads the shop on Windows installed without English text
+recognition (it uses another installed Latin-script OCR language) and says why when
+Windows OCR fails, instead of a generic "could not read the confirmation". It also
+reads shop rows more reliably when OCR splits or loses a small label. Version 0.2.4 pauses while the mouse rests on a windowed game (the game
 cancels Background clicks then) and recovers when the game ignores a Buy, Refresh
 or Confirm click, seen after buying from the bottom row of the scrolled shop. Version 0.2.3 waits for a refresh
 dialog the game ignored to close instead of stopping with "The refresh confirmation
@@ -15,7 +18,7 @@ are faster (about 5–6.5 seconds per refresh on Steam at 2560 × 1440, down fro
 8.5). It also includes the 0.1.4 trial changes: the global Stop key, optional
 Friendship Points purchases, remaining-time estimates, BlueStacks fixes and warm
 display tint handling. See CHANGELOG.txt or About & Credits → Release notes.
-Players need only **E7ShopRefresh-0.2.4.zip**; extract it into a fresh folder.
+Players need only **E7ShopRefresh-0.2.5.zip**; extract it into a fresh folder.
 New settings start in Background mode. Your existing saved mode is preserved; the
 app offers a one-click switch when another mode suits the game it finds.
 

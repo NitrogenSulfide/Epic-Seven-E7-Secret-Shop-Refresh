@@ -1,3 +1,21 @@
+0.2.5 (beta) · Works on Windows without English text recognition; says why OCR failed
+
+• Reported on GitHub (#2, #3): on a Windows set up in another language,
+  Background stopped right away with "Windows could not read the
+  confirmation. No confirmation click sent." Windows had no English text
+  recognition (OCR) installed. The app now uses English OCR if any variant is
+  installed, otherwise another Latin-script OCR language such as Portuguese or
+  Spanish. It still checks every item name, price and button strictly, so a
+  misread stops the run without a click.
+• If Windows OCR still cannot be used, the stop message now gives the actual
+  reason, for example which OCR languages are installed and how to add English,
+  instead of the generic message. Non-English Windows error text no longer
+  crashes the reader.
+• Shop rows: a stock count read in pieces ("1" and "/1") is joined back
+  together, and a small category label ("Currency") that OCR lost is read again
+  from its own strip. A row that shows two category, price or Buy words in any
+  read is still refused.
+
 0.2.4 (beta) · A mouse resting on the game no longer cancels clicks; recovers from ignored clicks
 
 • Windows: the game cancels a Background click while your mouse rests
