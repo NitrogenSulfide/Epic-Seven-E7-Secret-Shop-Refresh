@@ -1,6 +1,8 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.2.6** waits up to 15 seconds when the game opens the refresh or buy
+Version **0.2.6** lets you choose which items to buy (Covenant, Mystic,
+Friendship Points), calls out "Covenant!" / "Mystic!" on each purchase, moves timing
+into a collapsed Advanced section (older custom timing is reset once), and waits up to 15 seconds when the game opens the refresh or buy
 confirmation but leaves it blank (probably waiting on the server), instead of
 stopping with "The refresh confirmation was not recognized". Version 0.2.5 reads the shop on Windows installed without English text
 recognition (it uses another installed Latin-script OCR language) and says why when

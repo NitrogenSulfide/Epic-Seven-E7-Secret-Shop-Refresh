@@ -1,5 +1,16 @@
-0.2.6 (beta) · Waits out a blank confirmation while the game waits on the server
+0.2.6 (beta) · Choose what to buy; "Covenant!"/"Mystic!" callouts; simpler timing; waits out a blank confirmation
 
+• Choose what to buy: Covenant bookmarks, Mystic medals and Friendship Points
+  each have a checkbox under Buy (Covenant and Mystic on by default). An item
+  that is off is left in the shop. Start asks for at least one item.
+• Purchase callouts: a voice says "Covenant!" or "Mystic!" when a purchase is
+  confirmed. Each has its own checkbox under "Sounds: start, end and buys".
+  Voice: ElevenLabs "Laura" (see CREDITS.txt).
+• Simpler sidebar: tap delay, offsets, timing variation, calibration and the
+  budget estimate moved into a collapsed Advanced section with "Reset to
+  recommended". On first start, 0.2.6 resets older custom timing once to the
+  recommended 0.3 s delay with offsets on and ±0.03 s variation, and says so.
+  Budget and stop key are kept.
 • Reported on Steam (3840 × 2019, Background): after 76 refreshes the run
   stopped with "The refresh confirmation was not recognized". The game had
   darkened the shop and opened an empty dialog band for more than 5 seconds,
