@@ -1192,7 +1192,12 @@ class RefreshGui(tk.Tk):
             self.device.set(parser.get("GUI", "device", fallback=self.device.get()))
             mode = parser.get('GUI','control_mode',fallback=DEFAULT_CONTROL_MODE)
             self.control_mode.set(mode if mode in CONTROL_MODES else DEFAULT_CONTROL_MODE)
-            legacy_jitter = min(float(self.tap_sleep.get()) * .1, .05)
+            try:
+                legacy_jitter = min(float(self.tap_sleep.get()) * .1, .05)
+            except ValueError:
+                # A malformed tap delay must not skip the item toggles or the
+                # one-time timing reset below, which replaces it.
+                legacy_jitter = RECOMMENDED_TAP_JITTER
             jitter = parser.getfloat('GUI', 'tap_jitter', fallback=legacy_jitter)
             self.tap_jitter.set(jitter if math.isfinite(jitter) and 0 <= jitter <= .1 else .03)
             self.buy_covenant.set(parser.getboolean('GUI', 'buy_covenant', fallback=True))
@@ -1215,7 +1220,7 @@ class RefreshGui(tk.Tk):
         try:
             self._write_engine_timing()
             self._write_sound_preference()  # records SETTINGS_VERSION so this runs once
-        except (OSError, configparser.Error) as exc:
+        except (OSError, UnicodeError, configparser.Error) as exc:
             # Runs before the log exists; the notice line is the only output.
             self.setting_notice.set(f'Recommended timing could not be saved: {exc}')
             return
@@ -1225,19 +1230,23 @@ class RefreshGui(tk.Tk):
 
     def _reset_recommended_timing(self, save=True):
         """Recommended tap delay, offsets and jitter; returns whether anything changed."""
-        before = (self.tap_sleep.get(), self.random_offset.get(), round(self.tap_jitter.get(), 2), self.debug_mode.get())
+        try:
+            tap = float(self.tap_sleep.get())  # "0.30" is the same delay as "0.3"
+        except ValueError:
+            tap = None
+        before = (tap, self.random_offset.get(), round(self.tap_jitter.get(), 2), self.debug_mode.get())
         self.tap_sleep.set(RECOMMENDED_TAP_DELAY)
         self.random_offset.set(True)
         self.tap_jitter.set(RECOMMENDED_TAP_JITTER)
         self.debug_mode.set(False)
         self._update_tap_jitter()
-        changed = before != (RECOMMENDED_TAP_DELAY, True, RECOMMENDED_TAP_JITTER, False)
+        changed = before != (float(RECOMMENDED_TAP_DELAY), True, RECOMMENDED_TAP_JITTER, False)
         if save:
             try:
                 self._write_engine_timing()
                 self._write_sound_preference()
                 self.setting_notice.set('Timing reset to the recommended values.')
-            except (OSError, configparser.Error) as exc:
+            except (OSError, UnicodeError, configparser.Error) as exc:
                 self.setting_notice.set('Timing reset for this session; it could not be saved.')
                 self._append_log(f'Recommended timing could not be saved: {exc}\n')
         return changed
@@ -1245,13 +1254,17 @@ class RefreshGui(tk.Tk):
     def _write_engine_timing(self):
         """Store only the timing keys in ADBconfig.ini, leaving budget and stop key alone."""
         parser = configparser.ConfigParser()
-        parser.read(CONFIG_FILE)
+        try:
+            # read_file, not read: read() swallows open errors, and an empty
+            # parser written back would erase budget, stop key and the rest.
+            with CONFIG_FILE.open(encoding='utf-8-sig') as fh:
+                parser.read_file(fh)
+        except FileNotFoundError:
+            # Nothing saved yet, so no older timing to reset; the next
+            # Save or Start writes the full file.
+            self._timing_migration_pending = False
+            return
         if not parser.has_section('Settings'):
-            if not CONFIG_FILE.exists():
-                # Nothing saved yet, so no older timing to reset; the next
-                # Save or Start writes the full file.
-                self._timing_migration_pending = False
-                return
             parser.add_section('Settings')
         parser['Settings'].update({'tap_sleep': self.tap_sleep.get(), 'random_offset': str(self.random_offset.get())})
         temp = CONFIG_FILE.with_suffix('.ini.tmp')

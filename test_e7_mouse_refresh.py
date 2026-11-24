@@ -43,9 +43,10 @@ class FriendshipSessionTests(unittest.TestCase):
         self.assertFalse(engine.call_args.kwargs['buy_covenant'])
         self.assertTrue(engine.call_args.kwargs['buy_mystic'])
         with patch('e7_background_refresh.E7BackgroundShopRefresh') as engine,patch('e7_background_refresh.threading.Thread'),contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(run_background_session(['--background-session',*common,'--skip-mystic']),0)
+            self.assertEqual(run_background_session(['--background-session',*common,'--skip-mystic','--buy-friendship']),0)
         self.assertFalse(engine.call_args.kwargs['buy_covenant'])
         self.assertFalse(engine.call_args.kwargs['buy_mystic'])
+        self.assertTrue(engine.call_args.kwargs['buy_friendship'])
 
 
 def shop():

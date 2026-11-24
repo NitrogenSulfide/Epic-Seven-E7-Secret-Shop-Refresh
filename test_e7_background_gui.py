@@ -150,6 +150,29 @@ class BackgroundGuiTests(unittest.TestCase):
         self.assertIn('tap_sleep = 0.3', gui.CONFIG_FILE.read_text())
         self.assertIn('settings_version = 2', gui.GUI_CONFIG_FILE.read_text())
 
+    def test_malformed_tap_delay_still_loads_items_and_migrates(self):
+        self.app.destroy()
+        gui.CONFIG_FILE.write_text('[Settings]\ntap_sleep = 0,3\nbudget = 300\nstop_refresh_key = `\nrandom_offset = False\n')
+        gui.GUI_CONFIG_FILE.write_text('[GUI]\nbuy_mystic = False\n')
+        self.app = gui.RefreshGui(); self.app.withdraw()
+        self.assertFalse(self.app.buy_mystic.get())
+        self.assertEqual(self.app.tap_sleep.get(), '0.3')
+        self.assertIn('settings_version = 2', gui.GUI_CONFIG_FILE.read_text())
+
+    def test_unreadable_engine_config_is_never_overwritten(self):
+        original = '[Settings]\ntap_sleep = 0.8\nbudget = 300\nstop_refresh_key = `\nrandom_offset = False\n'
+        gui.CONFIG_FILE.write_text(original)
+        real_open = Path.open
+        def locked(path, *args, **kwargs):
+            if path == gui.CONFIG_FILE and 'w' not in (args[0] if args else kwargs.get('mode', 'r')):
+                raise PermissionError('locked')
+            return real_open(path, *args, **kwargs)
+        self.app.tap_sleep.set('0.9')
+        with patch.object(Path, 'open', locked):
+            self.app._reset_recommended_timing()
+        self.assertIn('could not be saved', self.app.setting_notice.get())
+        self.assertEqual(gui.CONFIG_FILE.read_text(), original)
+
     def test_missing_helper_or_game_never_launches(self):
         self.pump_until(lambda: self.app.mouse_target.get() == 'Epic Seven (Steam)')
         with os_named('posix'), patch.object(gui, 'launch_engine') as launch:
