@@ -49,3 +49,10 @@ built-in image_gen tool at the owner's request. The generated cutout is a
 derivative of game artwork, not an original project drawing. Epic Seven artwork
 belongs to its respective rightsholders; project GPL does not relicense it.
 Source/output hashes and the edit prompt are recorded in provenance.json.
+
+"Covenant!" and "Mystic!" purchase callouts: ElevenLabs text-to-speech, default
+library voice "Laura", model eleven_multilingual_v2, generated 2026-11-24 under
+the owner's paid ElevenLabs subscription and chosen by the owner from six
+candidates. Files: purchase-covenant.wav, purchase-mystic.wav. Edits: silence
+trimmed, 30 ms fade-out, gain lowered to sit near the start/end chimes.
+Settings, source and output hashes are recorded in provenance.json.

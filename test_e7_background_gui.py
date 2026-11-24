@@ -87,9 +87,91 @@ class BackgroundGuiTests(unittest.TestCase):
         self.assertNotIn('--mouse-session', arguments)
         self.assertEqual(arguments[arguments.index('--stop-key')+1], '`')
         self.assertIn('--buy-friendship', arguments)
+        self.assertNotIn('--skip-covenant', arguments)
+        self.assertNotIn('--skip-mystic', arguments)
         self.assertFalse(self.app._native_mouse_run)
         self.assertTrue(self.app._graceful_stop)
         self.release.assert_not_called()
+
+    def test_item_choice_reaches_the_engine_and_needs_one_item(self):
+        self.pump_until(lambda: self.app.mouse_target.get() == 'Epic Seven (Steam)')
+        (self.root/'e7_wine_input.exe').write_bytes(b'MZ')
+        self.app.buy_covenant.set(False)
+        # The fake engine predates item choice, so Start must refuse before launching.
+        with os_named('posix'), patch.object(gui, 'launch_engine', side_effect=OSError('test: not launched')) as launch:
+            self.app.start_button.invoke()
+        launch.assert_not_called()
+        self.assertIn('matching new engine', self.app.connection_warning)
+        self.fake.write_text(self.fake.read_text().replace('friendship purchases v1', 'friendship purchases v1; item choice v1'))
+        with os_named('posix'), patch.object(gui, 'launch_engine', side_effect=OSError('test: not launched')) as launch:
+            self.app.start_button.invoke()
+        arguments = launch.call_args.args[0]
+        self.assertIn('--skip-covenant', arguments)
+        self.assertNotIn('--skip-mystic', arguments)
+        self.app.buy_mystic.set(False)
+        with self.assertRaisesRegex(ValueError, 'at least one item'):
+            self.app._settings()
+        self.assertNotIn('Covenant buys', self.app.ev.get())
+        self.app._write_sound_preference()
+        text = gui.GUI_CONFIG_FILE.read_text()
+        self.assertIn('buy_covenant = False', text)
+        self.assertIn('buy_mystic = False', text)
+
+    def test_old_custom_timing_is_reset_once_then_kept(self):
+        self.app.destroy()
+        gui.CONFIG_FILE.write_text('[Settings]\ntap_sleep = 0.8\nbudget = 300\nstop_refresh_key = `\nrandom_offset = False\n')
+        gui.GUI_CONFIG_FILE.write_text('[GUI]\ntap_jitter = 0.08\n')
+        self.app = gui.RefreshGui(); self.app.withdraw()
+        self.assertEqual((self.app.tap_sleep.get(), self.app.random_offset.get(), round(self.app.tap_jitter.get(), 2)), ('0.3', True, 0.03))
+        self.assertEqual(self.app.budget.get(), '300')
+        self.assertIn('recommended values for this version', self.app.setting_notice.get())
+        self.assertIn('tap_sleep = 0.3', gui.CONFIG_FILE.read_text())
+        self.assertIn('settings_version = 2', gui.GUI_CONFIG_FILE.read_text())
+        # A later Advanced edit sticks across restarts.
+        self.app.tap_sleep.set('0.5'); self.app._write_engine_timing(); self.app.destroy()
+        self.app = gui.RefreshGui(); self.app.withdraw()
+        self.assertEqual(self.app.tap_sleep.get(), '0.5')
+        self.app.tap_sleep.set('0.9'); self.app.random_offset.set(False)
+        self.assertTrue(self.app._reset_recommended_timing())
+        self.assertEqual((self.app.tap_sleep.get(), self.app.random_offset.get()), ('0.3', True))
+
+    def test_failed_timing_reset_is_retried_on_next_start(self):
+        self.app.destroy()
+        gui.CONFIG_FILE.write_text('[Settings]\ntap_sleep = 0.8\nbudget = 300\nstop_refresh_key = `\nrandom_offset = False\n')
+        gui.GUI_CONFIG_FILE.write_text('[GUI]\ntap_jitter = 0.08\n')
+        with patch.object(gui.RefreshGui, '_write_engine_timing', side_effect=PermissionError('locked')):
+            self.app = gui.RefreshGui(); self.app.withdraw()
+        self.assertIn('could not be saved', self.app.setting_notice.get())
+        self.app._write_sound_preference()  # an unrelated preference save
+        self.assertIn('settings_version = 0', gui.GUI_CONFIG_FILE.read_text())
+        self.app.destroy()
+        self.app = gui.RefreshGui(); self.app.withdraw()
+        self.assertEqual(self.app.tap_sleep.get(), '0.3')
+        self.assertIn('tap_sleep = 0.3', gui.CONFIG_FILE.read_text())
+        self.assertIn('settings_version = 2', gui.GUI_CONFIG_FILE.read_text())
+
+    def test_malformed_tap_delay_still_loads_items_and_migrates(self):
+        self.app.destroy()
+        gui.CONFIG_FILE.write_text('[Settings]\ntap_sleep = 0,3\nbudget = 300\nstop_refresh_key = `\nrandom_offset = False\n')
+        gui.GUI_CONFIG_FILE.write_text('[GUI]\nbuy_mystic = False\n')
+        self.app = gui.RefreshGui(); self.app.withdraw()
+        self.assertFalse(self.app.buy_mystic.get())
+        self.assertEqual(self.app.tap_sleep.get(), '0.3')
+        self.assertIn('settings_version = 2', gui.GUI_CONFIG_FILE.read_text())
+
+    def test_unreadable_engine_config_is_never_overwritten(self):
+        original = '[Settings]\ntap_sleep = 0.8\nbudget = 300\nstop_refresh_key = `\nrandom_offset = False\n'
+        gui.CONFIG_FILE.write_text(original)
+        real_open = Path.open
+        def locked(path, *args, **kwargs):
+            if path == gui.CONFIG_FILE and 'w' not in (args[0] if args else kwargs.get('mode', 'r')):
+                raise PermissionError('locked')
+            return real_open(path, *args, **kwargs)
+        self.app.tap_sleep.set('0.9')
+        with patch.object(Path, 'open', locked):
+            self.app._reset_recommended_timing()
+        self.assertIn('could not be saved', self.app.setting_notice.get())
+        self.assertEqual(gui.CONFIG_FILE.read_text(), original)
 
     def test_missing_helper_or_game_never_launches(self):
         self.pump_until(lambda: self.app.mouse_target.get() == 'Epic Seven (Steam)')

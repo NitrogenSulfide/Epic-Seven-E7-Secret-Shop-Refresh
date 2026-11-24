@@ -17,9 +17,20 @@ class RunSettings:
     tap_jitter: float = 0.03
     trace_input: bool = False
     buy_friendship: bool = False
+    buy_covenant: bool = True
+    buy_mystic: bool = True
 
 
-def validate_settings(device, budget, delay, stop_key, random_offset, debug, tap_jitter=0.03, trace_input=False, buy_friendship=False):
+def validate_item_choice(buy_covenant, buy_mystic, buy_friendship):
+    """Each purchase switch is a real bool, and at least one item is bought."""
+    if any(type(value) is not bool for value in (buy_covenant, buy_mystic, buy_friendship)):
+        raise ValueError('Item purchases must be on or off.')
+    if not (buy_covenant or buy_mystic or buy_friendship):
+        raise ValueError('Choose at least one item to buy: Covenant, Mystic or Friendship.')
+
+
+def validate_settings(device, budget, delay, stop_key, random_offset, debug, tap_jitter=0.03, trace_input=False, buy_friendship=False,
+                      buy_covenant=True, buy_mystic=True):
     if not re.fullmatch(r'[0-9]+', str(budget).strip()):
         raise ValueError("The skystone budget must be a whole number of at least 3.")
     try:
@@ -41,7 +52,9 @@ def validate_settings(device, budget, delay, stop_key, random_offset, debug, tap
         raise ValueError('Friendship purchases must be on or off.')
     if debug and buy_friendship:
         raise ValueError('Turn off Friendship purchases for ADB calibration.')
-    return RunSettings(device, amount, sleep, key, bool(random_offset), bool(debug), jitter, trace_input, buy_friendship)
+    validate_item_choice(buy_covenant, buy_mystic, buy_friendship)
+    return RunSettings(device, amount, sleep, key, bool(random_offset), bool(debug), jitter, trace_input, buy_friendship,
+                       buy_covenant, buy_mystic)
 
 
 class EngineProtocol:

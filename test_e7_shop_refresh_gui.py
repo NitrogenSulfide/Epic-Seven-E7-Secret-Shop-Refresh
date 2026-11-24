@@ -159,6 +159,45 @@ prompt("press enter to exit...", "")
 
 
 class GuiTests(unittest.TestCase):
+    def test_purchase_callouts_follow_counts_and_toggles(self):
+        for name in ('purchase-covenant.wav', 'purchase-mystic.wav'):
+            shutil.copyfile(PACKAGED_ASSETS / name, self.assets / name)
+        self.app.run_settings = self.app._settings()
+        def stats(cov, mys, refreshes=1, wait=True):
+            self.app._handle_line('E7GUI_STATS ' + json.dumps(dict(refreshes=refreshes, skystone_spent=refreshes*3, covenant=cov, mystic=mys, friendship=0)))
+            if not wait:
+                return
+            deadline = max(time.monotonic(), self.app._purchase_sound_free_at) + .1
+            while time.monotonic() < deadline:  # queued clips play one after another
+                self.app.update(); time.sleep(.01)
+            played = [Path(call.args[0]).name for call in self.sound_mock.call_args_list]
+            self.sound_mock.reset_mock()
+            return played
+        self.assertEqual(stats(0, 0), [])
+        self.assertEqual(stats(1, 1, 2), ['purchase-covenant.wav', 'purchase-mystic.wav'])
+        self.assertEqual(stats(1, 1, 3), [])  # unchanged counts stay quiet
+        # Updates arriving close together queue rather than cut each other off.
+        started = time.monotonic()
+        stats(2, 1, 4, wait=False)
+        self.assertEqual(stats(2, 2, 5), ['purchase-covenant.wav', 'purchase-mystic.wav'])
+        self.assertGreaterEqual(time.monotonic() - started, gui.PURCHASE_SOUND_GAP_MS / 1000)
+        # A callout still queued when the session finishes stays silent.
+        stats(3, 3, 6, wait=False)
+        self.app._finalized_run_id = self.app.run_id
+        self.assertEqual(stats(3, 3, 6), [])
+        self.app._finalized_run_id = None
+        self.app.sound_mystic.set(False)
+        self.assertEqual(stats(4, 4, 7), ['purchase-covenant.wav'])
+        self.app.sound_enabled.set(False)
+        self.assertIn('disabled', self.app.sound_covenant_check.state())
+        self.assertEqual(stats(5, 5, 8), [])
+        self.app._save_sound_preference()
+        text = self.gui_config.read_text()
+        self.assertIn('sound_mystic = False', text)
+        self.assertIn('sound_covenant = True', text)
+        self.app.sound_mystic.set(True); self.app._load_config()
+        self.assertFalse(self.app.sound_mystic.get())
+
     def test_friendship_toggle_persists_and_reports_current_points(self):
         self.assertFalse(self.app.buy_friendship.get())
         self.app.buy_friendship.set(True)
@@ -175,7 +214,7 @@ class GuiTests(unittest.TestCase):
         self.app._handle_line('E7GUI_STOP_KEY '+json.dumps(dict(key='esc',status='ready',backend='Windows global hotkey')))
         with patch.object(self.app,'clipboard_clear'),patch.object(self.app,'clipboard_append') as copy:
             self.app._copy_diagnostics()
-        self.assertIn('Friendship Points buying: on',copy.call_args.args[0])
+        self.assertIn('Buying: Covenant on · Mystic on · Friendship Points on',copy.call_args.args[0])
         self.assertIn('Friendship 2',copy.call_args.args[0])
         self.assertIn('esc · Windows global hotkey',copy.call_args.args[0])
         self.assertIn('Friendship buys: 2 (on)',self.app.diagnostics_summary.get())
@@ -192,6 +231,21 @@ class GuiTests(unittest.TestCase):
         self.assertTrue(self.app.friendship_check.instate(['disabled']))
         self.app._set_controls(False)
         self.assertFalse(self.app.friendship_check.instate(['disabled']))
+
+    def test_calibration_keeps_skipped_items_skipped(self):
+        self.app.buy_mystic.set(False);self.app.debug_mode.set(True)
+        settings=self.app._settings()
+        self.app._structured_adb=True
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='gui session v1; item choice v1')), \
+             patch.object(gui.messagebox,'askyesno',return_value=True), \
+             patch.object(gui,'launch_engine',side_effect=OSError('test: not launched')) as launch:
+            self.app._begin_refresh(settings)
+        launch.assert_called_once()
+        self.assertTrue(self.app.run_settings.debug)
+        self.assertEqual(self.app.run_settings.budget,100)
+        self.assertFalse(self.app.run_settings.buy_mystic)
+        self.assertTrue(self.app.run_settings.buy_covenant)
+        self.assertIn('"buy_mystic": false',launch.call_args.args[0][-1])
 
     def test_friendship_rejects_old_engine_before_launch(self):
         self.app.buy_friendship.set(True)

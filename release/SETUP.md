@@ -107,7 +107,8 @@ available timestamps, outcomes and reasons. Tap delay must be above zero and no
 more than two seconds, including randomized timing. Sessions reload automatically;
 **Clear** archives all recorded sessions before clearing
 them and is disabled during a run. Archives remain in `ShopRefreshHistory/archive`.
-Use **Estimate & calibration help** to expand those details in the compact sidebar.
+Tap delay, timing variation and calibration live under **Advanced** in the sidebar, with **Reset to recommended**. Updating to 0.2.6 resets older custom timing once.
+The **Buy** checkboxes choose Covenant bookmarks, Mystic medals and Friendship Points; at least one must stay on.
 The blue-bean header button opens the existing About & Credits dialog.
 Shop scrolling uses a short upward mouse drag. The same checkbox adds small
 position and timing variations while keeping the vertical travel consistent.

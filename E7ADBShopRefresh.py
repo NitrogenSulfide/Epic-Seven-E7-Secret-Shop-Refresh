@@ -23,6 +23,7 @@ from e7_history import append_session, new_session_metadata
 from e7_session_control import listen_for_stop
 from e7_stop_key import stop_key_monitor
 from e7_input_trace import InputTrace
+from e7_engine_protocol import validate_item_choice
 
 class E7Item:
     def __init__(self, image=None, price=0, count=0):
@@ -78,9 +79,10 @@ class E7Inventory:
         append_session(os.path.join('ShopRefreshHistory', 'ADB_History.csv'), record)
 
 class E7ADBShopRefresh(ObservedShopFlow):
-    def __init__(self, tap_sleep:float = 0.3, budget=None, ip_port=None, stop_refresh_key='esc', random_offset = False, debug=False, tap_jitter=None, adb_runner=None, trace_input=False, buy_friendship=False):
+    def __init__(self, tap_sleep:float = 0.3, budget=None, ip_port=None, stop_refresh_key='esc', random_offset = False, debug=False, tap_jitter=None, adb_runner=None, trace_input=False, buy_friendship=False, buy_covenant=True, buy_mystic=True):
         if type(buy_friendship) is not bool or (debug and buy_friendship):
             raise ValueError('Friendship purchases require normal mode and an on/off setting.')
+        validate_item_choice(buy_covenant, buy_mystic, buy_friendship)
         if budget is not None:
             if isinstance(budget, bool) or not math.isfinite(float(budget)) or int(budget) != float(budget) or int(budget) < 3:
                 raise ValueError('Skystone budget must be a whole number of at least 3.')
@@ -128,8 +130,12 @@ class E7ADBShopRefresh(ObservedShopFlow):
         self.checkScreenDimension()
         self.navigation = create_navigator('adb-assets')
 
-        self.storage.addItem('cov.png', 'Covenant bookmark', 184000)
-        self.storage.addItem('mys.png', 'Mystic medal', 280000)
+        # Only chosen items enter the inventory, so the shop flow neither
+        # matches nor buys the others.
+        if buy_covenant:
+            self.storage.addItem('cov.png', 'Covenant bookmark', 184000)
+        if buy_mystic:
+            self.storage.addItem('mys.png', 'Mystic medal', 280000)
         if buy_friendship:
             # Current Secret Shop sells heart-icon Friendship Points. The
             # retained upstream fb.png is a retired clover bookmark template.
@@ -714,11 +720,13 @@ def run_gui_session(arguments):
         if not isinstance(data, dict) or any(type(data.get(key)) is not bool for key in ('random_offset', 'debug')):
             raise ValueError('Invalid GUI session settings.')
         settings = validate_settings(data['device'], data['budget'], data['tap_sleep'], data['stop_key'],
-                                     data['random_offset'], data['debug'], data['tap_jitter'], data.get('trace_input', False), data.get('buy_friendship', False))
+                                     data['random_offset'], data['debug'], data['tap_jitter'], data.get('trace_input', False), data.get('buy_friendship', False),
+                                     data.get('buy_covenant', True), data.get('buy_mystic', True))
         app = E7ADBShopRefresh(tap_sleep=settings.tap_sleep, budget=settings.budget,
                               ip_port=settings.device, stop_refresh_key=settings.stop_key,
                               random_offset=settings.random_offset, debug=settings.debug, tap_jitter=settings.tap_jitter,
-                              trace_input=settings.trace_input, buy_friendship=settings.buy_friendship)
+                              trace_input=settings.trace_input, buy_friendship=settings.buy_friendship,
+                              buy_covenant=settings.buy_covenant, buy_mystic=settings.buy_mystic)
         threading.Thread(target=listen_for_stop, args=(sys.stdin, app), daemon=True).start()
         if settings.trace_input:
             print('E7GUI_TRACE_READY', flush=True)
@@ -804,7 +812,7 @@ if __name__ == '__main__':
         print('Private Secret Shop references prepared and checked offline.')
         sys.exit(0)
     if sys.argv[1:] == ['--verify']:
-        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; window mouse v9; global stop key v2; tap timing v2; gui session v1; input trace v1; friendship purchases v1; background session v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
+        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; window mouse v9; global stop key v2; tap timing v2; gui session v1; input trace v1; friendship purchases v1; item choice v1; background session v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
         sys.exit(0)
     if sys.argv[1:2] == ['--check-navigation-frame']:
         import argparse
