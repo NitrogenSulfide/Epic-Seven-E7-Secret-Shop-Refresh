@@ -125,6 +125,11 @@ STOP_KEY_CHARACTERS = "0123456789abcdefghijklmnopqrstuvwxyz/.,';[]`"
 # Alt=0x10 (also ALT_MASK=0x20000); Mod1=0x8 is Num Lock there. X11: Control=0x4,
 # Alt=Mod1=0x8; Mod2=0x10 is Num Lock. Lock states must not reject input.
 STOP_KEY_REJECT_MASK = 0x4 | 0x10 | 0x20000 if os.name == "nt" else 0x4 | 0x8
+# Saved-settings schema. 2 (0.2.6): timing moved under Advanced; older custom
+# timing is reset once to the recommended values below.
+SETTINGS_VERSION = 2
+RECOMMENDED_TAP_DELAY = "0.3"
+RECOMMENDED_TAP_JITTER = 0.03
 
 
 def captured_stop_key(keysym, character, state=0):
@@ -328,6 +333,8 @@ class RefreshGui(tk.Tk):
         self.debug_mode = tk.BooleanVar(value=False)
         self.trace_input = tk.BooleanVar(value=False)
         self.buy_friendship = tk.BooleanVar(value=False)
+        self.buy_covenant = tk.BooleanVar(value=True)
+        self.buy_mystic = tk.BooleanVar(value=True)
         self.random_offset = tk.BooleanVar(value=True)
         self.tap_jitter = tk.DoubleVar(value=0.03)
         self.tap_jitter_text = tk.StringVar()
@@ -349,7 +356,7 @@ class RefreshGui(tk.Tk):
         self.mystic = tk.StringVar(value="—")
         self.friendship = tk.StringVar(value="—")
         self.diagnostics_summary=tk.StringVar(value='Purchases · Covenant — · Mystic — · Friendship —')
-        for var in (self.covenant,self.mystic,self.friendship,self.buy_friendship):
+        for var in (self.covenant,self.mystic,self.friendship,self.buy_friendship,self.buy_covenant,self.buy_mystic):
             var.trace_add('write',lambda *_:self._update_diagnostics_summary())
         self.progress_text = tk.StringVar(value="Waiting for a session")
         # Red line in the full view and the compact bar while the pointer pauses a Background run.
@@ -866,30 +873,56 @@ class RefreshGui(tk.Tk):
         self.device_button.grid(row=0, column=1, padx=(dp(12), 0))
         self.settings_widgets.extend([self.device_box, self.device_button])
         ttk.Label(controls, textvariable=self.device_notice, style="Muted.TLabel", wraplength=dp(350)).grid(row=3, column=0, sticky="w", pady=(dp(4), dp(10)))
+        # Everyday settings stay visible: budget, stop key and what to buy.
+        # Timing and calibration live under Advanced with a reset to the
+        # recommended values, so a stray edit is easy to undo.
         amounts = ttk.Frame(controls)
         amounts.grid(row=4, column=0, sticky='ew', pady=(0, dp(6)))
-        amounts.columnconfigure((0, 1), weight=1, uniform='amounts')
-        for column, label, var in ((0, 'Skystone budget', self.budget), (1, 'Tap delay (s)', self.tap_sleep)):
-            ttk.Label(amounts, text=label).grid(row=0, column=column, sticky='w', padx=(0 if column==0 else dp(8), 0))
-            entry = ttk.Entry(amounts, textvariable=var, font=self.ui_font, width=10)
-            if var is self.budget:
-                entry.configure(validate='key', validatecommand=(self.register(lambda value: not value or re.fullmatch(r'[0-9]+', value) is not None), '%P'))
-                self.budget_entry = entry
-            entry.grid(row=1, column=column, sticky='ew', pady=(dp(3), 0), padx=(0 if column==0 else dp(8), 0))
-            self.settings_widgets.append(entry)
-            if var is self.tap_sleep:
-                self.delay_hint = ThemeHint(entry, lambda: f'{MIN_TAP_DELAY:.2f} to 2.00 seconds · lower values are raised to {MIN_TAP_DELAY:.2f} because the game ignores faster clicks')
+        amounts.columnconfigure(0, weight=1)
+        ttk.Label(amounts, text='Skystone budget').grid(row=0, column=0, sticky='w')
+        self.budget_entry = entry = ttk.Entry(amounts, textvariable=self.budget, font=self.ui_font, width=10)
+        entry.configure(validate='key', validatecommand=(self.register(lambda value: not value or re.fullmatch(r'[0-9]+', value) is not None), '%P'))
+        entry.grid(row=1, column=0, sticky='ew', pady=(dp(3), 0))
+        self.settings_widgets.append(entry)
         ttk.Label(controls, text='Stop key · click the box, then press a key').grid(row=5, column=0, sticky='w')
         self.stop_key_entry = ttk.Entry(controls, textvariable=self.stop_key, font=self.ui_font)
         self.stop_key_entry.state(['readonly'])
         self.stop_key_entry.bind('<KeyPress>', self._capture_stop_key)
         self.stop_key_entry.grid(row=6, column=0, sticky='ew', pady=(dp(3), dp(6)))
         self.settings_widgets.append(self.stop_key_entry)
-        self.random_check = ttk.Checkbutton(controls, text="Randomize tap offsets (recommended)", variable=self.random_offset, style="Large.TCheckbutton")
+        buys = ttk.Frame(controls)
+        buys.grid(row=7, column=0, sticky='ew')
+        ttk.Label(buys, text='Buy').grid(row=0, column=0, sticky='w')
+        self.covenant_check = ttk.Checkbutton(buys, text='Covenant bookmarks', variable=self.buy_covenant, style='Large.TCheckbutton')
+        self.covenant_check.grid(row=1, column=0, sticky='w')
+        ThemeHint(self.covenant_check, lambda: '184,000 gold per buy')
+        self.mystic_check = ttk.Checkbutton(buys, text='Mystic medals', variable=self.buy_mystic, style='Large.TCheckbutton')
+        self.mystic_check.grid(row=2, column=0, sticky='w')
+        ThemeHint(self.mystic_check, lambda: '280,000 gold per buy')
+        self.friendship_check = ttk.Checkbutton(buys, text='Friendship Points',
+                                               variable=self.buy_friendship, style='Large.TCheckbutton')
+        self.friendship_check.grid(row=3, column=0, sticky='w')
+        ThemeHint(self.friendship_check, lambda: 'Optional extra purchases · 18,000 gold per buy · normal mode only')
+        self.settings_widgets.extend([self.covenant_check, self.mystic_check, self.friendship_check])
+        self.details_button = ttk.Button(controls, text='▸ Advanced: timing, calibration, estimate', command=self._toggle_settings_details)
+        self.details_button.grid(row=8, column=0, sticky='ew', pady=(dp(10), dp(12)))
+        self.settings_details = advanced = ttk.Frame(controls)
+        self.settings_details.grid(row=9, column=0, sticky='ew', pady=(dp(6), 0))
+        self.settings_details.columnconfigure(0, weight=1)
+        ttk.Label(advanced, text='Recommended values work for almost everyone. Change them only if a session keeps stopping.',
+                  style='Muted.TLabel', wraplength=dp(350)).grid(row=0, column=0, sticky='w', pady=(0, dp(6)))
+        delay_row = ttk.Frame(advanced)
+        delay_row.grid(row=1, column=0, sticky='ew', pady=(0, dp(6)))
+        ttk.Label(delay_row, text='Tap delay (s)').grid(row=0, column=0, sticky='w')
+        entry = ttk.Entry(delay_row, textvariable=self.tap_sleep, font=self.ui_font, width=10)
+        entry.grid(row=1, column=0, sticky='w', pady=(dp(3), 0))
+        self.settings_widgets.append(entry)
+        self.delay_hint = ThemeHint(entry, lambda: f'{MIN_TAP_DELAY:.2f} to 2.00 seconds · lower values are raised to {MIN_TAP_DELAY:.2f} because the game ignores faster clicks')
+        self.random_check = ttk.Checkbutton(advanced, text="Randomize tap offsets (recommended)", variable=self.random_offset, style="Large.TCheckbutton")
         self.random_check.configure(command=self._update_tap_jitter)
-        self.random_check.grid(row=7, column=0, sticky="w")
-        timing = ttk.Frame(controls)
-        timing.grid(row=8, column=0, sticky='ew', pady=(0, dp(5)))
+        self.random_check.grid(row=2, column=0, sticky="w")
+        timing = ttk.Frame(advanced)
+        timing.grid(row=3, column=0, sticky='ew', pady=(0, dp(5)))
         timing.columnconfigure(0, weight=1)
         ttk.Label(timing, textvariable=self.tap_jitter_text).grid(row=0, column=0, sticky='w')
         self.tap_jitter_slider = ttk.Scale(timing, from_=0, to=0.1, variable=self.tap_jitter, command=self._update_tap_jitter,
@@ -900,20 +933,12 @@ class RefreshGui(tk.Tk):
         self.settings_widgets.append(self.tap_jitter_slider)
         self.tap_timing_hint = ttk.Label(timing, text="0–±0.10s · capped at half the base delay", style="Muted.TLabel", wraplength=dp(350))
         self.tap_timing_hint.grid(row=2, column=0, sticky='w')
-        self.debug_check = ttk.Checkbutton(controls, text="Debug / calibration mode\n(only in ADB mode)", variable=self.debug_mode, style="Large.TCheckbutton")
-        self.debug_check.grid(row=9, column=0, sticky="w")
-        self.settings_widgets.extend([self.random_check, self.debug_check])
-        self.friendship_check = ttk.Checkbutton(controls, text='Also buy Friendship Points',
-                                               variable=self.buy_friendship, style='Large.TCheckbutton')
-        self.friendship_check.grid(row=10, column=0, sticky='w', pady=(dp(5), 0))
-        self.settings_widgets.append(self.friendship_check)
-        ThemeHint(self.friendship_check, lambda: 'Optional extra purchases · 18,000 gold per buy · normal mode only')
-        self.details_button = ttk.Button(controls, text='▸ Estimate & calibration help', command=self._toggle_settings_details)
-        self.details_button.grid(row=11, column=0, sticky='ew', pady=(dp(8), dp(12)))
-        self.settings_details = ttk.Frame(controls)
-        self.settings_details.grid(row=12, column=0, sticky='ew', pady=(dp(6), 0))
-        self.settings_details.columnconfigure(0, weight=1)
-        ttk.Label(self.settings_details, text="ADB calibration pauses before each click.\nCheck the image, then press a key other than Esc to continue.", style="Muted.TLabel", wraplength=dp(350)).grid(row=0, column=0, sticky="w", pady=(0, dp(6)))
+        self.debug_check = ttk.Checkbutton(advanced, text="Debug / calibration mode\n(only in ADB mode)", variable=self.debug_mode, style="Large.TCheckbutton")
+        self.debug_check.grid(row=4, column=0, sticky="w")
+        ttk.Label(advanced, text="ADB calibration pauses before each click.\nCheck the image, then press a key other than Esc to continue.", style="Muted.TLabel", wraplength=dp(350)).grid(row=5, column=0, sticky="w", pady=(0, dp(6)))
+        self.reset_timing_button = ttk.Button(advanced, text='Reset to recommended', command=self._reset_recommended_timing)
+        self.reset_timing_button.grid(row=6, column=0, sticky='w', pady=(0, dp(8)))
+        self.settings_widgets.extend([self.random_check, self.debug_check, self.reset_timing_button])
         self.start_button = ttk.Button(action_dock, text="Start Refresh", style="Accent.TButton", command=self.start_refresh)
         self.start_button.grid(row=0, column=0, sticky="ew", padx=(0, dp(4)))
         self.stop_button = ttk.Button(action_dock, text="Stop Session", command=self.stop_refresh, state=tk.DISABLED)
@@ -928,11 +953,12 @@ class RefreshGui(tk.Tk):
         ThemeHint(self.tracker_button, lambda: 'Shrink to a small always-on-top bar once the engine starts; returns when the session ends')
         ttk.Label(action_dock, textvariable=self.setting_notice, style="Muted.TLabel", wraplength=dp(350)).grid(row=4, column=0, columnspan=2, sticky="w", pady=(dp(4), 0))
         estimate = ttk.LabelFrame(self.settings_details, text="Budget estimate", padding=dp(8))
-        estimate.grid(row=1, column=0, sticky="ew")
+        estimate.grid(row=7, column=0, sticky="ew")
         ttk.Label(estimate, textvariable=self.ev, wraplength=dp(320), justify=tk.LEFT).grid(sticky="w")
         ttk.Label(estimate, text="Statistical estimate; results vary.", style="Muted.TLabel", wraplength=dp(320)).grid(sticky="w", pady=(dp(8), 0))
         self.budget.trace_add("write", lambda *_: self._update_ev())
-        self.buy_friendship.trace_add('write', lambda *_: self._update_ev())
+        for var in (self.buy_friendship, self.buy_covenant, self.buy_mystic):
+            var.trace_add('write', lambda *_: self._update_ev())
         self.tap_sleep.trace_add('write', lambda *_: self._update_tap_jitter())
         self.random_offset.trace_add('write', lambda *_: self._update_tap_jitter())
         self.debug_mode.trace_add('write', lambda *_: self._update_tap_jitter())
@@ -1169,8 +1195,61 @@ class RefreshGui(tk.Tk):
             legacy_jitter = min(float(self.tap_sleep.get()) * .1, .05)
             jitter = parser.getfloat('GUI', 'tap_jitter', fallback=legacy_jitter)
             self.tap_jitter.set(jitter if math.isfinite(jitter) and 0 <= jitter <= .1 else .03)
+            self.buy_covenant.set(parser.getboolean('GUI', 'buy_covenant', fallback=True))
+            self.buy_mystic.set(parser.getboolean('GUI', 'buy_mystic', fallback=True))
+            settings_version = parser.getint('GUI', 'settings_version', fallback=0)
         except (OSError, ValueError, configparser.Error) as exc:
             self.setting_notice.set(f"Sound preference could not be read: {exc}")
+            return
+        if settings_version < SETTINGS_VERSION:
+            self._migrate_recommended_timing()
+
+    def _migrate_recommended_timing(self):
+        """0.2.6 moved timing under Advanced: reset older custom timing once."""
+        changed = self._reset_recommended_timing(save=False)
+        try:
+            self._write_engine_timing()
+            self._write_sound_preference()  # records SETTINGS_VERSION so this runs once
+        except (OSError, configparser.Error) as exc:
+            # Runs before the log exists; the notice line is the only output.
+            self.setting_notice.set(f'Recommended timing could not be saved: {exc}')
+            return
+        if changed:
+            self.setting_notice.set('Timing reset to the recommended values for this version. '
+                                    'Advanced settings can change it again.')
+
+    def _reset_recommended_timing(self, save=True):
+        """Recommended tap delay, offsets and jitter; returns whether anything changed."""
+        before = (self.tap_sleep.get(), self.random_offset.get(), round(self.tap_jitter.get(), 2), self.debug_mode.get())
+        self.tap_sleep.set(RECOMMENDED_TAP_DELAY)
+        self.random_offset.set(True)
+        self.tap_jitter.set(RECOMMENDED_TAP_JITTER)
+        self.debug_mode.set(False)
+        self._update_tap_jitter()
+        changed = before != (RECOMMENDED_TAP_DELAY, True, RECOMMENDED_TAP_JITTER, False)
+        if save:
+            try:
+                self._write_engine_timing()
+                self._write_sound_preference()
+                self.setting_notice.set('Timing reset to the recommended values.')
+            except (OSError, configparser.Error) as exc:
+                self.setting_notice.set('Timing reset for this session; it could not be saved.')
+                self._append_log(f'Recommended timing could not be saved: {exc}\n')
+        return changed
+
+    def _write_engine_timing(self):
+        """Store only the timing keys in ADBconfig.ini, leaving budget and stop key alone."""
+        parser = configparser.ConfigParser()
+        parser.read(CONFIG_FILE)
+        if not parser.has_section('Settings'):
+            if not CONFIG_FILE.exists():
+                return  # nothing saved yet; the next Save or Start writes the full file
+            parser.add_section('Settings')
+        parser['Settings'].update({'tap_sleep': self.tap_sleep.get(), 'random_offset': str(self.random_offset.get())})
+        temp = CONFIG_FILE.with_suffix('.ini.tmp')
+        with temp.open('w', encoding='utf-8') as fh:
+            parser.write(fh)
+        temp.replace(CONFIG_FILE)
 
     def _write_sound_preference(self):
         # The original engine rewrites ADBconfig.ini, so GUI preferences need
@@ -1183,6 +1262,9 @@ class RefreshGui(tk.Tk):
         parser['GUI']['trace_input'] = str(self.trace_input.get())
         parser['GUI']['compact_tracker'] = str(self.compact_tracker.get())
         parser['GUI']['buy_friendship'] = str(self.buy_friendship.get())
+        parser['GUI']['buy_covenant'] = str(self.buy_covenant.get())
+        parser['GUI']['buy_mystic'] = str(self.buy_mystic.get())
+        parser['GUI']['settings_version'] = str(SETTINGS_VERSION)
         parser["GUI"]["dark_mode"] = str(self.dark_mode.get())
         parser["GUI"]["credits_seen"] = str(self.credits_seen.get())
         parser["GUI"]["show_credits_on_startup"] = str(self.credits_on_startup.get())
@@ -1250,7 +1332,8 @@ class RefreshGui(tk.Tk):
             raise ValueError('Choose the emulator from the device list, or enter its ADB endpoint. Use Scan to discover BlueStacks.')
         device = self._device_address() or ('native-mouse' if self.control_mode.get() != 'ADB' else '')
         self._raise_tap_delay_floor()
-        return validate_settings(device, self.budget.get(), self.tap_sleep.get(), self.stop_key.get(), self.random_offset.get(), self.debug_mode.get(), round(self.tap_jitter.get(), 2), self.trace_input.get(), self.buy_friendship.get())
+        return validate_settings(device, self.budget.get(), self.tap_sleep.get(), self.stop_key.get(), self.random_offset.get(), self.debug_mode.get(), round(self.tap_jitter.get(), 2), self.trace_input.get(), self.buy_friendship.get(),
+                                 self.buy_covenant.get(), self.buy_mystic.get())
 
     def _raise_tap_delay_floor(self):
         """Show the raised value in the box; validation applies the same floor."""
@@ -1660,6 +1743,18 @@ class RefreshGui(tk.Tk):
         self._close()
 
     def _begin_refresh(self, settings, *, mouse_target=None):
+        if not (settings.buy_covenant and settings.buy_mystic):
+            try:
+                check = subprocess.run([*engine_command(), '--verify'], stdin=subprocess.DEVNULL, cwd=APP_DIR, capture_output=True,
+                                       text=True, timeout=15, creationflags=NO_WINDOW)
+                if check.returncode or 'item choice v1' not in check.stdout:
+                    raise ValueError('Choosing which items to buy needs the matching new engine. Use the complete player folder, '
+                                     'or turn Covenant and Mystic back on.')
+                if mouse_target is None and not self._structured_adb:
+                    raise ValueError('Choosing which items to buy requires GUI session support from the matching new engine.')
+            except (ValueError, OSError, subprocess.SubprocessError) as error:
+                self._set_connection_warning(str(error), reveal=True)
+                return
         if settings.buy_friendship:
             try:
                 check = subprocess.run([*engine_command(), '--verify'], stdin=subprocess.DEVNULL, cwd=APP_DIR, capture_output=True,
@@ -1737,12 +1832,14 @@ class RefreshGui(tk.Tk):
         self._set_controls(True)
         self._event(f"Starting on {mouse_target.title if mouse_target else settings.device} · budget {settings.budget:,.0f} skystone.")
         arguments = engine_command()
+        skip_items = (['--skip-covenant'] if not settings.buy_covenant else []) + (['--skip-mystic'] if not settings.buy_mystic else [])
         if background:
             arguments += ['--background-session','--budget',str(settings.budget),'--delay',str(settings.tap_sleep),
                           '--stop-key',settings.stop_key,'--random-offset','yes' if settings.random_offset else 'no',
                           '--tap-jitter',str(settings.tap_jitter)]
             arguments += ['--trace-input'] if settings.trace_input else []
             arguments += ['--buy-friendship'] if settings.buy_friendship else []
+            arguments += skip_items
         elif mouse_target is not None:
             arguments += ['--mouse-session',json.dumps(dict(handle=mouse_target.handle,pid=mouse_target.pid,
                           title=mouse_target.title,rectangle=mouse_target.rectangle,render_handle=mouse_target.render_handle,
@@ -1752,6 +1849,7 @@ class RefreshGui(tk.Tk):
                           '--tap-jitter',str(settings.tap_jitter)]
             if settings.buy_friendship:
                 arguments.append('--buy-friendship')
+            arguments += skip_items
         else:
             arguments += ['--gui-session', json.dumps(asdict(settings))] if self._structured_adb else ['--tap-jitter',str(settings.tap_jitter)]
         try:
@@ -2290,17 +2388,18 @@ class RefreshGui(tk.Tk):
 
     def _update_diagnostics_summary(self):
         settings=self.run_settings
-        enabled=settings.buy_friendship if settings else self.buy_friendship.get()
-        self.diagnostics_summary.set(f"Covenant buys: {self.covenant.get()} · Mystic buys: {self.mystic.get()} · Friendship buys: {self.friendship.get()} ({'on' if enabled else 'off'})\n"
+        on=lambda name:'on' if (getattr(settings,name) if settings else getattr(self,name).get()) else 'off'
+        self.diagnostics_summary.set(f"Covenant buys: {self.covenant.get()} ({on('buy_covenant')}) · Mystic buys: {self.mystic.get()} ({on('buy_mystic')}) · "
+            f"Friendship buys: {self.friendship.get()} ({on('buy_friendship')})\n"
             f"Stop key: {getattr(self,'_stop_key_status','No active session')}")
 
     def _copy_diagnostics(self):
         self.clipboard_clear()
         settings=self.run_settings
-        enabled=settings.buy_friendship if settings else self.buy_friendship.get()
+        on=lambda name:'on' if (getattr(settings,name) if settings else getattr(self,name).get()) else 'off'
         stop_status=getattr(self,'_stop_key_status','No active session')
         self.clipboard_append(anonymize(f"App: v{APP_VERSION}\nSystem: {system_name()}\nControl: {self.control_mode.get()}\nEngine: {ENGINE_EXE}\nState: {self.status.get()}\n"
-            f"Stop key: {stop_status}\nFriendship Points buying: {'on' if enabled else 'off'}\n"
+            f"Stop key: {stop_status}\nBuying: Covenant {on('buy_covenant')} · Mystic {on('buy_mystic')} · Friendship Points {on('buy_friendship')}\n"
             f"Purchases: Covenant {self.covenant.get()} · Mystic {self.mystic.get()} · Friendship {self.friendship.get()}\n\n{self.raw_output}"))
 
     def _report_text(self):
@@ -2455,7 +2554,7 @@ class RefreshGui(tk.Tk):
             self.settings_details.grid()
         else:
             self.settings_details.grid_remove()
-        self.details_button.configure(text=('▾' if self.details_expanded else '▸')+' Estimate & calibration help')
+        self.details_button.configure(text=('▾' if self.details_expanded else '▸')+' Advanced: timing, calibration, estimate')
         self.update_idletasks()
         self._update_settings_scroll()
 
@@ -2495,7 +2594,12 @@ class RefreshGui(tk.Tk):
             budget = int(self.budget.get())
             if budget < 3:
                 raise ValueError
-            self.ev.set(f"Gold needed ≈ {int(budget * 1691.04536):,}\nCovenant buys ≈ {budget * 0.006602509:.1f}\nMystic buys ≈ {budget * 0.001700646:.1f}")
+            covenant, mystic = self.buy_covenant.get(), self.buy_mystic.get()
+            gold = budget * (0.006602509 * 184000 * covenant + 0.001700646 * 280000 * mystic)
+            lines = [f"Gold needed ≈ {int(gold):,}"]
+            lines += [f"Covenant buys ≈ {budget * 0.006602509:.1f}"] if covenant else []
+            lines += [f"Mystic buys ≈ {budget * 0.001700646:.1f}"] if mystic else []
+            self.ev.set('\n'.join(lines))
             if self.buy_friendship.get():
                 self.ev.set(self.ev.get()+'\nFriendship adds 18,000 gold per buy.')
         except (ValueError, OverflowError):

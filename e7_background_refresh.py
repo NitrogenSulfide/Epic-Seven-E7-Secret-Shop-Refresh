@@ -85,6 +85,8 @@ def run_background_session(arguments):
     parser.add_argument('--tap-jitter', type=float, default=None)
     parser.add_argument('--trace-input', action='store_true')
     parser.add_argument('--buy-friendship', action='store_true')
+    parser.add_argument('--skip-covenant', action='store_true')
+    parser.add_argument('--skip-mystic', action='store_true')
     parser.add_argument('--dry-run', action='store_true', help='navigate and recognize only; never Buy or Refresh')
     args = parser.parse_args(arguments)
     if not math.isfinite(args.budget) or args.budget < 3:
@@ -98,7 +100,8 @@ def run_background_session(arguments):
         app = E7BackgroundShopRefresh(budget=args.budget, tap_sleep=args.delay, stop_refresh_key=args.stop_key,
                                       random_offset=args.random_offset == 'yes', debug=False,
                                       tap_jitter=args.tap_jitter, trace_input=args.trace_input,
-                                      buy_friendship=args.buy_friendship, dry_run=args.dry_run)
+                                      buy_friendship=args.buy_friendship, buy_covenant=not args.skip_covenant,
+                                      buy_mystic=not args.skip_mystic, dry_run=args.dry_run)
         if sys.stdin is not None:
             threading.Thread(target=listen_for_stop, args=(sys.stdin, app), daemon=True).start()
         print('E7GUI_STARTED', flush=True)

@@ -175,7 +175,7 @@ class GuiTests(unittest.TestCase):
         self.app._handle_line('E7GUI_STOP_KEY '+json.dumps(dict(key='esc',status='ready',backend='Windows global hotkey')))
         with patch.object(self.app,'clipboard_clear'),patch.object(self.app,'clipboard_append') as copy:
             self.app._copy_diagnostics()
-        self.assertIn('Friendship Points buying: on',copy.call_args.args[0])
+        self.assertIn('Buying: Covenant on · Mystic on · Friendship Points on',copy.call_args.args[0])
         self.assertIn('Friendship 2',copy.call_args.args[0])
         self.assertIn('esc · Windows global hotkey',copy.call_args.args[0])
         self.assertIn('Friendship buys: 2 (on)',self.app.diagnostics_summary.get())

@@ -26,6 +26,20 @@ class StartupSelectionTests(unittest.TestCase):
                 with self.assertRaises(ValueError):engine.E7ADBShopRefresh(**kwargs)
             capture.assert_not_called()
 
+    def test_item_choice_limits_inventory_and_needs_one_item(self):
+        import numpy as np
+        with patch.object(engine.E7ADBShopRefresh, 'checkScreenDimension'), patch.object(engine, 'create_navigator'), \
+             patch.object(engine.cv2, 'imread', return_value=np.zeros((20, 20, 3), dtype=np.uint8)):
+            for kwargs, names in ((dict(), ['Covenant bookmark', 'Mystic medal']),
+                                  (dict(buy_covenant=False), ['Mystic medal']),
+                                  (dict(buy_mystic=False), ['Covenant bookmark']),
+                                  (dict(buy_covenant=False, buy_mystic=False, buy_friendship=True), ['Friendship points'])):
+                with self.subTest(**kwargs):
+                    self.assertEqual(list(engine.E7ADBShopRefresh(**kwargs).storage.inventory), names)
+            for kwargs in (dict(buy_covenant=False, buy_mystic=False), dict(buy_covenant='no')):
+                with self.subTest(**kwargs), self.assertRaises(ValueError):
+                    engine.E7ADBShopRefresh(**kwargs)
+
     def test_calibration_and_normal_inventory_exclude_friendship(self):
         import numpy as np
         for debug in (False, True):
