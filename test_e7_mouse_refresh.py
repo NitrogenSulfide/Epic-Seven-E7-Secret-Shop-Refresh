@@ -1188,6 +1188,51 @@ class NativeEngineTests(unittest.TestCase):
             app._confirm('refresh',np.array(frame()))
         self.assertEqual(app.mouse.click.call_count,1)  # the one Confirm, nothing more
 
+    def test_blank_dialog_backdrop_gets_a_longer_wait_but_still_needs_the_full_checks(self):
+        # Steam 3840x2019, 2026-11-24: the dimmed shop and an empty dialog band
+        # stayed up for the whole 5 s, probably while the game waited on the server.
+        import itertools
+        navigation,frame=self._real_navigator_frames()
+        before=np.array(frame())
+        box=(1100,600,1300,660)
+        for appears in (8.,None):
+            with self.subTest(appears=appears):
+                app=self.make_engine();app.navigation=navigation;app._item_name=None
+                app.read_confirmation_text=lambda _:'' if appears is None else 'Use Skystone to refresh?'
+                clock=itertools.count(0,.25);now=[0.]
+                def tick():
+                    now[0]=next(clock);return now[0]
+                found=lambda *a:box if appears is not None and now[0]>=appears else None
+                app.mouse.screenshot.side_effect=lambda:frame(.15)
+                with patch('e7_shop_flow.confirmation_button',side_effect=found), \
+                        patch('e7_shop_flow.confirmation_matches',  # Codex P2: text readable 1 s after the button
+                              side_effect=lambda *a:appears is not None and now[0]>=appears+1), \
+                        patch('e7_mouse_refresh.time.sleep'),patch('e7_mouse_refresh.time.monotonic',side_effect=tick), \
+                        patch('builtins.print') as printed:
+                    if appears is None:
+                        with self.assertRaisesRegex(MouseStopped,'refresh confirmation was not recognized: it stayed blank for 15 seconds'):
+                            app._confirm('refresh',before)
+                        app.mouse.click.assert_not_called()
+                        self.assertGreaterEqual(now[0],15)
+                    else:
+                        # The shop never returns in this fake, so it stops after Confirm.
+                        clicked=[];app.mouse.click.side_effect=lambda *a:clicked.append(now[0])
+                        with self.assertRaisesRegex(MouseStopped,'shop did not return'):
+                            app._confirm('refresh',before)
+                        self.assertGreaterEqual(clicked[0],appears+1)  # clicked only once the dialog was read
+                self.assertTrue(any('still blank' in str(c.args[0]) for c in printed.call_args_list if c.args))
+        # A dark frame without the dimmed shop behind it gets no extra time.
+        app=self.make_engine();app.navigation=navigation;app.read_confirmation_text=lambda _:''
+        clock=itertools.count(0,.25);now=[0.]
+        def tick2():
+            now[0]=next(clock);return now[0]
+        app.mouse.screenshot.side_effect=lambda:Image.fromarray(np.full((1080,1920,3),5,dtype=np.uint8))
+        with patch('e7_shop_flow.confirmation_button',return_value=None),patch('e7_mouse_refresh.time.sleep'), \
+                patch('e7_mouse_refresh.time.monotonic',side_effect=tick2), \
+                self.assertRaisesRegex(MouseStopped,r'refresh confirmation was not recognized\. No'):
+            app._confirm('refresh',before)
+        self.assertLess(now[0],8)
+
     def test_fading_confirmation_is_read_again_and_clicked_once_settled(self):
         # Fast captures can catch the dialog half transparent (seen live on Linux):
         # the button is found but looks different in the next capture.

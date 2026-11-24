@@ -460,6 +460,7 @@ def confirmation_button(rgb, operation, before):
     return None
 
 
+BLANK_DIALOG_EXTRA_SECONDS = 10  # extra wait while a dialog backdrop is up but nothing in it can be read yet
 BUTTON_SETTLED = 6  # mean change of the confirm button between two captures; ~19 mid fade-in, 0 at rest
 CONFIRM_IN_PLACE_SECONDS = 1.0  # a confirm button found in the same place this long counts as settled even while its pixels change
 
@@ -948,18 +949,32 @@ class ObservedShopFlow:
         changed = None
         visibility_rechecks = 0
         in_place = None  # (button box, first time seen there) while it keeps changing in place
-        while self.loop_active and time.monotonic()<deadline:
+        # Steam 3840x2019, 2026-11-24: after 76 refreshes the game showed the
+        # dimmed shop and an empty dialog band for the whole 5 s (likely a slow
+        # server reply). While that blank backdrop stays up, keep reading for
+        # up to BLANK_DIALOG_EXTRA_SECONDS more; a click still needs the full
+        # button and text checks below. Once granted, the extra time stays, so
+        # a dialog that fills in late still gets its text and settling reads.
+        blank_dialog = extended = False
+        while self.loop_active and (time.monotonic()<deadline or
+                                    (extended and time.monotonic()<deadline+BLANK_DIALOG_EXTRA_SECONDS)):
             self._poll_wait(operation+' dialog')
             if not self.loop_active:
                 return False
-            self.takeScreenshot()
+            frame = self.takeScreenshot()
             if self._capture_resumed:
                 deadline = time.monotonic()+5
                 in_place = None
             box = confirmation_button(self._rgb,operation,before)
             if box is None:
                 in_place = None  # the hold must be unbroken
+                blank_dialog = time.monotonic()>=deadline-.5 and self._blank_dialog_up(frame,before)
+                if blank_dialog and not extended:
+                    extended = True
+                    print(f'Navigation: The {operation} confirmation is open but still blank (the game may be waiting '
+                          f'on the server); waiting up to {BLANK_DIALOG_EXTRA_SECONDS} more seconds.',flush=True)
             else:
+                blank_dialog = False
                 text = self.read_confirmation_text(self._rgb)
                 if not confirmation_matches(text,operation,self._item_name):
                     in_place = None
@@ -1054,6 +1069,10 @@ class ObservedShopFlow:
                                    'No confirmation click sent.'+detail)
             if text_rejected:
                 raise MouseStopped('The confirmation does not match the intended shop action. No confirmation click sent.'+detail)
+            if blank_dialog:
+                raise ConfirmationNotShown(f'The {operation} confirmation was not recognized: it stayed blank for '
+                                           f'{5+BLANK_DIALOG_EXTRA_SECONDS} seconds (the game may be waiting on the server). '
+                                           'No confirmation click sent.'+detail)
             raise ConfirmationNotShown(f'The {operation} confirmation was not recognized. No confirmation click sent.'+detail)
         clicked, click_revision, retried = current, self._pause_revision(), False
         while True:
@@ -1126,6 +1145,18 @@ class ObservedShopFlow:
                 or not confirmation_matches(self.read_confirmation_text(self._rgb),operation,self._item_name)):
             return None
         return current
+
+
+    def _blank_dialog_up(self,frame,before):
+        """True when a dialog backdrop covers the shop (its centre changed and
+        the shop title or Refresh label is there only dimmed) but no dialog
+        button can be read yet, e.g. while the game waits on the server."""
+        if np.mean(cv2.absdiff(self._rgb[300:920,550:1400],before[300:920,550:1400])) < 4:
+            return False
+        if self.navigation.shop_visible(frame):
+            return False
+        return any(nav.dimmed(frame,name) is True for _,nav in self.navigation.navigators
+                   for name in ('shop-title.png','refresh-label.png'))
 
 
     def _save_confirmation_failure(self,operation,before,*,validated=None):

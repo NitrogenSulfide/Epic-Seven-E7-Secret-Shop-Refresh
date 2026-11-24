@@ -1,3 +1,13 @@
+Unreleased
+
+• Reported on Steam (3840 × 2019, Background): after 76 refreshes the run
+  stopped with "The refresh confirmation was not recognized". The game had
+  darkened the shop and opened an empty dialog band for more than 5 seconds,
+  probably while waiting on the server. While that blank dialog is up, the app
+  now keeps reading for up to 10 more seconds (15 in all) and says so. It still
+  clicks Confirm only after reading the full dialog; if it stays blank, the
+  stop message says it stayed blank.
+
 0.2.5 (beta) · Works on Windows without English text recognition; maximized windows; says why OCR failed
 
 • Reported on GitHub (#2, #3): on a Windows set up in another language,
