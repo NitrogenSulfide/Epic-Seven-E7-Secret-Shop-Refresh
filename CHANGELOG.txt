@@ -1,4 +1,4 @@
-0.2.7-rc2 (test) · A more visual settings panel that saves itself
+0.2.7-rc3 (test) · A more visual settings panel that saves itself
 
 • Control mode is a row of cards (Background, Mouse, ADB) instead of a list.
   Hover a card for who it is for.
@@ -18,6 +18,8 @@
   off in an older version, the callouts start off too.
 • The settings sidebar sits on one rounded card, so scrolling it no longer
   tears the background picture.
+• The session dashboard sits on a matching rounded card, with the stat tiles
+  as smaller cards inside it.
 
 0.2.6 (beta) · Choose what to buy; "Covenant!"/"Mystic!" callouts; simpler timing; waits out a blank confirmation
 

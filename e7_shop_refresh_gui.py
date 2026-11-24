@@ -745,7 +745,8 @@ class RefreshGui(tk.Tk):
 
     def _layout_dashboard(self):
         self._layout_job = None
-        width = self.right_panel.winfo_width()
+        left, top, right, bottom = self._dashboard_pad
+        width = self.right_panel.winfo_width() - left - right  # inside the card's padding
         self.home_ui_notice.configure(wraplength=max(self._dp(200), width-self._dp(75)))
         self.detail_label.configure(wraplength=max(self._dp(250), width-self._dp(12)))
         self.diagnostics_label.configure(wraplength=max(self._dp(250), width-self._dp(60)))
@@ -772,7 +773,8 @@ class RefreshGui(tk.Tk):
         banner_height = 0 if self.home_ui_hint_dismissed else self.home_ui_banner.winfo_reqheight() + self._dp(6)
         messages_height = banner_height + self.detail_label.winfo_reqheight()
         required_height = sum(widget.winfo_reqheight() for widget in (self.session_title, self.metrics, self.progress_frame, self.history_header, self.history_label)) + messages_height + self.table_rowheight*6 + self._dp(160)
-        compact = self.right_panel.winfo_height() < required_height
+        inner_height = self.right_panel.winfo_height() - top - bottom
+        compact = inner_height < required_height
         if compact != self.compact_history:
             self.compact_history = compact
             for widget in (self.history_header, self.history_frame, self.history_label):
@@ -790,7 +792,7 @@ class RefreshGui(tk.Tk):
                 self.history_label.grid(row=7, column=0, sticky="w", pady=(self._dp(6), 0))
                 self.right_panel.rowconfigure(6, weight=2, minsize=self.table_rowheight*3+self._dp(55))
         top_height = sum(widget.winfo_reqheight() for widget in (self.session_title, self.metrics, self.progress_frame)) + messages_height + self._dp(40)
-        condensed = compact and self.right_panel.winfo_height() < top_height + self.table_rowheight*2 + self._dp(90)
+        condensed = compact and inner_height < top_height + self.table_rowheight*2 + self._dp(90)
         self.session_title.grid_remove() if condensed else self.session_title.grid()
         critical_detail = self.status.get() in ('Needs attention', 'Paused', 'Waiting for game', 'Not ready', 'Not connected', 'Failed')
         self.detail_label.grid_remove() if condensed and not critical_detail else self.detail_label.grid()
@@ -1151,8 +1153,11 @@ class RefreshGui(tk.Tk):
                 bind_wheel(child)
         bind_wheel(controls)
 
-        self.right_panel = right = ttk.Frame(body)
+        # The dashboard is a solid rounded card too, matching the sidebar.
+        self._dashboard_pad = (dp(16), dp(12), dp(16), dp(14))
+        self.right_panel = right = ttk.Frame(body, padding=self._dashboard_pad)
         right.grid(row=0, column=1, sticky="nsew")
+        self.scenery_cards = (self.sidebar_card, right)
         right.columnconfigure(0, weight=1)
         right.rowconfigure(4, weight=1, minsize=self.table_rowheight * 3 + dp(55))
         right.rowconfigure(6, weight=2, minsize=self.table_rowheight * 3 + dp(55))

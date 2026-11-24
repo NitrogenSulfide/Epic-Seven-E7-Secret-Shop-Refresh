@@ -158,8 +158,9 @@ class Scenery:
                     continue
                 if str(widget.cget('style')).startswith('Tile.'):
                     continue  # Item and mode tiles are solid cards, like buttons.
-                if self._inside_card(widget):
-                    continue  # The sidebar card is a solid surface.
+                cards = getattr(root, 'metric_cards', ())
+                if self._inside_card(widget) and widget not in cards and widget.master not in cards:
+                    continue  # Cards are solid surfaces; their metric tiles are drawn below.
                 ancestor = widget.master
                 while ancestor is not root and ancestor.winfo_class() != 'TLabelframe':
                     ancestor = ancestor.master
@@ -186,29 +187,30 @@ class Scenery:
         visit(root)
         root.bind('<Configure>',self.schedule,add='+')
 
+    def _cards(self):
+        return tuple(getattr(self.root, 'scenery_cards', ()))
+
     def _inside_card(self, widget):
-        card = getattr(self.root, 'sidebar_card', None)
+        """True for widgets on one of the solid rounded cards (sidebar, dashboard)."""
+        cards = self._cards()
         ancestor = widget.master
-        while card is not None and ancestor is not None:
-            if ancestor is card:
+        while ancestor is not None:
+            if ancestor in cards:
                 return True
             ancestor = ancestor.master
         return False
 
-    def _card(self, crop, w, h, dark):
-        """Draw the sidebar's rounded card over its backdrop crop, smoothed by supersampling."""
-        scale, radius = 3, self.root._dp(14)
-        fill = ttk.Style(self.root).lookup('TFrame', 'background') or ('#111827' if dark else '#f3f5f8')
+    def _rounded(self, base, w, h, fill, border, radius):
+        """Paint a rounded rectangle over base, smoothed by supersampling."""
+        scale, line = 3, max(1, self.root._dp(1))
         mask = Image.new('L', (w*scale, h*scale), 0)
         ImageDraw.Draw(mask).rounded_rectangle((0, 0, w*scale-1, h*scale-1), radius=radius*scale, fill=255)
-        border = Image.new('L', (w*scale, h*scale), 0)
-        ImageDraw.Draw(border).rounded_rectangle((0, 0, w*scale-1, h*scale-1), radius=radius*scale,
-                                                 outline=255, width=max(1, self.root._dp(1))*scale)
-        mask = mask.resize((w, h), Image.Resampling.LANCZOS)
-        border = border.resize((w, h), Image.Resampling.LANCZOS)
-        crop.paste(Image.new('RGB', (w, h), fill), (0, 0), mask)
-        crop.paste(Image.new('RGB', (w, h), '#475569' if dark else '#cbd5e1'), (0, 0), border)
-        return crop
+        edge = Image.new('L', (w*scale, h*scale), 0)
+        ImageDraw.Draw(edge).rounded_rectangle((0, 0, w*scale-1, h*scale-1), radius=radius*scale,
+                                               outline=255, width=line*scale)
+        base.paste(Image.new('RGB', (w, h), fill), (0, 0), mask.resize((w, h), Image.Resampling.LANCZOS))
+        base.paste(Image.new('RGB', (w, h), border), (0, 0), edge.resize((w, h), Image.Resampling.LANCZOS))
+        return base
 
     def schedule(self, event=None):
         if Image is None or not getattr(self,'sources',{}):
@@ -264,10 +266,18 @@ class Scenery:
             if rectangle == previous or w < 1 or h < 1:
                 continue
             crop = self.backdrop.crop((x,y,x+w,y+h))
-            if widget is getattr(self.root, 'sidebar_card', None):
-                crop = self._card(crop, w, h, dark)
+            panel = ttk.Style(self.root).lookup('TFrame', 'background') or ('#111827' if dark else '#f3f5f8')
+            border = '#475569' if dark else '#cbd5e1'
+            tile = '#1e293b' if dark else '#ffffff'
             cards = self.root.metric_cards
-            if widget in cards or widget.master in cards:
+            if widget in self._cards():
+                crop = self._rounded(crop, w, h, panel, border, self.root._dp(14))
+            elif widget in cards and self._inside_card(widget):
+                # A metric tile on the solid dashboard card.
+                crop = self._rounded(Image.new('RGB', (w, h), panel), w, h, tile, border, self.root._dp(8))
+            elif widget.master in cards and self._inside_card(widget):
+                crop = Image.new('RGB', (w, h), tile)
+            elif widget in cards or widget.master in cards:
                 crop = Image.blend(crop,Image.new('RGB',(w,h),'#1e293b' if dark else '#ffffff'),.72)
                 if widget in cards:
                     draw = ImageDraw.Draw(crop)
