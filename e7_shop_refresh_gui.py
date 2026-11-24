@@ -15,7 +15,7 @@ import time
 import uuid
 import webbrowser
 import tkinter as tk
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from tkinter import font as tkfont, messagebox, ttk, filedialog
 from e7_process import launch_engine
@@ -1201,11 +1201,16 @@ class RefreshGui(tk.Tk):
         except (OSError, ValueError, configparser.Error) as exc:
             self.setting_notice.set(f"Sound preference could not be read: {exc}")
             return
+        self._loaded_settings_version = settings_version
         if settings_version < SETTINGS_VERSION:
             self._migrate_recommended_timing()
 
     def _migrate_recommended_timing(self):
         """0.2.6 moved timing under Advanced: reset older custom timing once."""
+        # Until ADBconfig.ini holds the reset timing, no preference save may
+        # record the new settings_version, or a failed write would skip the
+        # reset for good.
+        self._timing_migration_pending = True
         changed = self._reset_recommended_timing(save=False)
         try:
             self._write_engine_timing()
@@ -1243,13 +1248,17 @@ class RefreshGui(tk.Tk):
         parser.read(CONFIG_FILE)
         if not parser.has_section('Settings'):
             if not CONFIG_FILE.exists():
-                return  # nothing saved yet; the next Save or Start writes the full file
+                # Nothing saved yet, so no older timing to reset; the next
+                # Save or Start writes the full file.
+                self._timing_migration_pending = False
+                return
             parser.add_section('Settings')
         parser['Settings'].update({'tap_sleep': self.tap_sleep.get(), 'random_offset': str(self.random_offset.get())})
         temp = CONFIG_FILE.with_suffix('.ini.tmp')
         with temp.open('w', encoding='utf-8') as fh:
             parser.write(fh)
         temp.replace(CONFIG_FILE)
+        self._timing_migration_pending = False
 
     def _write_sound_preference(self):
         # The original engine rewrites ADBconfig.ini, so GUI preferences need
@@ -1264,7 +1273,8 @@ class RefreshGui(tk.Tk):
         parser['GUI']['buy_friendship'] = str(self.buy_friendship.get())
         parser['GUI']['buy_covenant'] = str(self.buy_covenant.get())
         parser['GUI']['buy_mystic'] = str(self.buy_mystic.get())
-        parser['GUI']['settings_version'] = str(SETTINGS_VERSION)
+        pending = getattr(self, '_timing_migration_pending', False)
+        parser['GUI']['settings_version'] = str(getattr(self, '_loaded_settings_version', 0) if pending else SETTINGS_VERSION)
         parser["GUI"]["dark_mode"] = str(self.dark_mode.get())
         parser["GUI"]["credits_seen"] = str(self.credits_seen.get())
         parser["GUI"]["show_credits_on_startup"] = str(self.credits_on_startup.get())
@@ -1406,6 +1416,7 @@ class RefreshGui(tk.Tk):
             with temp.open("w", encoding="utf-8") as fh:
                 parser.write(fh)
             temp.replace(CONFIG_FILE)
+            self._timing_migration_pending = False  # the full file now holds the current timing
             self._write_sound_preference()
         except (ValueError, OSError, configparser.Error) as exc:
             messagebox.showerror("Settings not saved", str(exc), parent=self)
@@ -1774,7 +1785,8 @@ class RefreshGui(tk.Tk):
         if settings is None:
             return
         if settings.debug:
-            settings = RunSettings(settings.device, 100, settings.tap_sleep, "esc", True, True, settings.tap_jitter, settings.trace_input)
+            # Calibration overrides only these; the chosen items stay as set.
+            settings = replace(settings, budget=100, stop_key="esc", random_offset=True, debug=True)
         self.run_settings = settings
         self.session_estimate.reset(settings.budget, enabled=not settings.debug)
         self.remaining_time.set('Time remaining: Starting…' if not settings.debug else 'Time remaining: Unavailable during calibration')

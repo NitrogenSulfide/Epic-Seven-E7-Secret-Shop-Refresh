@@ -193,6 +193,21 @@ class GuiTests(unittest.TestCase):
         self.app._set_controls(False)
         self.assertFalse(self.app.friendship_check.instate(['disabled']))
 
+    def test_calibration_keeps_skipped_items_skipped(self):
+        self.app.buy_mystic.set(False);self.app.debug_mode.set(True)
+        settings=self.app._settings()
+        self.app._structured_adb=True
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='gui session v1; item choice v1')), \
+             patch.object(gui.messagebox,'askyesno',return_value=True), \
+             patch.object(gui,'launch_engine',side_effect=OSError('test: not launched')) as launch:
+            self.app._begin_refresh(settings)
+        launch.assert_called_once()
+        self.assertTrue(self.app.run_settings.debug)
+        self.assertEqual(self.app.run_settings.budget,100)
+        self.assertFalse(self.app.run_settings.buy_mystic)
+        self.assertTrue(self.app.run_settings.buy_covenant)
+        self.assertIn('"buy_mystic": false',launch.call_args.args[0][-1])
+
     def test_friendship_rejects_old_engine_before_launch(self):
         self.app.buy_friendship.set(True)
         settings=self.app._settings()

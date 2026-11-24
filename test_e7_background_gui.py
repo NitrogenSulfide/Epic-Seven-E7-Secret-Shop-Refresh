@@ -135,6 +135,21 @@ class BackgroundGuiTests(unittest.TestCase):
         self.assertTrue(self.app._reset_recommended_timing())
         self.assertEqual((self.app.tap_sleep.get(), self.app.random_offset.get()), ('0.3', True))
 
+    def test_failed_timing_reset_is_retried_on_next_start(self):
+        self.app.destroy()
+        gui.CONFIG_FILE.write_text('[Settings]\ntap_sleep = 0.8\nbudget = 300\nstop_refresh_key = `\nrandom_offset = False\n')
+        gui.GUI_CONFIG_FILE.write_text('[GUI]\ntap_jitter = 0.08\n')
+        with patch.object(gui.RefreshGui, '_write_engine_timing', side_effect=PermissionError('locked')):
+            self.app = gui.RefreshGui(); self.app.withdraw()
+        self.assertIn('could not be saved', self.app.setting_notice.get())
+        self.app._write_sound_preference()  # an unrelated preference save
+        self.assertIn('settings_version = 0', gui.GUI_CONFIG_FILE.read_text())
+        self.app.destroy()
+        self.app = gui.RefreshGui(); self.app.withdraw()
+        self.assertEqual(self.app.tap_sleep.get(), '0.3')
+        self.assertIn('tap_sleep = 0.3', gui.CONFIG_FILE.read_text())
+        self.assertIn('settings_version = 2', gui.GUI_CONFIG_FILE.read_text())
+
     def test_missing_helper_or_game_never_launches(self):
         self.pump_until(lambda: self.app.mouse_target.get() == 'Epic Seven (Steam)')
         with os_named('posix'), patch.object(gui, 'launch_engine') as launch:
