@@ -1,3 +1,24 @@
+0.2.7-rc2 (test) · A more visual settings panel that saves itself
+
+• Control mode is a row of cards (Background, Mouse, ADB) instead of a list.
+  Hover a card for who it is for.
+• Skystone budget: type it, drag the slider or pick 150 / 300 / 1,000 / 3,000.
+  A line underneath shows the refreshes, the expected Covenant and Mystic buys
+  and the gold needed.
+• Buy: Covenant, Mystic and Friendship are tiles with their own icons and the
+  gold per buy. A chosen tile is filled blue.
+• Settings save themselves a moment after each change, so the Save Settings
+  button is gone. An unfinished budget (below 3) or no item chosen keeps the
+  last good values in the engine file and says "Not saved yet". Nothing is
+  written while a session runs.
+• The stop key shows as a key cap; Start Refresh is larger.
+• Start/Stop SFX, Compact tracker and the "Covenant!" / "Mystic!" callouts are
+  four toggle pills under Start, filled blue when on. Each works on its own:
+  turning off Start/Stop SFX no longer silences the callouts. If Sounds was
+  off in an older version, the callouts start off too.
+• The settings sidebar sits on one rounded card, so scrolling it no longer
+  tears the background picture.
+
 0.2.6 (beta) · Choose what to buy; "Covenant!"/"Mystic!" callouts; simpler timing; waits out a blank confirmation
 
 • Choose what to buy: Covenant bookmarks, Mystic medals and Friendship Points

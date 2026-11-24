@@ -100,6 +100,29 @@ def mode_label(mode):
                            else 'Background · Steam (recommended)'),
             'Mouse': 'Mouse · emulators, takes over your pointer',
             'ADB': 'ADB · emulators'}.get(mode, mode)
+# One short line under each mode card; the hint shows the full mode_label.
+MODE_CARD_NOTES = {'Background': 'recommended', 'Mouse': 'uses pointer', 'ADB': 'emulators'}
+# Quick budget picks under the slider, in skystones.
+BUDGET_PICKS = (150, 300, 1000, 3000)
+BUDGET_SLIDER_RANGE = (30, 6000)
+# Expected buys of each item per skystone spent, for the budget estimates.
+COVENANT_RATE, MYSTIC_RATE = 0.006602509, 0.001700646
+AUTOSAVE_DELAY_MS = 700
+
+
+def budget_from_slider(position):
+    """Slider position 0..1 to a round budget on a log scale."""
+    low, high = BUDGET_SLIDER_RANGE
+    raw = low * (high / low) ** max(0.0, min(1.0, float(position)))
+    step = 30 if raw < 300 else 50 if raw < 1500 else 100
+    return int(max(low, min(high, round(raw / step) * step)))
+
+
+def slider_from_budget(budget):
+    low, high = BUDGET_SLIDER_RANGE
+    return max(0.0, min(1.0, math.log(max(low, min(high, budget)) / low) / math.log(high / low)))
+
+
 ENGINE_LOCATION_FILE = PROJECT_DIR / "engine-location.ini"
 APP_DIR = DEFAULT_ENGINE_DIR
 ENGINE_EXE = APP_DIR / ENGINE_NAME
@@ -398,6 +421,7 @@ class RefreshGui(tk.Tk):
         self.after(300, self._maybe_show_credits)
         self.after(10000, self._rescan_idle_devices)
         self.after(3000, self._poll_history)
+        self._autosave_saved = self._autosave_snapshot()  # startup tidying is not an edit
 
     def _configure_scaling(self):
         self.ui_scale = self.winfo_fpixels("1i") / 96.0
@@ -422,6 +446,8 @@ class RefreshGui(tk.Tk):
             pass
 
     def _update_settings_scroll(self, _event=None):
+        if hasattr(self, '_settings_redraw'):
+            self.settings_canvas.coords(self._settings_redraw, 0, 0, 1, 1)
         self.settings_canvas.configure(scrollregion=self.settings_canvas.bbox(self.settings_controls_window))
         if self.settings_controls.winfo_reqheight() > self.settings_canvas.winfo_height() + self._dp(2):
             self.settings_scroll.grid(row=0, column=1, sticky="ns")
@@ -539,6 +565,28 @@ class RefreshGui(tk.Tk):
         style.layout("Large.TCheckbutton", layout)
         style.configure("Large.TCheckbutton", background="#f3f5f8", font=self.ui_font, padding=(0, self._dp(5)))
 
+    def _style_settings_tiles(self, style, dark, bg, field, fg, muted, border, active):
+        """Card look for the mode and item toggles, chips, keycap and Start."""
+        chosen_bg, chosen_border = ('#1e3a8a', '#60a5fa') if dark else ('#dbeafe', '#2563eb')
+        layout = [('Toolbutton.border', {'sticky': 'nswe', 'children': [('Toolbutton.focus', {'sticky': 'nswe', 'children': [
+            ('Toolbutton.padding', {'sticky': 'nswe', 'children': [('Toolbutton.label', {'sticky': 'nswe'})]})]})]})]
+        for name in ('Tile.TCheckbutton', 'Tile.TRadiobutton', 'Tile.Pill.TCheckbutton'):
+            style.layout(name, layout)
+            style.configure(name, background=field, foreground=fg, bordercolor=border, lightcolor=field, darkcolor=field,
+                            relief='raised', borderwidth=self._dp(2), padding=(self._dp(4), self._dp(5)),
+                            anchor='center', justify='center', font=self.ui_font, focuscolor=chosen_border)
+            style.map(name, background=[('disabled', bg), ('selected', chosen_bg), ('active', active)],
+                      bordercolor=[('selected', chosen_border), ('active', chosen_border)],
+                      lightcolor=[('selected', chosen_bg), ('active', active)],
+                      darkcolor=[('selected', chosen_bg), ('active', active)],
+                      foreground=[('disabled', muted)], relief=[('pressed', 'raised')])
+        style.configure('Tile.Pill.TCheckbutton', padding=(self._dp(6), self._dp(7)))
+        style.configure('Section.TLabel', font=self.heading_font)
+        style.configure('Chip.TButton', padding=(self._dp(2), self._dp(3)))
+        style.configure('Keycap.TEntry', padding=(self._dp(6), self._dp(6)))
+        style.configure('Start.Accent.TButton', font=self.heading_font, padding=(self._dp(10), self._dp(12)))
+        style.configure('Stop.TButton', padding=(self._dp(8), self._dp(12)))
+
     def _apply_theme(self):
         dark = self.dark_mode.get()
         bg, field, fg, muted, border, active = (
@@ -563,6 +611,7 @@ class RefreshGui(tk.Tk):
         style.configure('Accent.TButton', background='#2563eb', foreground='#ffffff')
         style.map('Accent.TButton', background=[('disabled', active), ('active', '#1d4ed8')], foreground=[('disabled', muted), ('!disabled', '#ffffff')])
         style.map('Large.TCheckbutton', foreground=[('disabled', muted)], background=[('active', bg)])
+        self._style_settings_tiles(style, dark, bg, field, fg, muted, border, active)
         style.configure('Treeview', background=field, fieldbackground=field, foreground=fg, bordercolor=border)
         style.map('Treeview', background=[('selected', '#2563eb')], foreground=[('selected', '#ffffff')])
         self.history.tag_configure('even', background=bg, foreground=fg)
@@ -610,7 +659,7 @@ class RefreshGui(tk.Tk):
     def _save_credits_preference(self):
         try:
             self._write_sound_preference()
-        except (OSError,configparser.Error) as exc:
+        except (OSError, UnicodeError, configparser.Error) as exc:
             self.setting_notice.set('Credits preference changed for this session; it could not be saved.')
             self._append_log(f'Credits preference save failed: {exc}\n')
 
@@ -619,7 +668,7 @@ class RefreshGui(tk.Tk):
         self._apply_theme()
         try:
             self._write_sound_preference()
-        except (OSError, configparser.Error) as exc:
+        except (OSError, UnicodeError, configparser.Error) as exc:
             self.setting_notice.set('Theme changed for this session; preference could not be saved.')
             self._append_log(f'Theme preference save failed: {exc}\n')
 
@@ -680,7 +729,7 @@ class RefreshGui(tk.Tk):
             self.adb_hint_dismissed.set(True)
             try:
                 self._write_sound_preference()
-            except (OSError, configparser.Error) as exc:
+            except (OSError, UnicodeError, configparser.Error) as exc:
                 self.setting_notice.set('Reminder dismissed for this session; preference could not be saved.')
                 self._append_log(f'ADB reminder preference save failed: {exc}\n')
         self.home_ui_hint_dismissed = True
@@ -767,11 +816,6 @@ class RefreshGui(tk.Tk):
         except (OSError, RuntimeError):
             self._append_log("\nThe session sound could not be played.\n")
 
-    def _update_purchase_sound_checks(self):
-        state = '!disabled' if self.sound_enabled.get() else 'disabled'
-        for check in (self.sound_covenant_check, self.sound_mystic_check):
-            check.state([state])
-
     def _announce_purchases(self, stats):
         """Say "Covenant!"/"Mystic!" once per confirmed purchase count increase."""
         due = []
@@ -780,7 +824,7 @@ class RefreshGui(tk.Tk):
             self._purchase_counts[key] = stats[key]
             if stats[key] > before and enabled.get():
                 due.append(key)
-        if not due or not self.sound_enabled.get():
+        if not due:
             return
         # SND_ASYNC cuts off a playing sound, so each callout, from this
         # update or a later one, waits for the one queued before it.
@@ -793,7 +837,7 @@ class RefreshGui(tk.Tk):
     def _play_purchase_sound(self, key, run_id):
         enabled = self.sound_covenant if key == 'covenant' else self.sound_mystic
         # A finished session has played its end chime; a late callout would cut it off.
-        if run_id != self.run_id or self._finalized_run_id == run_id or not (self.sound_enabled.get() and enabled.get()):
+        if run_id != self.run_id or self._finalized_run_id == run_id or not enabled.get():
             return
         sound = ASSET_DIR / f'purchase-{key}.wav'
         if not sound.is_file():
@@ -887,8 +931,11 @@ class RefreshGui(tk.Tk):
         body.grid(row=1, column=0, sticky="nsew")
         body.columnconfigure(1, weight=1)
         body.rowconfigure(0, weight=1)
-        sidebar = ttk.Frame(body, padding=(0, 0, dp(20), 0))
-        sidebar.grid(row=0, column=0, sticky="nsw")
+        # The sidebar is one solid rounded card (Scenery draws its outline):
+        # content inside it uses the plain panel colour, so scrolling has no
+        # background slices to re-cut and cannot tear.
+        self.sidebar_card = sidebar = ttk.Frame(body, padding=(dp(14), dp(12), dp(6), dp(14)))
+        sidebar.grid(row=0, column=0, sticky="nsw", padx=(0, dp(20)))
         sidebar.rowconfigure(0, weight=1)
         self.settings_canvas = settings_canvas = tk.Canvas(sidebar, width=dp(370), bg="#f3f5f8", highlightthickness=0)
         settings_canvas.grid(row=0, column=0, sticky="ns")
@@ -903,6 +950,12 @@ class RefreshGui(tk.Tk):
         def resize_settings(event):
             settings_canvas.itemconfigure(controls_window, width=event.width)
             self._update_settings_scroll()
+        # Tk applies a window item's forced width only when the canvas redraws
+        # the area under it; after the controls grow, nothing did, so they kept
+        # their natural, wider size and were clipped. Touching this invisible
+        # item in _update_settings_scroll requests that redraw.
+        self._settings_redraw = settings_canvas.create_rectangle(0, 0, 1, 1, width=0, fill='')
+        settings_canvas.tag_lower(self._settings_redraw)
         settings_canvas.bind("<Configure>", resize_settings)
         controls.columnconfigure(0, weight=1)
         self.settings_widgets = []
@@ -921,35 +974,62 @@ class RefreshGui(tk.Tk):
         ttk.Label(controls, textvariable=self.device_notice, style="Muted.TLabel", wraplength=dp(350)).grid(row=3, column=0, sticky="w", pady=(dp(4), dp(10)))
         # Everyday settings stay visible: budget, stop key and what to buy.
         # Timing and calibration live under Advanced with a reset to the
-        # recommended values, so a stray edit is easy to undo.
+        # recommended values, so a stray edit is easy to undo. Every change
+        # saves itself shortly after the last edit (see _schedule_autosave).
+        self.buy_icons = currency_icons(self, ASSET_DIR, dp(30))
         amounts = ttk.Frame(controls)
-        amounts.grid(row=4, column=0, sticky='ew', pady=(0, dp(6)))
-        amounts.columnconfigure(0, weight=1)
-        ttk.Label(amounts, text='Skystone budget').grid(row=0, column=0, sticky='w')
-        self.budget_entry = entry = ttk.Entry(amounts, textvariable=self.budget, font=self.ui_font, width=10)
+        amounts.grid(row=4, column=0, sticky='ew', pady=(0, dp(10)))
+        amounts.columnconfigure(1, weight=1)
+        ttk.Label(amounts, text='Skystone budget', image=self.buy_icons.get('spent', ''), compound='left',
+                  style='Section.TLabel').grid(row=0, column=0, columnspan=2, sticky='w')
+        self.budget_entry = entry = ttk.Entry(amounts, textvariable=self.budget, font=self.heading_font, width=7, justify='center')
         entry.configure(validate='key', validatecommand=(self.register(lambda value: not value or re.fullmatch(r'[0-9]+', value) is not None), '%P'))
-        entry.grid(row=1, column=0, sticky='ew', pady=(dp(3), 0))
+        entry.grid(row=1, column=0, sticky='w', pady=(dp(4), 0))
         self.settings_widgets.append(entry)
-        ttk.Label(controls, text='Stop key · click the box, then press a key').grid(row=5, column=0, sticky='w')
-        self.stop_key_entry = ttk.Entry(controls, textvariable=self.stop_key, font=self.ui_font)
+        self.budget_position = tk.DoubleVar(value=0)
+        self.budget_slider = ttk.Scale(amounts, from_=0, to=1, variable=self.budget_position,
+                                       command=self._slide_budget, style='TapTiming.Horizontal.TScale')
+        self.budget_slider.grid(row=1, column=1, sticky='ew', padx=(dp(10), 0), pady=(dp(4), 0))
+        self.settings_widgets.append(self.budget_slider)
+        picks = ttk.Frame(amounts)
+        picks.grid(row=2, column=0, columnspan=2, sticky='ew', pady=(dp(6), 0))
+        self.budget_picks = []
+        for column, amount in enumerate(BUDGET_PICKS):
+            picks.columnconfigure(column, weight=1, uniform='picks')
+            pick = ttk.Button(picks, text=f'{amount:,}', style='Chip.TButton', cursor='hand2',
+                              command=lambda amount=amount: self.budget.set(str(amount)))
+            pick.grid(row=0, column=column, sticky='ew', padx=(0 if column == 0 else dp(4), 0))
+            self.budget_picks.append(pick)
+        self.settings_widgets.extend(self.budget_picks)
+        self.budget_summary = tk.StringVar()
+        ttk.Label(amounts, textvariable=self.budget_summary, style='Muted.TLabel', wraplength=dp(350)).grid(
+            row=3, column=0, columnspan=2, sticky='w', pady=(dp(6), 0))
+        buys = ttk.Frame(controls)
+        buys.grid(row=5, column=0, sticky='ew', pady=(0, dp(10)))
+        ttk.Label(buys, text='Buy', style='Section.TLabel').grid(row=0, column=0, columnspan=3, sticky='w', pady=(0, dp(4)))
+        tiles = (('covenant_check', 'Covenant', '184k gold', 'covenant', self.buy_covenant, '184,000 gold per buy'),
+                 ('mystic_check', 'Mystic', '280k gold', 'mystic', self.buy_mystic, '280,000 gold per buy'),
+                 ('friendship_check', 'Friendship', '18k gold', 'friendship', self.buy_friendship,
+                  'Optional extra purchases · 18,000 gold per buy · normal mode only'))
+        for column, (name, title, cost, icon, variable, hint) in enumerate(tiles):
+            buys.columnconfigure(column, weight=1, uniform='tiles')
+            tile = ttk.Checkbutton(buys, text=f'{title}\n{cost}', variable=variable, style='Tile.TCheckbutton',
+                                   image=self.buy_icons.get(icon, ''), compound='top', cursor='hand2')
+            tile.grid(row=1, column=column, sticky='nsew', padx=(0 if column == 0 else dp(6), 0))
+            ThemeHint(tile, lambda hint=hint: hint)
+            setattr(self, name, tile)
+        self.settings_widgets.extend([self.covenant_check, self.mystic_check, self.friendship_check])
+        stop_row = ttk.Frame(controls)
+        stop_row.grid(row=6, column=0, sticky='ew', pady=(0, dp(4)))
+        stop_row.columnconfigure(1, weight=1)
+        self.stop_key_entry = ttk.Entry(stop_row, textvariable=self.stop_key, font=self.heading_font, width=4,
+                                        justify='center', style='Keycap.TEntry', cursor='hand2')
         self.stop_key_entry.state(['readonly'])
         self.stop_key_entry.bind('<KeyPress>', self._capture_stop_key)
-        self.stop_key_entry.grid(row=6, column=0, sticky='ew', pady=(dp(3), dp(6)))
+        self.stop_key_entry.grid(row=0, column=0, sticky='w')
+        ttk.Label(stop_row, text='Stop key · click it, then press a new key', style='Muted.TLabel',
+                  wraplength=dp(280)).grid(row=0, column=1, sticky='w', padx=(dp(10), 0))
         self.settings_widgets.append(self.stop_key_entry)
-        buys = ttk.Frame(controls)
-        buys.grid(row=7, column=0, sticky='ew')
-        ttk.Label(buys, text='Buy').grid(row=0, column=0, sticky='w')
-        self.covenant_check = ttk.Checkbutton(buys, text='Covenant bookmarks', variable=self.buy_covenant, style='Large.TCheckbutton')
-        self.covenant_check.grid(row=1, column=0, sticky='w')
-        ThemeHint(self.covenant_check, lambda: '184,000 gold per buy')
-        self.mystic_check = ttk.Checkbutton(buys, text='Mystic medals', variable=self.buy_mystic, style='Large.TCheckbutton')
-        self.mystic_check.grid(row=2, column=0, sticky='w')
-        ThemeHint(self.mystic_check, lambda: '280,000 gold per buy')
-        self.friendship_check = ttk.Checkbutton(buys, text='Friendship Points',
-                                               variable=self.buy_friendship, style='Large.TCheckbutton')
-        self.friendship_check.grid(row=3, column=0, sticky='w')
-        ThemeHint(self.friendship_check, lambda: 'Optional extra purchases · 18,000 gold per buy · normal mode only')
-        self.settings_widgets.extend([self.covenant_check, self.mystic_check, self.friendship_check])
         self.details_button = ttk.Button(controls, text='▸ Advanced: timing, calibration, estimate', command=self._toggle_settings_details)
         self.details_button.grid(row=8, column=0, sticky='ew', pady=(dp(10), dp(12)))
         self.settings_details = advanced = ttk.Frame(controls)
@@ -985,29 +1065,33 @@ class RefreshGui(tk.Tk):
         self.reset_timing_button = ttk.Button(advanced, text='Reset to recommended', command=self._reset_recommended_timing)
         self.reset_timing_button.grid(row=6, column=0, sticky='w', pady=(0, dp(8)))
         self.settings_widgets.extend([self.random_check, self.debug_check, self.reset_timing_button])
-        self.start_button = ttk.Button(action_dock, text="Start Refresh", style="Accent.TButton", command=self.start_refresh)
+        # Settings save themselves, so the dock holds only Start and Stop.
+        action_dock.columnconfigure(0, weight=3, uniform='')
+        action_dock.columnconfigure(1, weight=2, uniform='')
+        self.start_button = ttk.Button(action_dock, text="Start Refresh", style="Start.Accent.TButton", command=self.start_refresh, cursor='hand2')
         self.start_button.grid(row=0, column=0, sticky="ew", padx=(0, dp(4)))
-        self.stop_button = ttk.Button(action_dock, text="Stop Session", command=self.stop_refresh, state=tk.DISABLED)
-        self.stop_button.grid(row=0, column=1, sticky="ew", padx=(dp(4), 0))
-        self.save_button = ttk.Button(action_dock, text="Save Settings", command=self.save_settings)
-        self.save_button.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(dp(6), 0))
-        self.settings_widgets.append(self.save_button)
-        self.sound_button = ttk.Checkbutton(action_dock, text="Sounds: start, end and buys", variable=self.sound_enabled, style="Large.TCheckbutton", command=self._save_sound_preference)
-        self.sound_button.grid(row=2, column=0, columnspan=2, sticky="w", pady=(dp(6), 0))
-        # Spoken purchase callouts sit under the master switch and follow it.
-        voices = ttk.Frame(action_dock)
-        voices.grid(row=3, column=0, columnspan=2, sticky="w", padx=(dp(24), 0))
-        self.sound_covenant_check = ttk.Checkbutton(voices, text='Say "Covenant!"', variable=self.sound_covenant, style="Large.TCheckbutton", command=self._save_sound_preference)
-        self.sound_covenant_check.grid(row=0, column=0, sticky="w", padx=(0, dp(12)))
-        self.sound_mystic_check = ttk.Checkbutton(voices, text='Say "Mystic!"', variable=self.sound_mystic, style="Large.TCheckbutton", command=self._save_sound_preference)
-        self.sound_mystic_check.grid(row=0, column=1, sticky="w")
-        for check in (self.sound_covenant_check, self.sound_mystic_check):
-            ThemeHint(check, lambda: 'Spoken when the engine confirms a purchase of that item')
-        self.sound_enabled.trace_add('write', lambda *_: self._update_purchase_sound_checks())
-        self._update_purchase_sound_checks()
-        self.tracker_button = ttk.Checkbutton(action_dock, text="Compact tracker while running", variable=self.compact_tracker, style="Large.TCheckbutton", command=self._save_tracker_preference)
-        self.tracker_button.grid(row=4, column=0, columnspan=2, sticky="w", pady=(dp(6), 0))
-        ThemeHint(self.tracker_button, lambda: 'Shrink to a small always-on-top bar once the engine starts; returns when the session ends')
+        self.stop_button = ttk.Button(action_dock, text="Stop Session", style='Stop.TButton', command=self.stop_refresh, state=tk.DISABLED)
+        self.stop_button.grid(row=0, column=1, sticky="nsew", padx=(dp(4), 0))
+        # Sound and tracker preferences: a 2 x 2 grid of toggle pills in the
+        # same card style as Buy. Each pill is independent of the others.
+        extras = ttk.Frame(action_dock)
+        extras.grid(row=2, column=0, columnspan=2, sticky='ew', pady=(dp(10), 0))
+        extras.columnconfigure((0, 1), weight=1, uniform='extras')
+        pills = (('sound_button', 'Start/Stop SFX', self.sound_enabled, self._save_sound_preference, 0, 0,
+                  'Play a sound when a session starts and when it ends'),
+                 ('tracker_button', 'Compact tracker', self.compact_tracker, self._save_tracker_preference, 0, 1,
+                  'Shrink to a small always-on-top bar once the engine starts; returns when the session ends'),
+                 ('sound_covenant_check', 'Say "Covenant!"', self.sound_covenant, self._save_sound_preference, 1, 0,
+                  'Spoken when the engine confirms a Covenant purchase'),
+                 ('sound_mystic_check', 'Say "Mystic!"', self.sound_mystic, self._save_sound_preference, 1, 1,
+                  'Spoken when the engine confirms a Mystic purchase'))
+        for name, text, variable, command, row, column, hint in pills:
+            pill = ttk.Checkbutton(extras, text=text, variable=variable, command=command,
+                                   style='Tile.Pill.TCheckbutton', cursor='hand2')
+            pill.grid(row=row, column=column, sticky='ew', padx=(0 if column == 0 else dp(6), 0),
+                      pady=(0 if row == 0 else dp(6), 0))
+            ThemeHint(pill, lambda hint=hint: hint)
+            setattr(self, name, pill)
         ttk.Label(action_dock, textvariable=self.setting_notice, style="Muted.TLabel", wraplength=dp(350)).grid(row=5, column=0, columnspan=2, sticky="w", pady=(dp(4), 0))
         estimate = ttk.LabelFrame(self.settings_details, text="Budget estimate", padding=dp(8))
         estimate.grid(row=7, column=0, sticky="ew")
@@ -1021,6 +1105,11 @@ class RefreshGui(tk.Tk):
         self.debug_mode.trace_add('write', lambda *_: self._update_tap_jitter())
         self._update_ev()
         self._update_tap_jitter()
+        self.budget.trace_add('write', lambda *_: self._sync_budget_slider())
+        self._sync_budget_slider()
+        for var in (self.budget, self.stop_key, self.buy_covenant, self.buy_mystic, self.buy_friendship,
+                    self.tap_sleep, self.random_offset, self.tap_jitter, self.control_mode):
+            var.trace_add('write', lambda *_: self._schedule_autosave())
         # Insert one compact mode section; existing session fields retain their
         # order and use the existing scrolling layout on smaller screens.
         for widget in controls.winfo_children():
@@ -1029,15 +1118,27 @@ class RefreshGui(tk.Tk):
         mode_panel = ttk.Frame(controls)
         mode_panel.grid(row=1,column=0,sticky='ew',pady=(0,dp(10)))
         mode_panel.columnconfigure(0,weight=1)
-        ttk.Label(mode_panel,text='Control mode').grid(row=0,column=0,sticky='w')
-        # The list shows who each mode is for; control_mode keeps the plain name.
+        ttk.Label(mode_panel,text='Control mode',style='Section.TLabel').grid(row=0,column=0,sticky='w')
+        # The cards show who each mode is for; control_mode keeps the plain name.
         self.mode_label = tk.StringVar(value=mode_label(self.control_mode.get()))
         self.control_mode.trace_add('write', lambda *_: self.mode_label.set(mode_label(self.control_mode.get())))
+        # mode_box keeps the full labels (and the existing selection code) but
+        # is not shown: one card per mode replaces the drop-down.
         self.mode_box = ttk.Combobox(mode_panel,textvariable=self.mode_label,
             values=[mode_label(mode) for mode in CONTROL_MODES],state='readonly',font=self.ui_font)
-        self.mode_box.grid(row=1,column=0,sticky='ew',pady=(dp(4),0))
         self.mode_box.bind('<<ComboboxSelected>>',self._select_control_mode)
-        self.settings_widgets.append(self.mode_box)
+        cards = ttk.Frame(mode_panel)
+        cards.grid(row=1,column=0,sticky='ew',pady=(dp(4),0))
+        self.mode_cards = {}
+        for column, mode in enumerate(CONTROL_MODES):
+            cards.columnconfigure(column, weight=1, uniform='modes')
+            card = ttk.Radiobutton(cards, text=f'{mode}\n{MODE_CARD_NOTES.get(mode, "")}'.rstrip(), value=mode_label(mode),
+                                   variable=self.mode_label, command=self._select_control_mode,
+                                   style='Tile.TRadiobutton', cursor='hand2')
+            card.grid(row=0, column=column, sticky='nsew', padx=(0 if column == 0 else dp(6), 0))
+            ThemeHint(card, lambda mode=mode: mode_label(mode))
+            self.mode_cards[mode] = card
+        self.settings_widgets.extend([self.mode_box, *self.mode_cards.values()])
         self.settings_details.grid_remove()
         def bind_wheel(widget):
             def scroll_settings(event):
@@ -1220,6 +1321,15 @@ class RefreshGui(tk.Tk):
         self._event("Ready. Session updates will appear here.")
 
     def _load_config(self):
+        # Loading is not an edit: keep autosave quiet while values arrive.
+        self._autosave_suspended = True
+        try:
+            self._read_config()
+        finally:
+            self._autosave_suspended = False
+            self._autosave_saved = self._autosave_snapshot()
+
+    def _read_config(self):
         try:
             parser = configparser.ConfigParser()
             parser.read(CONFIG_FILE)
@@ -1261,6 +1371,10 @@ class RefreshGui(tk.Tk):
             self.buy_mystic.set(parser.getboolean('GUI', 'buy_mystic', fallback=True))
             self.sound_covenant.set(parser.getboolean('GUI', 'sound_covenant', fallback=True))
             self.sound_mystic.set(parser.getboolean('GUI', 'sound_mystic', fallback=True))
+            # Before 0.2.7 "Sounds" off also silenced the callouts. Now they are
+            # separate pills; keep an older all-quiet choice quiet, once.
+            if not parser.getboolean('GUI', 'sound_callouts_separate', fallback=False) and not self.sound_enabled.get():
+                self.sound_covenant.set(False); self.sound_mystic.set(False)
             settings_version = parser.getint('GUI', 'settings_version', fallback=0)
         except (OSError, ValueError, configparser.Error) as exc:
             self.setting_notice.set(f"Sound preference could not be read: {exc}")
@@ -1336,7 +1450,13 @@ class RefreshGui(tk.Tk):
         # The original engine rewrites ADBconfig.ini, so GUI preferences need
         # their own file to survive a real refresh session.
         parser = configparser.ConfigParser()
-        parser.read(GUI_CONFIG_FILE)
+        try:
+            # read_file, not read: read() swallows open errors, and writing
+            # back an empty parser would erase the other preferences.
+            with GUI_CONFIG_FILE.open(encoding='utf-8-sig') as fh:
+                parser.read_file(fh)
+        except FileNotFoundError:
+            pass
         if not parser.has_section("GUI"):
             parser.add_section("GUI")
         parser["GUI"]["sound_enabled"] = str(self.sound_enabled.get())
@@ -1347,6 +1467,7 @@ class RefreshGui(tk.Tk):
         parser['GUI']['buy_mystic'] = str(self.buy_mystic.get())
         parser['GUI']['sound_covenant'] = str(self.sound_covenant.get())
         parser['GUI']['sound_mystic'] = str(self.sound_mystic.get())
+        parser['GUI']['sound_callouts_separate'] = 'True'
         pending = getattr(self, '_timing_migration_pending', False)
         parser['GUI']['settings_version'] = str(getattr(self, '_loaded_settings_version', 0) if pending else SETTINGS_VERSION)
         parser["GUI"]["dark_mode"] = str(self.dark_mode.get())
@@ -1364,8 +1485,8 @@ class RefreshGui(tk.Tk):
     def _save_sound_preference(self):
         try:
             self._write_sound_preference()
-            self.setting_notice.set("Sound alerts on." if self.sound_enabled.get() else "Sound alerts off.")
-        except (OSError, configparser.Error) as exc:
+            self.setting_notice.set('Sound settings saved.')
+        except (OSError, UnicodeError, configparser.Error) as exc:
             self.setting_notice.set("Sound changed for this session; preference could not be saved.")
             self._append_log(f"Sound preference save failed: {exc}\n")
 
@@ -1385,7 +1506,7 @@ class RefreshGui(tk.Tk):
         try:
             self._write_sound_preference()
             self.setting_notice.set("Compact tracker on." if self.compact_tracker.get() else "Compact tracker off.")
-        except (OSError, configparser.Error) as exc:
+        except (OSError, UnicodeError, configparser.Error) as exc:
             self.setting_notice.set("Tracker changed for this session; preference could not be saved.")
             self._append_log(f"Tracker preference save failed: {exc}\n")
 
@@ -1393,7 +1514,7 @@ class RefreshGui(tk.Tk):
         try:
             self._write_sound_preference()
             self._append_log('Detailed input logging '+('enabled' if self.trace_input.get() else 'disabled')+' for the next session.\n')
-        except (OSError, configparser.Error) as exc:
+        except (OSError, UnicodeError, configparser.Error) as exc:
             self._append_log(f'Logging preference could not be saved: {exc}\n')
 
     def _capture_stop_key(self, event):
@@ -1495,6 +1616,8 @@ class RefreshGui(tk.Tk):
         except (ValueError, OSError, configparser.Error) as exc:
             messagebox.showerror("Settings not saved", str(exc), parent=self)
             return None
+        if hasattr(self, '_autosave_saved'):
+            self._autosave_saved = self._autosave_snapshot()  # autosave compares against this
         self.setting_notice.set("Settings saved.")
         return settings
 
@@ -1595,7 +1718,7 @@ class RefreshGui(tk.Tk):
         self._change_control_mode()
         try:
             self._write_sound_preference()
-        except (OSError, configparser.Error) as exc:
+        except (OSError, UnicodeError, configparser.Error) as exc:
             self._append_log(f'Control mode preference save failed: {exc}\n')
 
     def _apply_mouse_windows(self, windows, error, suggestion=None):
@@ -2684,16 +2807,122 @@ class RefreshGui(tk.Tk):
             if budget < 3:
                 raise ValueError
             covenant, mystic = self.buy_covenant.get(), self.buy_mystic.get()
-            gold = budget * (0.006602509 * 184000 * covenant + 0.001700646 * 280000 * mystic)
+            gold = budget * (COVENANT_RATE * 184000 * covenant + MYSTIC_RATE * 280000 * mystic)
             lines = [f"Gold needed ≈ {int(gold):,}"]
-            lines += [f"Covenant buys ≈ {budget * 0.006602509:.1f}"] if covenant else []
-            lines += [f"Mystic buys ≈ {budget * 0.001700646:.1f}"] if mystic else []
+            lines += [f"Covenant buys ≈ {budget * COVENANT_RATE:.1f}"] if covenant else []
+            lines += [f"Mystic buys ≈ {budget * MYSTIC_RATE:.1f}"] if mystic else []
             self.ev.set('\n'.join(lines))
             if self.buy_friendship.get():
                 self.ev.set(self.ev.get()+'\nFriendship adds 18,000 gold per buy.')
+            expected = [f'{budget * COVENANT_RATE:.1f} Covenant'] if covenant else []
+            expected += [f'{budget * MYSTIC_RATE:.1f} Mystic'] if mystic else []
+            summary = f'{budget // 3:,} refreshes'
+            summary += ' · expect about ' + ' and '.join(expected) if expected else ''
+            summary += f' · about {int(gold):,} gold' if gold else ''
+            if hasattr(self, 'budget_summary'):
+                self.budget_summary.set(summary)
         except (ValueError, OverflowError):
             self.ev.set("Enter a valid budget to see the estimate.")
+            if hasattr(self, 'budget_summary'):
+                self.budget_summary.set('Enter a budget of at least 3 skystones.')
         self._update_spent_display()
+
+    def _slide_budget(self, _value=None):
+        if self.budget_slider.instate(['disabled']):
+            return
+        amount = str(budget_from_slider(self.budget_position.get()))
+        if amount != self.budget.get():
+            self._budget_sliding = True
+            try:
+                self.budget.set(amount)
+            finally:
+                self._budget_sliding = False
+
+    def _sync_budget_slider(self):
+        if getattr(self, '_budget_sliding', False) or not hasattr(self, 'budget_position'):
+            return
+        try:
+            self.budget_position.set(slider_from_budget(int(self.budget.get())))
+        except (ValueError, OverflowError):
+            pass
+
+    def _schedule_autosave(self):
+        """Save shortly after the last settings change; there is no Save button."""
+        if getattr(self, '_autosave_suspended', False) or not hasattr(self, '_autosave_saved'):
+            return
+        job = getattr(self, '_autosave_job', None)
+        if job is not None:
+            self.after_cancel(job)
+        self._autosave_job = self.after(AUTOSAVE_DELAY_MS, self._autosave)
+
+    def _autosave_snapshot(self):
+        return (self.budget.get(), self.stop_key.get(), self.buy_covenant.get(), self.buy_mystic.get(),
+                self.buy_friendship.get(), self.tap_sleep.get(), self.random_offset.get(), round(self.tap_jitter.get(), 2),
+                self.control_mode.get())
+
+    def _flush_autosave(self):
+        """Save a change still waiting out the autosave delay (used on close)."""
+        job = getattr(self, '_autosave_job', None)
+        if job is not None:
+            self.after_cancel(job)
+            self._autosave()
+
+    def _autosave(self):
+        self._autosave_job = None
+        if self._checking_connection:
+            # Start is checking the connection; if that fails, Start saves
+            # nothing, so try again once it is over.
+            self._autosave_job = self.after(AUTOSAVE_DELAY_MS, self._autosave)
+            return
+        if self.process and self.process.poll() is None:
+            return  # settings are locked while running; Start already saved them
+        snapshot = self._autosave_snapshot()
+        if snapshot == self._autosave_saved:
+            # e.g. a value rewritten unchanged, or an edit undone
+            if self.setting_notice.get().startswith('Not saved yet'):
+                self.setting_notice.set('')
+            return
+        try:
+            # Same checks as Start, without needing a device: an unfinished
+            # budget or no item chosen keeps the engine file as it was.
+            settings = validate_settings('autosave', self.budget.get(), self.tap_sleep.get(), self.stop_key.get(),
+                                         self.random_offset.get(), False, round(self.tap_jitter.get(), 2),
+                                         self.trace_input.get(), self.buy_friendship.get(),
+                                         self.buy_covenant.get(), self.buy_mystic.get())
+            problem = ''
+        except ValueError as exc:
+            settings, problem = None, str(exc)
+        if settings is None:
+            # Nothing is written, the GUI file included: it holds the Buy
+            # choices too, and an all-off choice must not be reloaded.
+            self.setting_notice.set(f'Not saved yet: {problem}')
+            return
+        try:
+            self._write_engine_settings(settings)
+            self._write_sound_preference()
+        except (OSError, UnicodeError, configparser.Error) as exc:
+            self.setting_notice.set(f'Settings could not be saved: {exc}')
+            return
+        self._autosave_saved = snapshot
+        self.setting_notice.set('Settings saved.')
+
+    def _write_engine_settings(self, settings):
+        """Update ADBconfig.ini in place; an unreadable file is never replaced."""
+        parser = configparser.ConfigParser()
+        try:
+            with CONFIG_FILE.open(encoding='utf-8-sig') as fh:
+                parser.read_file(fh)
+        except FileNotFoundError:
+            pass
+        if not parser.has_section('Settings'):
+            parser.add_section('Settings')
+        parser['Settings'].update({'tap_sleep': str(settings.tap_sleep), 'budget': str(settings.budget),
+                                   'stop_refresh_key': settings.stop_key, 'random_offset': str(settings.random_offset)})
+        temp = CONFIG_FILE.with_suffix('.ini.tmp')
+        with temp.open('w', encoding='utf-8') as fh:
+            parser.write(fh)
+        temp.replace(CONFIG_FILE)
+        self._timing_migration_pending = False
 
     def _close(self):
         if self.tracker.active:
@@ -2707,6 +2936,7 @@ class RefreshGui(tk.Tk):
             self.stop_refresh()
             self.after(100, self._close_when_stopped)
         else:
+            self._flush_autosave()
             self.destroy()
 
     def _close_when_stopped(self):

@@ -188,15 +188,116 @@ class GuiTests(unittest.TestCase):
         self.app._finalized_run_id = None
         self.app.sound_mystic.set(False)
         self.assertEqual(stats(4, 4, 7), ['purchase-covenant.wav'])
+        # Start/Stop SFX is a separate pill: turning it off keeps the callouts.
         self.app.sound_enabled.set(False)
-        self.assertIn('disabled', self.app.sound_covenant_check.state())
-        self.assertEqual(stats(5, 5, 8), [])
+        self.assertNotIn('disabled', self.app.sound_covenant_check.state())
+        self.assertEqual(stats(5, 5, 8), ['purchase-covenant.wav'])
+        self.app.sound_covenant.set(False)
+        self.assertEqual(stats(6, 6, 9), [])
+        self.app.sound_covenant.set(True)
         self.app._save_sound_preference()
         text = self.gui_config.read_text()
         self.assertIn('sound_mystic = False', text)
         self.assertIn('sound_covenant = True', text)
+        self.assertIn('sound_enabled = False', text)
         self.app.sound_mystic.set(True); self.app._load_config()
         self.assertFalse(self.app.sound_mystic.get())
+        self.assertTrue(self.app.sound_covenant.get())  # saved after the split: kept
+        # An older file with Sounds off kept everything quiet; that holds once.
+        self.app.sound_enabled.set(True)  # proves the file's Sounds-off is read first
+        self.gui_config.write_text('[GUI]\nsound_enabled = False\nsound_covenant = True\nsound_mystic = True\n', encoding='utf-8')
+        self.app._load_config()
+        self.assertEqual((self.app.sound_covenant.get(), self.app.sound_mystic.get()), (False, False))
+        self.app.sound_mystic.set(True); self.app._save_sound_preference(); self.app._load_config()
+        self.assertTrue(self.app.sound_mystic.get())
+        self.assertFalse(self.app.sound_enabled.get())
+
+    def test_budget_slider_and_picks_follow_the_budget(self):
+        self.assertEqual([gui.budget_from_slider(p) for p in (0, 1)], list(gui.BUDGET_SLIDER_RANGE))
+        for amount in (30, 150, 300, 1000, 3000, 6000):
+            self.assertEqual(gui.budget_from_slider(gui.slider_from_budget(amount)), amount)
+        self.app.budget_picks[-1].invoke()
+        self.assertEqual(self.app.budget.get(), '3000')
+        self.assertAlmostEqual(self.app.budget_position.get(), gui.slider_from_budget(3000))
+        self.assertIn('1,000 refreshes', self.app.budget_summary.get())
+        self.app.budget_position.set(gui.slider_from_budget(300)); self.app._slide_budget()
+        self.assertEqual(self.app.budget.get(), '300')
+        self.app.budget.set('')
+        self.assertIn('at least 3', self.app.budget_summary.get())
+        self.app._set_controls(True)
+        self.assertTrue(all(w.instate(['disabled']) for w in (self.app.budget_slider, *self.app.budget_picks, *self.app.mode_cards.values())))
+        self.app._set_controls(False)
+
+    def test_settings_save_themselves_after_an_edit(self):
+        def settle():
+            deadline = time.monotonic() + gui.AUTOSAVE_DELAY_MS/1000 + .5
+            while time.monotonic() < deadline:
+                self.app.update(); time.sleep(.01)
+        self.config.unlink(missing_ok=True)
+        settle()  # startup alone writes nothing
+        self.assertFalse(self.config.exists())
+        self.assertEqual(self.app.setting_notice.get(), '')
+        self.app.budget.set('450'); self.app.buy_friendship.set(True); self.app.stop_key.set('q')
+        settle()
+        text = self.config.read_text()
+        self.assertIn('budget = 450', text); self.assertIn('stop_refresh_key = q', text)
+        self.assertIn('buy_friendship = True', self.gui_config.read_text())
+        self.assertEqual(self.app.setting_notice.get(), 'Settings saved.')
+        # An unfinished budget keeps the last good one in the engine file.
+        self.app.budget.set('2'); settle()
+        self.assertIn('budget = 450', self.config.read_text())
+        self.assertIn('Not saved yet', self.app.setting_notice.get())
+        # Undoing the unfinished edit clears the notice.
+        self.app.budget.set('450'); settle()
+        self.assertEqual(self.app.setting_notice.get(), '')
+        # No item chosen: neither file is written, so reopening keeps the old
+        # choice, and choosing again needs no save.
+        gui_before = self.gui_config.read_text()
+        for var in (self.app.buy_covenant, self.app.buy_mystic, self.app.buy_friendship):
+            var.set(False)
+        settle()
+        self.assertIn('Not saved yet', self.app.setting_notice.get())
+        self.assertEqual(self.gui_config.read_text(), gui_before)
+        self.app.buy_covenant.set(True); self.app.buy_mystic.set(True); self.app.buy_friendship.set(True); settle()
+        self.assertEqual(self.app.setting_notice.get(), '')
+        # A locked file is reported, never replaced with a partial one.
+        self.app.budget.set('600')
+        real_open = Path.open
+        def locked(path, *args, **kwargs):
+            if path == gui.CONFIG_FILE and 'w' not in (args[0] if args else kwargs.get('mode', 'r')):
+                raise PermissionError('locked')
+            return real_open(path, *args, **kwargs)
+        with patch.object(Path, 'open', locked):
+            settle()
+        self.assertIn('could not be saved', self.app.setting_notice.get())
+        self.assertIn('budget = 450', self.config.read_text())
+        # Nothing is written while a session runs; Start saved its settings.
+        self.app.process = Mock(); self.app.process.poll.return_value = None
+        self.app.budget.set('900'); settle()
+        self.assertIn('budget = 450', self.config.read_text())
+        self.app.process = None
+        # A mode card choice saves too.
+        with patch.object(gui.RefreshGui, 'refresh_devices'):
+            self.app.mode_label.set(gui.mode_label('Mouse')); self.app._select_control_mode()
+            settle()
+        self.assertIn('control_mode = Mouse', self.gui_config.read_text())
+        # An unreadable preferences file is reported, never replaced.
+        before = self.gui_config.read_text()
+        real_open = Path.open
+        def gui_locked(path, *args, **kwargs):
+            if path == gui.GUI_CONFIG_FILE and 'w' not in (args[0] if args else kwargs.get('mode', 'r')):
+                raise PermissionError('locked')
+            return real_open(path, *args, **kwargs)
+        self.app.buy_mystic.set(False)
+        with patch.object(Path, 'open', gui_locked):
+            settle()
+        self.assertIn('could not be saved', self.app.setting_notice.get())
+        self.assertEqual(self.gui_config.read_text(), before)
+        # Closing right after an edit still saves it.
+        self.app.budget.set('750')
+        self.app._close()
+        self.assertIn('budget = 750', self.config.read_text())
+        self.app = gui.RefreshGui(); self.app.withdraw()  # tearDown destroys it
 
     def test_friendship_toggle_persists_and_reports_current_points(self):
         self.assertFalse(self.app.buy_friendship.get())

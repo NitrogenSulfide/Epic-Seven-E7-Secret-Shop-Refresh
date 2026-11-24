@@ -134,9 +134,6 @@ class Scenery:
         self.checkbox_styles = {}
         self.job = None
         self.cache_key = None
-        self.canvas_image = None
-        self.canvas_photo = None
-        self.canvas_rectangle = None
         self.renders = 0
         self.render_calls = 0
         self.checkbox_theme = None
@@ -159,6 +156,10 @@ class Scenery:
                 visit(widget)
                 if widget.winfo_class() not in ('TFrame','TLabel','TCheckbutton'):
                     continue
+                if str(widget.cget('style')).startswith('Tile.'):
+                    continue  # Item and mode tiles are solid cards, like buttons.
+                if self._inside_card(widget):
+                    continue  # The sidebar card is a solid surface.
                 ancestor = widget.master
                 while ancestor is not root and ancestor.winfo_class() != 'TLabelframe':
                     ancestor = ancestor.master
@@ -184,6 +185,30 @@ class Scenery:
                 self.widgets.append([widget,photo,None])
         visit(root)
         root.bind('<Configure>',self.schedule,add='+')
+
+    def _inside_card(self, widget):
+        card = getattr(self.root, 'sidebar_card', None)
+        ancestor = widget.master
+        while card is not None and ancestor is not None:
+            if ancestor is card:
+                return True
+            ancestor = ancestor.master
+        return False
+
+    def _card(self, crop, w, h, dark):
+        """Draw the sidebar's rounded card over its backdrop crop, smoothed by supersampling."""
+        scale, radius = 3, self.root._dp(14)
+        fill = ttk.Style(self.root).lookup('TFrame', 'background') or ('#111827' if dark else '#f3f5f8')
+        mask = Image.new('L', (w*scale, h*scale), 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, w*scale-1, h*scale-1), radius=radius*scale, fill=255)
+        border = Image.new('L', (w*scale, h*scale), 0)
+        ImageDraw.Draw(border).rounded_rectangle((0, 0, w*scale-1, h*scale-1), radius=radius*scale,
+                                                 outline=255, width=max(1, self.root._dp(1))*scale)
+        mask = mask.resize((w, h), Image.Resampling.LANCZOS)
+        border = border.resize((w, h), Image.Resampling.LANCZOS)
+        crop.paste(Image.new('RGB', (w, h), fill), (0, 0), mask)
+        crop.paste(Image.new('RGB', (w, h), '#475569' if dark else '#cbd5e1'), (0, 0), border)
+        return crop
 
     def schedule(self, event=None):
         if Image is None or not getattr(self,'sources',{}):
@@ -224,22 +249,11 @@ class Scenery:
             for widget,(name,element,original) in self.checkbox_styles.items():
                 style.layout(name,[(element,{'sticky':'nswe','children':style.layout(original)})])
             self.checkbox_theme = dark
+        # The settings canvas only applies its forced content width on a redraw.
+        update = getattr(self.root, "_update_settings_scroll", None)
+        if update is not None:
+            update()
         rx,ry = self.root.winfo_rootx(),self.root.winfo_rooty()
-        # Paint the unused settings viewport too; use only the embedded controls
-        # for its scrollregion, so this decoration cannot create a scrollbar.
-        canvas = self.root.settings_canvas
-        if canvas.winfo_ismapped():
-            x, y = canvas.winfo_rootx()-rx, canvas.winfo_rooty()-ry
-            rectangle = (x, y, canvas.winfo_width(), canvas.winfo_height(), key)
-            if rectangle != self.canvas_rectangle:
-                crop = self.backdrop.crop((x, y, x+rectangle[2], y+rectangle[3]))
-                self.canvas_photo = ImageTk.PhotoImage(crop, master=self.root)
-                if self.canvas_image is None:
-                    self.canvas_image = canvas.create_image(0, 0, anchor='nw', tags='scenery')
-                canvas.itemconfigure(self.canvas_image, image=self.canvas_photo)
-                self.canvas_rectangle = rectangle
-            canvas.coords(self.canvas_image, canvas.canvasx(0), canvas.canvasy(0))
-            canvas.tag_lower(self.canvas_image)
         for item in self.widgets:
             widget,photo,previous = item
             if not widget.winfo_exists() or not widget.winfo_ismapped():
@@ -250,6 +264,8 @@ class Scenery:
             if rectangle == previous or w < 1 or h < 1:
                 continue
             crop = self.backdrop.crop((x,y,x+w,y+h))
+            if widget is getattr(self.root, 'sidebar_card', None):
+                crop = self._card(crop, w, h, dark)
             cards = self.root.metric_cards
             if widget in cards or widget.master in cards:
                 crop = Image.blend(crop,Image.new('RGB',(w,h),'#1e293b' if dark else '#ffffff'),.72)
