@@ -1,6 +1,8 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.2.6** lets you choose which items to buy (Covenant, Mystic,
+Version **0.2.7** reworks the settings panel (control-mode cards, a budget slider,
+Buy tiles, toggle pills) and saves settings by itself. Version 0.2.6, released only
+as part of 0.2.7, lets you choose which items to buy (Covenant, Mystic,
 Friendship Points), calls out "Covenant!" / "Mystic!" on each purchase, moves timing
 into a collapsed Advanced section (older custom timing is reset once), and waits up to 15 seconds when the game opens the refresh or buy
 confirmation but leaves it blank (probably waiting on the server), instead of
@@ -22,7 +24,7 @@ are faster (about 5–6.5 seconds per refresh on Steam at 2560 × 1440, down fro
 8.5). It also includes the 0.1.4 trial changes: the global Stop key, optional
 Friendship Points purchases, remaining-time estimates, BlueStacks fixes and warm
 display tint handling. See CHANGELOG.txt or About & Credits → Release notes.
-Players need only **E7ShopRefresh-0.2.5.zip**; extract it into a fresh folder.
+Players need only **E7ShopRefresh-0.2.7.zip**; extract it into a fresh folder.
 New settings start in Background mode. Your existing saved mode is preserved; the
 app offers a one-click switch when another mode suits the game it finds.
 

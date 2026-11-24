@@ -1,4 +1,4 @@
-0.2.7-rc3 (test) · A more visual settings panel that saves itself
+0.2.7 (beta) · A more visual settings panel that saves itself; includes 0.2.6
 
 • Control mode is a row of cards (Background, Mouse, ADB) instead of a list.
   Hover a card for who it is for.
@@ -21,7 +21,7 @@
 • The session dashboard sits on a matching rounded card, with the stat tiles
   as smaller cards inside it.
 
-0.2.6 (beta) · Choose what to buy; "Covenant!"/"Mystic!" callouts; simpler timing; waits out a blank confirmation
+0.2.6 (not released separately; included in 0.2.7) · Choose what to buy; "Covenant!"/"Mystic!" callouts; simpler timing; waits out a blank confirmation
 
 • Choose what to buy: Covenant bookmarks, Mystic medals and Friendship Points
   each have a checkbox under Buy (Covenant and Mystic on by default). An item

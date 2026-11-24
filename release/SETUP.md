@@ -107,8 +107,8 @@ available timestamps, outcomes and reasons. Tap delay must be above zero and no
 more than two seconds, including randomized timing. Sessions reload automatically;
 **Clear** archives all recorded sessions before clearing
 them and is disabled during a run. Archives remain in `ShopRefreshHistory/archive`.
-Tap delay, timing variation and calibration live under **Advanced** in the sidebar, with **Reset to recommended**. Updating to 0.2.6 resets older custom timing once.
-The **Buy** checkboxes choose Covenant bookmarks, Mystic medals and Friendship Points; at least one must stay on.
+Tap delay, timing variation and calibration live under **Advanced** in the sidebar, with **Reset to recommended**. Updating from 0.2.5 or older resets custom timing once.
+The **Buy** tiles choose Covenant bookmarks, Mystic medals and Friendship Points; at least one must stay on.
 The blue-bean header button opens the existing About & Credits dialog.
 Shop scrolling uses a short upward mouse drag. The same checkbox adds small
 position and timing variations while keeping the vertical travel consistent.
@@ -154,7 +154,7 @@ Live counters describe completed action sequences rather than balance readings.
 The owner reports passing Mouse and ADB regression runs with the rc3 candidate.
 Insufficient-currency stopping remains unverified;
 begin with a small supervised budget and check Stop and your Stop key.
-Save Settings retains your control mode and other preferences. Reopening the app
+Settings, including your control mode, save themselves a moment after each change. Reopening the app
 scans that mode without starting a session. Background is the fresh-install default;
 an existing saved Mouse or ADB preference is preserved, and Mouse mode offers
 **Switch to Background** when it sees Epic Seven on Steam or STOVE.
