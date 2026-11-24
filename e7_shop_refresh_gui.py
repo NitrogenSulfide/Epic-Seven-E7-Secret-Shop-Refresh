@@ -997,9 +997,9 @@ class RefreshGui(tk.Tk):
         # Spoken purchase callouts sit under the master switch and follow it.
         voices = ttk.Frame(action_dock)
         voices.grid(row=3, column=0, columnspan=2, sticky="w", padx=(dp(24), 0))
-        self.sound_covenant_check = ttk.Checkbutton(voices, text='Say "Covenant!"', variable=self.sound_covenant, command=self._save_sound_preference)
+        self.sound_covenant_check = ttk.Checkbutton(voices, text='Say "Covenant!"', variable=self.sound_covenant, style="Large.TCheckbutton", command=self._save_sound_preference)
         self.sound_covenant_check.grid(row=0, column=0, sticky="w", padx=(0, dp(12)))
-        self.sound_mystic_check = ttk.Checkbutton(voices, text='Say "Mystic!"', variable=self.sound_mystic, command=self._save_sound_preference)
+        self.sound_mystic_check = ttk.Checkbutton(voices, text='Say "Mystic!"', variable=self.sound_mystic, style="Large.TCheckbutton", command=self._save_sound_preference)
         self.sound_mystic_check.grid(row=0, column=1, sticky="w")
         for check in (self.sound_covenant_check, self.sound_mystic_check):
             ThemeHint(check, lambda: 'Spoken when the engine confirms a purchase of that item')
