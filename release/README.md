@@ -1,6 +1,8 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
-Version **0.2.5** reads the shop on Windows installed without English text
+Version **0.2.6** waits up to 15 seconds when the game opens the refresh or buy
+confirmation but leaves it blank (probably waiting on the server), instead of
+stopping with "The refresh confirmation was not recognized". Version 0.2.5 reads the shop on Windows installed without English text
 recognition (it uses another installed Latin-script OCR language) and says why when
 Windows OCR fails, instead of a generic "could not read the confirmation". It also
 recognizes the shop in maximized windows wider than 16:9 and reads shop rows more reliably when OCR splits or loses a small label. Version 0.2.4 pauses while the mouse rests on a windowed game (the game
