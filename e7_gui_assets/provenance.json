@@ -134,5 +134,38 @@
     "use_case": "background-extraction",
     "rights": "Derivative game artwork; respective rightsholders retain rights. Project GPL does not relicense artwork.",
     "prompt": "Use case: background-extraction. Asset type: Epic Seven Friendship points counter UI icon. Input image: edit target. Extract only the existing green two-leaf heart emblem, preserving its exact distinctive shape, colours, shading, dark outline, central seam and highlights. Remove the brown square tile, frame and white '50' text completely. Do not redesign or replace the emblem with a generic heart. Put the faithful green leaf heart cutout alone centered on a genuinely transparent background with a small transparent margin. No text, no tile, no new decorations."
+  },
+  "purchase_voice": {
+    "generator": "ElevenLabs text-to-speech, owner's paid subscription (commercial use permitted by the plan)",
+    "generated": "2026-11-24",
+    "voice": "Laura (ElevenLabs default library voice, id FGY2WhTYpPnrIDTdsKH5)",
+    "selected_by_owner": "2026-11-24, from six candidates",
+    "model": "eleven_multilingual_v2",
+    "voice_settings": {
+      "stability": 0.4,
+      "similarity_boost": 0.8,
+      "style": 0.5
+    },
+    "output_format": "pcm_24000, wrapped as 16-bit mono WAV",
+    "processing": "Trimmed to 20 ms before the first sample above 2% full scale and 100 ms after the last, 30 ms fade-out, gain set so the loudest 50 ms window reads -17 dBFS (start/end chimes read about -22)",
+    "use": "Spoken on a confirmed Covenant or Mystic purchase when the matching sound toggle is on",
+    "files": {
+      "purchase-covenant.wav": {
+        "text": "Covenant!",
+        "original_sha256": "587076f9c42818ba298e2903f4fe9e81cb0b5a313eb909b213c2f63ed36e3320",
+        "gain_db": -9.17,
+        "peak_dbfs": -9.97,
+        "duration_seconds": 0.653,
+        "sha256": "e37a43149f92da2254631684c9492f23c2cc0f71d12a51ca63f89bac09e624d5"
+      },
+      "purchase-mystic.wav": {
+        "text": "Mystic!",
+        "original_sha256": "a1939d19f2974ab3db43248eb1b7f84f516b132ed8ed557777eea2a9bb71c11a",
+        "gain_db": -4.16,
+        "peak_dbfs": -6.88,
+        "duration_seconds": 0.622,
+        "sha256": "100e39b7e2556cfd69ccbf043a3b07beeff0df7ce9e15962cd8c817ccad07495"
+      }
+    }
   }
 }

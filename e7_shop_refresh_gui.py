@@ -130,6 +130,8 @@ STOP_KEY_REJECT_MASK = 0x4 | 0x10 | 0x20000 if os.name == "nt" else 0x4 | 0x8
 SETTINGS_VERSION = 2
 RECOMMENDED_TAP_DELAY = "0.3"
 RECOMMENDED_TAP_JITTER = 0.03
+# The purchase clips run about 0.65 s; a second callout waits for the first.
+PURCHASE_SOUND_GAP_MS = 750
 
 
 def captured_stop_key(keysym, character, state=0):
@@ -284,6 +286,9 @@ class RefreshGui(tk.Tk):
         self._finalized_run_id = None
         self.stop_key_pressed = False
         self.sound_enabled = tk.BooleanVar(value=True)
+        self.sound_covenant = tk.BooleanVar(value=True)
+        self.sound_mystic = tk.BooleanVar(value=True)
+        self._purchase_counts = {}
         self.compact_tracker = tk.BooleanVar(value=True)
         self.dark_mode = tk.BooleanVar(value=False)
         self.credits_seen = tk.BooleanVar(value=False)
@@ -761,6 +766,41 @@ class RefreshGui(tk.Tk):
         except (OSError, RuntimeError):
             self._append_log("\nThe session sound could not be played.\n")
 
+    def _update_purchase_sound_checks(self):
+        state = '!disabled' if self.sound_enabled.get() else 'disabled'
+        for check in (self.sound_covenant_check, self.sound_mystic_check):
+            check.state([state])
+
+    def _announce_purchases(self, stats):
+        """Say "Covenant!"/"Mystic!" once per confirmed purchase count increase."""
+        due = []
+        for key, enabled in (('covenant', self.sound_covenant), ('mystic', self.sound_mystic)):
+            before = self._purchase_counts.get(key, 0)
+            self._purchase_counts[key] = stats[key]
+            if stats[key] > before and enabled.get():
+                due.append(key)
+        if not due or not self.sound_enabled.get():
+            return
+        # SND_ASYNC cuts off a playing sound, so a second item in the same
+        # update waits for the first clip to finish.
+        for index, key in enumerate(due):
+            self.after(index * PURCHASE_SOUND_GAP_MS, lambda key=key, run_id=self.run_id: self._play_purchase_sound(key, run_id))
+
+    def _play_purchase_sound(self, key, run_id):
+        if run_id != self.run_id or not self.sound_enabled.get():
+            return
+        sound = ASSET_DIR / f'purchase-{key}.wav'
+        if not sound.is_file():
+            return
+        try:
+            try:
+                import winsound
+            except ImportError:
+                import e7_sound as winsound
+            winsound.PlaySound(str(sound), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+        except (OSError, RuntimeError):
+            self._append_log(f"\nThe {key} purchase sound could not be played.\n")
+
     def _build_ui(self):
         dp = self._dp
         self.ui_font = tkfont.Font(self, family="Segoe UI", size=12)
@@ -948,10 +988,21 @@ class RefreshGui(tk.Tk):
         self.settings_widgets.append(self.save_button)
         self.sound_button = ttk.Checkbutton(action_dock, text="Sounds on start and end", variable=self.sound_enabled, style="Large.TCheckbutton", command=self._save_sound_preference)
         self.sound_button.grid(row=2, column=0, columnspan=2, sticky="w", pady=(dp(6), 0))
+        # Spoken purchase callouts sit under the master switch and follow it.
+        voices = ttk.Frame(action_dock)
+        voices.grid(row=3, column=0, columnspan=2, sticky="w", padx=(dp(24), 0))
+        self.sound_covenant_check = ttk.Checkbutton(voices, text='Say "Covenant!"', variable=self.sound_covenant, command=self._save_sound_preference)
+        self.sound_covenant_check.grid(row=0, column=0, sticky="w", padx=(0, dp(12)))
+        self.sound_mystic_check = ttk.Checkbutton(voices, text='Say "Mystic!"', variable=self.sound_mystic, command=self._save_sound_preference)
+        self.sound_mystic_check.grid(row=0, column=1, sticky="w")
+        for check in (self.sound_covenant_check, self.sound_mystic_check):
+            ThemeHint(check, lambda: 'Spoken when the engine confirms a purchase of that item')
+        self.sound_enabled.trace_add('write', lambda *_: self._update_purchase_sound_checks())
+        self._update_purchase_sound_checks()
         self.tracker_button = ttk.Checkbutton(action_dock, text="Compact tracker while running", variable=self.compact_tracker, style="Large.TCheckbutton", command=self._save_tracker_preference)
-        self.tracker_button.grid(row=3, column=0, columnspan=2, sticky="w", pady=(dp(6), 0))
+        self.tracker_button.grid(row=4, column=0, columnspan=2, sticky="w", pady=(dp(6), 0))
         ThemeHint(self.tracker_button, lambda: 'Shrink to a small always-on-top bar once the engine starts; returns when the session ends')
-        ttk.Label(action_dock, textvariable=self.setting_notice, style="Muted.TLabel", wraplength=dp(350)).grid(row=4, column=0, columnspan=2, sticky="w", pady=(dp(4), 0))
+        ttk.Label(action_dock, textvariable=self.setting_notice, style="Muted.TLabel", wraplength=dp(350)).grid(row=5, column=0, columnspan=2, sticky="w", pady=(dp(4), 0))
         estimate = ttk.LabelFrame(self.settings_details, text="Budget estimate", padding=dp(8))
         estimate.grid(row=7, column=0, sticky="ew")
         ttk.Label(estimate, textvariable=self.ev, wraplength=dp(320), justify=tk.LEFT).grid(sticky="w")
@@ -1202,6 +1253,8 @@ class RefreshGui(tk.Tk):
             self.tap_jitter.set(jitter if math.isfinite(jitter) and 0 <= jitter <= .1 else .03)
             self.buy_covenant.set(parser.getboolean('GUI', 'buy_covenant', fallback=True))
             self.buy_mystic.set(parser.getboolean('GUI', 'buy_mystic', fallback=True))
+            self.sound_covenant.set(parser.getboolean('GUI', 'sound_covenant', fallback=True))
+            self.sound_mystic.set(parser.getboolean('GUI', 'sound_mystic', fallback=True))
             settings_version = parser.getint('GUI', 'settings_version', fallback=0)
         except (OSError, ValueError, configparser.Error) as exc:
             self.setting_notice.set(f"Sound preference could not be read: {exc}")
@@ -1286,6 +1339,8 @@ class RefreshGui(tk.Tk):
         parser['GUI']['buy_friendship'] = str(self.buy_friendship.get())
         parser['GUI']['buy_covenant'] = str(self.buy_covenant.get())
         parser['GUI']['buy_mystic'] = str(self.buy_mystic.get())
+        parser['GUI']['sound_covenant'] = str(self.sound_covenant.get())
+        parser['GUI']['sound_mystic'] = str(self.sound_mystic.get())
         pending = getattr(self, '_timing_migration_pending', False)
         parser['GUI']['settings_version'] = str(getattr(self, '_loaded_settings_version', 0) if pending else SETTINGS_VERSION)
         parser["GUI"]["dark_mode"] = str(self.dark_mode.get())
@@ -1838,6 +1893,7 @@ class RefreshGui(tk.Tk):
         self.elapsed.set("0m 00s")
         self.raw_output = self.partial_line = ""
         self._live_stats_seen = False
+        self._purchase_counts = {}
         self._legacy_progress_seen = False
         self.metric_captions[1].configure(text='Skystone spent ≈')
         self.log.configure(state=tk.NORMAL)
@@ -2129,6 +2185,7 @@ class RefreshGui(tk.Tk):
             except (ValueError, TypeError):
                 return
             self._live_stats_seen = True
+            self._announce_purchases(stats)
             self.session_estimate.observe(stats['refreshes'], observed_at)
             self._update_remaining_time(observed_at)
             for key, var in (('skystone_spent', self.spent), ('covenant', self.covenant), ('mystic', self.mystic), ('friendship', self.friendship)):

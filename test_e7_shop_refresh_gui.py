@@ -159,6 +159,33 @@ prompt("press enter to exit...", "")
 
 
 class GuiTests(unittest.TestCase):
+    def test_purchase_callouts_follow_counts_and_toggles(self):
+        for name in ('purchase-covenant.wav', 'purchase-mystic.wav'):
+            shutil.copyfile(PACKAGED_ASSETS / name, self.assets / name)
+        self.app.run_settings = self.app._settings()
+        def stats(cov, mys, refreshes=1):
+            self.app._handle_line('E7GUI_STATS ' + json.dumps(dict(refreshes=refreshes, skystone_spent=refreshes*3, covenant=cov, mystic=mys, friendship=0)))
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline:  # the second clip is scheduled after the first
+                self.app.update(); time.sleep(.01)
+            played = [Path(call.args[0]).name for call in self.sound_mock.call_args_list]
+            self.sound_mock.reset_mock()
+            return played
+        self.assertEqual(stats(0, 0), [])
+        self.assertEqual(stats(1, 1, 2), ['purchase-covenant.wav', 'purchase-mystic.wav'])
+        self.assertEqual(stats(1, 1, 3), [])  # unchanged counts stay quiet
+        self.app.sound_mystic.set(False)
+        self.assertEqual(stats(2, 2, 4), ['purchase-covenant.wav'])
+        self.app.sound_enabled.set(False)
+        self.assertIn('disabled', self.app.sound_covenant_check.state())
+        self.assertEqual(stats(3, 3, 5), [])
+        self.app._save_sound_preference()
+        text = self.gui_config.read_text()
+        self.assertIn('sound_mystic = False', text)
+        self.assertIn('sound_covenant = True', text)
+        self.app.sound_mystic.set(True); self.app._load_config()
+        self.assertFalse(self.app.sound_mystic.get())
+
     def test_friendship_toggle_persists_and_reports_current_points(self):
         self.assertFalse(self.app.buy_friendship.get())
         self.app.buy_friendship.set(True)

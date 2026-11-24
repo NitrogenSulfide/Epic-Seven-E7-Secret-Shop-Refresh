@@ -13,6 +13,9 @@ Original sounds use VCSL and VSCO 2 CE sample libraries.
 https://opengameart.org/content/ui-sound-effects-button-clicks-user-feedback-notifications
 https://creativecommons.org/publicdomain/zero/1.0/
 
+"Covenant!" / "Mystic!" purchase voice: ElevenLabs text-to-speech, voice "Laura",
+generated 2026-11-24 under the owner's paid ElevenLabs subscription.
+
 Icon, backgrounds and currency artwork retain their original rights holders.
 The software GPL does not relicense third-party artwork.
 Background restoration and sharpening: image_gen.
