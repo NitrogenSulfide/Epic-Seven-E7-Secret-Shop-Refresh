@@ -289,6 +289,7 @@ class RefreshGui(tk.Tk):
         self.sound_covenant = tk.BooleanVar(value=True)
         self.sound_mystic = tk.BooleanVar(value=True)
         self._purchase_counts = {}
+        self._purchase_sound_free_at = 0.0
         self.compact_tracker = tk.BooleanVar(value=True)
         self.dark_mode = tk.BooleanVar(value=False)
         self.credits_seen = tk.BooleanVar(value=False)
@@ -781,13 +782,18 @@ class RefreshGui(tk.Tk):
                 due.append(key)
         if not due or not self.sound_enabled.get():
             return
-        # SND_ASYNC cuts off a playing sound, so a second item in the same
-        # update waits for the first clip to finish.
-        for index, key in enumerate(due):
-            self.after(index * PURCHASE_SOUND_GAP_MS, lambda key=key, run_id=self.run_id: self._play_purchase_sound(key, run_id))
+        # SND_ASYNC cuts off a playing sound, so each callout, from this
+        # update or a later one, waits for the one queued before it.
+        now = time.monotonic()
+        for key in due:
+            start = max(now, self._purchase_sound_free_at)
+            self._purchase_sound_free_at = start + PURCHASE_SOUND_GAP_MS / 1000
+            self.after(round((start - now) * 1000), lambda key=key, run_id=self.run_id: self._play_purchase_sound(key, run_id))
 
     def _play_purchase_sound(self, key, run_id):
-        if run_id != self.run_id or not self.sound_enabled.get():
+        enabled = self.sound_covenant if key == 'covenant' else self.sound_mystic
+        # A finished session has played its end chime; a late callout would cut it off.
+        if run_id != self.run_id or self._finalized_run_id == run_id or not (self.sound_enabled.get() and enabled.get()):
             return
         sound = ASSET_DIR / f'purchase-{key}.wav'
         if not sound.is_file():
@@ -986,7 +992,7 @@ class RefreshGui(tk.Tk):
         self.save_button = ttk.Button(action_dock, text="Save Settings", command=self.save_settings)
         self.save_button.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(dp(6), 0))
         self.settings_widgets.append(self.save_button)
-        self.sound_button = ttk.Checkbutton(action_dock, text="Sounds on start and end", variable=self.sound_enabled, style="Large.TCheckbutton", command=self._save_sound_preference)
+        self.sound_button = ttk.Checkbutton(action_dock, text="Sounds: start, end and buys", variable=self.sound_enabled, style="Large.TCheckbutton", command=self._save_sound_preference)
         self.sound_button.grid(row=2, column=0, columnspan=2, sticky="w", pady=(dp(6), 0))
         # Spoken purchase callouts sit under the master switch and follow it.
         voices = ttk.Frame(action_dock)
@@ -1894,6 +1900,7 @@ class RefreshGui(tk.Tk):
         self.raw_output = self.partial_line = ""
         self._live_stats_seen = False
         self._purchase_counts = {}
+        self._purchase_sound_free_at = 0.0
         self._legacy_progress_seen = False
         self.metric_captions[1].configure(text='Skystone spent ≈')
         self.log.configure(state=tk.NORMAL)

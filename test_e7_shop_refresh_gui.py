@@ -163,10 +163,12 @@ class GuiTests(unittest.TestCase):
         for name in ('purchase-covenant.wav', 'purchase-mystic.wav'):
             shutil.copyfile(PACKAGED_ASSETS / name, self.assets / name)
         self.app.run_settings = self.app._settings()
-        def stats(cov, mys, refreshes=1):
+        def stats(cov, mys, refreshes=1, wait=True):
             self.app._handle_line('E7GUI_STATS ' + json.dumps(dict(refreshes=refreshes, skystone_spent=refreshes*3, covenant=cov, mystic=mys, friendship=0)))
-            deadline = time.monotonic() + 2
-            while time.monotonic() < deadline:  # the second clip is scheduled after the first
+            if not wait:
+                return
+            deadline = max(time.monotonic(), self.app._purchase_sound_free_at) + .1
+            while time.monotonic() < deadline:  # queued clips play one after another
                 self.app.update(); time.sleep(.01)
             played = [Path(call.args[0]).name for call in self.sound_mock.call_args_list]
             self.sound_mock.reset_mock()
@@ -174,11 +176,21 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(stats(0, 0), [])
         self.assertEqual(stats(1, 1, 2), ['purchase-covenant.wav', 'purchase-mystic.wav'])
         self.assertEqual(stats(1, 1, 3), [])  # unchanged counts stay quiet
+        # Updates arriving close together queue rather than cut each other off.
+        started = time.monotonic()
+        stats(2, 1, 4, wait=False)
+        self.assertEqual(stats(2, 2, 5), ['purchase-covenant.wav', 'purchase-mystic.wav'])
+        self.assertGreaterEqual(time.monotonic() - started, gui.PURCHASE_SOUND_GAP_MS / 1000)
+        # A callout still queued when the session finishes stays silent.
+        stats(3, 3, 6, wait=False)
+        self.app._finalized_run_id = self.app.run_id
+        self.assertEqual(stats(3, 3, 6), [])
+        self.app._finalized_run_id = None
         self.app.sound_mystic.set(False)
-        self.assertEqual(stats(2, 2, 4), ['purchase-covenant.wav'])
+        self.assertEqual(stats(4, 4, 7), ['purchase-covenant.wav'])
         self.app.sound_enabled.set(False)
         self.assertIn('disabled', self.app.sound_covenant_check.state())
-        self.assertEqual(stats(3, 3, 5), [])
+        self.assertEqual(stats(5, 5, 8), [])
         self.app._save_sound_preference()
         text = self.gui_config.read_text()
         self.assertIn('sound_mystic = False', text)
