@@ -100,9 +100,24 @@ def _same_folder(first, second):
         return False
 
 
+def _children(folder):
+    """A folder's entries, refusing links: a link or junction could loop or reach unrelated files."""
+    children = sorted(Path(folder).iterdir())
+    for child in children:
+        if _is_link(child):
+            raise MigrationError(f'{child} is a link or junction; settings folders with links are not copied.')
+    return children
+
+
 def _copy(source, target):
+    """Copy a file or folder without following links (OneDrive placeholders are copied)."""
+    if _is_link(source):
+        raise MigrationError(f'{source} is a link or junction; settings folders with links are not copied.')
     if source.is_dir():
-        shutil.copytree(source, target)
+        target.mkdir()
+        for child in _children(source):
+            _copy(child, target / child.name)
+        shutil.copystat(source, target)
     else:
         shutil.copy2(source, target)
 
@@ -110,11 +125,10 @@ def _copy(source, target):
 def _verify(source, target):
     """Byte-compare a copied file or tree; raise if anything differs or is missing."""
     if source.is_dir():
-        if not target.is_dir():
+        if not target.is_dir() or _is_link(target):
             raise MigrationError(f'{target} was not created')
-        for path in source.rglob('*'):
-            if path.is_file():
-                _verify(path, target / path.relative_to(source))
+        for child in _children(source):
+            _verify(child, target / child.name)
         return
     if not target.is_file() or not filecmp.cmp(source, target, shallow=False):
         raise MigrationError(f'{target} does not match {source}')
@@ -128,6 +142,47 @@ def _writable(folder):
         return True
     except OSError:
         return False
+
+
+def _recover_interrupted_import(data):
+    """Put the settings back if an import stopped between moving them aside and the new ones in place.
+
+    The import moves the settings folder to `.<name>.replaced-<id>` and then
+    renames its checked copy `.<name>.migrating-<id>` into place. If the app
+    was stopped in between, the settings folder is missing. The folder moved
+    aside is the player's last known-good settings, so it is put back; the
+    unfinished import is dropped (the older version is unchanged and can be
+    imported again). Returns (events, stranded): stranded means the settings
+    could not be put back and must not be replaced by an empty folder.
+    """
+    real = _resolved(data)
+    if real.exists() or os.path.lexists(real):
+        return [], False
+    try:
+        asides = [path for path in real.parent.glob(f'.{real.name}.replaced-*')
+                  if path.is_dir() and not _is_link(path)]
+        staged = [path for path in real.parent.glob(f'.{real.name}.migrating-*')
+                  if path.is_dir() and not _is_link(path)]
+    except OSError:
+        return [], False
+    if not asides:
+        return [], False  # a copy still being made (or abandoned) leaves the settings folder as it was
+    asides.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+    try:
+        os.rename(asides[0], real)
+    except OSError as error:
+        return [f'An import of older settings was interrupted. Your settings are in {asides[0]} and could not '
+                f'be put back ({error}): close the app and rename that folder to {real.name}. '
+                f'Settings stay in the engine folder for this run.'], True
+    events = [f'An import of older settings was interrupted; your previous settings were put back in {real}. '
+              'Nothing from the older version was kept; you can import it again from '
+              'Settings › Advanced › Import settings from an older version.']
+    for path in staged:
+        _remove_tree(path)
+    if asides[1:]:
+        events.append('Other settings set aside by earlier interrupted imports were kept: '
+                      + ', '.join(str(path) for path in asides[1:]) + '.')
+    return events, False
 
 
 def _stage(legacy, staging, items, now, replaced=None, **details):
@@ -197,6 +252,11 @@ def prepare_data_directory(legacy_folder, data_folder=None, *, environ=None, now
     now = now or datetime.datetime.now()
     location = DataLocation(data)
     if _same_folder(legacy, data):
+        return location
+    recovered, stranded = _recover_interrupted_import(data)
+    location.events += recovered
+    if stranded:  # never start a new, empty folder while the player's settings sit aside
+        location.directory, location.fallback = legacy, True
         return location
 
     def fall_back(reason):
@@ -458,17 +518,30 @@ def _fingerprint(folder):
     """Every file in a settings folder with its size and time, to notice a save during an import."""
     folder = Path(folder)
     result = []
-    for path in sorted(folder.rglob('*')) if folder.is_dir() else ():
-        relative = path.relative_to(folder)
-        if relative.parts[0] == MARKER or relative.parts[0].startswith('.write-test-'):
-            continue
+
+    def walk(current):
         try:
-            info = path.stat()
+            children = sorted(current.iterdir())
         except OSError:
-            continue
-        is_file = path.is_file()
-        result.append((relative.as_posix(), is_file, info.st_size if is_file else 0,
-                       info.st_mtime_ns if is_file else 0))
+            return
+        for path in children:
+            relative = path.relative_to(folder)
+            if relative.parts[0] == MARKER or relative.parts[0].startswith('.write-test-'):
+                continue
+            if _is_link(path):  # recorded, never followed
+                result.append((relative.as_posix(), 'link', 0, 0))
+                continue
+            try:
+                info = path.stat()
+            except OSError:
+                continue
+            is_file = path.is_file()
+            result.append((relative.as_posix(), is_file, info.st_size if is_file else 0,
+                           info.st_mtime_ns if is_file else 0))
+            if not is_file:
+                walk(path)
+    if folder.is_dir():
+        walk(folder)
     return result
 
 

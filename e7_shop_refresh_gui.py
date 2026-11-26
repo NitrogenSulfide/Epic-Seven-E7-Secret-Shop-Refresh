@@ -31,7 +31,7 @@ from e7_tracker import CompactTracker
 from e7_report import build_report, anonymize, latest_failure, system_name
 from e7_setup import missing_references, has_builtin_references, RecognitionSetup, verify_setup_engine
 from e7_native_mouse import activate_native_target, release_native_button, MouseElevationRequired
-from e7_elevation import restart_as_administrator, ElevationCancelled
+from e7_elevation import restart_as_administrator, restart_command, ElevationCancelled
 from e7_connection import check_connection, ConnectionCheck, endpoint_key
 from e7_windows_capture import WindowsCapture
 from e7_user_data import (prepare_data_directory, ENVIRONMENT_VARIABLE as DATA_DIR_VARIABLE, needs_import_choice,
@@ -260,9 +260,21 @@ def apply_import_choice(choice, data_dir):
                 'Settings › Advanced › Import settings from an older version.']
     try:
         return import_older_install(install.runtime, data_dir)
-    except (ImportRefused, OSError) as error:
+    except (ImportRefused, OSError, RecursionError) as error:
         return [f'Import from {install.folder} failed: {error} Default settings are used; '
                 f'{install.folder} was not changed.']
+
+
+def relaunch_app():
+    """Start this app again with the same engine folder (not elevated); raises OSError."""
+    if os.name == 'nt':
+        executable, arguments, directory = restart_command(APP_DIR)
+        subprocess.Popen(f'"{executable}" {arguments}', cwd=directory, close_fds=True)
+        return
+    script = Path(__file__).resolve()
+    command = [sys.executable] if getattr(sys, 'frozen', False) else [sys.executable, str(script)]
+    subprocess.Popen([*command, '--engine-dir', str(Path(APP_DIR).resolve())], cwd=str(script.parent),
+                     start_new_session=True, close_fds=True)
 
 
 def offer_older_settings(data_dir):
@@ -766,17 +778,39 @@ class RefreshGui(tk.Tk):
         self._autosave_suspended = True
         try:
             events = import_older_install(install.runtime, DATA_DIR, replace=replace)
-        except (ImportRefused, OSError) as error:
+        except (ImportRefused, OSError, RecursionError) as error:
+            self._autosave_suspended = False
             self._event(f'Import from {install.folder} failed: {error}')
             messagebox.showerror('Import settings', f'Nothing was imported.\n\n{error}', parent=self)
             return
-        finally:
-            self._autosave_suspended = False
+        # The imported files are loaded by a fresh start, not into this window:
+        # a reload here would mix them with what this window already holds
+        # (control mode and its target, settings the import did not include).
+        # Until then nothing is saved over them and no session starts.
+        self._restart_required = True
+        job = getattr(self, '_autosave_job', None)
+        if job is not None:
+            self.after_cancel(job)
+            self._autosave_job = None
         for text in events:
             self._event(text)
-        self._load_config()  # show the imported settings; autosave starts from them
-        self._apply_theme()
-        self.refresh_history()
+        messagebox.showinfo('Import settings', f'Imported settings and history from {install.folder}.\n\n'
+                            'The app restarts now to load them.', parent=self)
+        try:
+            relaunch_app()
+        except OSError as error:
+            self._event(f'The app could not restart itself ({error}). Close and reopen it to use the imported settings.')
+            messagebox.showinfo('Import settings', 'The app could not restart itself. Close and reopen it to use '
+                                'the imported settings; Start Refresh is off until then.', parent=self)
+            return
+        self.destroy()
+
+    def _restart_pending(self):
+        if not getattr(self, '_restart_required', False):
+            return False
+        messagebox.showinfo('Restart needed', 'Imported settings are loaded when the app starts. Close and '
+                            'reopen it first.', parent=self)
+        return True
 
     def _show_about(self):
         if self.about_window is not None and self.about_window.winfo_exists():
@@ -1563,6 +1597,8 @@ class RefreshGui(tk.Tk):
 
     def _write_engine_timing(self):
         """Store only the timing keys in ADBconfig.ini, leaving budget and stop key alone."""
+        if getattr(self, '_restart_required', False):
+            return  # imported files wait for the restart
         parser = configparser.ConfigParser()
         try:
             # read_file, not read: read() swallows open errors, and an empty
@@ -1584,6 +1620,8 @@ class RefreshGui(tk.Tk):
         self._timing_migration_pending = False
 
     def _write_sound_preference(self):
+        if getattr(self, '_restart_required', False):
+            return  # imported files wait for the restart
         # The original engine rewrites ADBconfig.ini, so GUI preferences need
         # their own file to survive a real refresh session.
         parser = configparser.ConfigParser()
@@ -1737,6 +1775,8 @@ class RefreshGui(tk.Tk):
             self._append_log(raw + "\n")
 
     def save_settings(self, settings=None):
+        if getattr(self, '_restart_required', False):
+            return None  # imported files wait for the restart; nothing is written over them
         try:
             settings = settings or self._settings()
             parser = configparser.ConfigParser()
@@ -1979,6 +2019,8 @@ class RefreshGui(tk.Tk):
         self._show_recognition_setup()
 
     def start_refresh(self):
+        if self._restart_pending():
+            return
         if self.control_mode.get() == 'Mouse':
             self._start_mouse_refresh()
             return
@@ -3017,6 +3059,8 @@ class RefreshGui(tk.Tk):
 
     def _autosave(self):
         self._autosave_job = None
+        if getattr(self, '_restart_required', False):
+            return  # imported files wait for the restart
         if self._checking_connection:
             # Start is checking the connection; if that fails, Start saves
             # nothing, so try again once it is over.
@@ -3056,6 +3100,8 @@ class RefreshGui(tk.Tk):
 
     def _write_engine_settings(self, settings):
         """Update ADBconfig.ini in place; an unreadable file is never replaced."""
+        if getattr(self, '_restart_required', False):
+            return  # imported files wait for the restart
         parser = configparser.ConfigParser()
         try:
             with CONFIG_FILE.open(encoding='utf-8-sig') as fh:

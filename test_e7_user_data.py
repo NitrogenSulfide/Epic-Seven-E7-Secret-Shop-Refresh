@@ -215,14 +215,14 @@ class MigrationTests(unittest.TestCase):
 
     def test_copy_failure_falls_back_cleans_up_and_retries_next_start(self):
         before = self.old_install()
-        real_copytree = shutil.copytree
+        real_copy2 = shutil.copy2
 
         def failing_copytree(source, target, *args, **kwargs):
             if BACKUP_FOLDER in str(target):
                 raise OSError(28, 'No space left on device')
-            return real_copytree(source, target, *args, **kwargs)
+            return real_copy2(source, target, *args, **kwargs)
 
-        with patch.object(data.shutil, 'copytree', failing_copytree):
+        with patch.object(data.shutil, 'copy2', failing_copytree):
             location = self.prepare()
         self.assertEqual(location.directory, self.legacy)
         self.assertTrue(location.fallback)
@@ -671,18 +671,139 @@ class ImportTests(unittest.TestCase):
         self.assertEqual((history / 'ADB_History.csv').read_text(encoding='utf-8'), 'Duration\n1\n2\n')
         self.assertEqual(self.leftovers(), [])
 
+    # --- an import stopped between moving the settings aside and the new ones in place
+
+    def interrupted(self, *, staged=True):
+        """The state a killed import leaves: the settings folder aside, a checked copy beside it."""
+        self.fresh_start()
+        (self.data / 'ShopRefreshGUI.ini').write_text('[GUI]\nmine\n', encoding='utf-8')
+        aside = self.data.parent / f'.{self.data.name}.replaced-0123'
+        os.rename(self.data, aside)
+        if staged:
+            staging = self.data.parent / f'.{self.data.name}.migrating-4567'
+            staging.mkdir()
+            (staging / 'ADBconfig.ini').write_text('[Settings]\nbudget = 450\n', encoding='utf-8')
+        return aside
+
+    def test_interrupted_import_puts_the_settings_back(self):
+        self.interrupted()
+        location = prepare_data_directory(self.legacy, self.data, now=NOW)
+        self.assertEqual(location.directory, self.data)
+        self.assertFalse(location.fresh or location.fallback)
+        self.assertIn('previous settings were put back', location.events[0])
+        self.assertEqual((self.data / 'ShopRefreshGUI.ini').read_text(encoding='utf-8'), '[GUI]\nmine\n')
+        self.assertFalse((self.data / 'ADBconfig.ini').exists())  # nothing half-imported is kept
+        self.assertFalse(data.needs_import_choice(location))
+        self.assertEqual(self.leftovers(), [])
+
+    def test_interrupted_before_the_copy_was_staged_puts_the_settings_back(self):
+        self.interrupted(staged=False)
+        location = prepare_data_directory(self.legacy, self.data, now=NOW)
+        self.assertIn('previous settings were put back', location.events[0])
+        self.assertTrue((self.data / 'ShopRefreshGUI.ini').exists())
+        self.assertEqual(self.leftovers(), [])
+
+    def test_settings_that_cannot_be_put_back_are_never_replaced_by_an_empty_folder(self):
+        aside = self.interrupted()
+        real_rename = os.rename
+
+        def failing(source, target):
+            if '.replaced-' in Path(source).name:
+                raise PermissionError(13, 'Access is denied', str(source))
+            return real_rename(source, target)
+
+        with patch.object(data.os, 'rename', failing):
+            location = prepare_data_directory(self.legacy, self.data, now=NOW)
+        self.assertTrue(location.fallback)
+        self.assertEqual(location.directory, self.legacy)
+        self.assertIn(str(aside), location.events[0])
+        self.assertFalse(self.data.exists())
+        self.assertTrue((aside / 'ShopRefreshGUI.ini').exists())
+
+    def test_a_copy_still_being_made_is_left_alone(self):
+        self.data.parent.mkdir(parents=True)
+        staging = self.data.parent / f'.{self.data.name}.migrating-4567'  # e.g. another start moving settings
+        staging.mkdir()
+        location = prepare_data_directory(self.legacy, self.data, now=NOW)
+        self.assertTrue(location.fresh)
+        self.assertEqual(location.events, [])
+        self.assertTrue(staging.exists())
+
+    def test_leftover_beside_a_settings_folder_in_use_changes_nothing(self):
+        self.fresh_start()
+        (self.data / 'ShopRefreshGUI.ini').write_text('[GUI]\ncurrent\n', encoding='utf-8')
+        leftover = self.data.parent / f'.{self.data.name}.replaced-0123'
+        leftover.mkdir()
+        (leftover / 'ShopRefreshGUI.ini').write_text('[GUI]\nold\n', encoding='utf-8')
+        location = prepare_data_directory(self.legacy, self.data, now=NOW)
+        self.assertEqual(location.events, [])
+        self.assertEqual((self.data / 'ShopRefreshGUI.ini').read_text(encoding='utf-8'), '[GUI]\ncurrent\n')
+        self.assertTrue(leftover.exists())
+
+    # --- links inside copied folders
+
+    def junction(self, link, target):
+        import subprocess
+        if os.name != 'nt':
+            self.skipTest('junctions are Windows-only')
+        result = subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(target)], capture_output=True)
+        if result.returncode:
+            self.skipTest('mklink /J failed')
+        self.addCleanup(lambda: os.path.lexists(link) and os.rmdir(link))  # the junction only, never its target
+
+    def test_junction_loop_in_history_is_refused_not_followed(self):
+        self.fresh_start()
+        history = self.old / 'ShopRefreshHistory'
+        self.junction(history / 'loop', history)
+        old_before = (self.old / 'ADBconfig.ini').read_bytes()
+        with self.assertRaises(data.MigrationError) as raised:
+            data.import_older_install(self.old, self.data, now=NOW)
+        self.assertIn('link or junction', str(raised.exception))
+        self.assertEqual(sorted(path.name for path in self.data.iterdir()), [])
+        self.assertEqual(self.leftovers(), [])
+        self.assertEqual((self.old / 'ADBconfig.ini').read_bytes(), old_before)
+
+    def test_junction_to_other_files_in_a_backup_is_refused(self):
+        self.fresh_start()
+        (self.data / 'ShopRefreshGUI.ini').write_text('[GUI]\n', encoding='utf-8')
+        private = self.root / 'private'
+        private.mkdir()
+        (private / 'secret.txt').write_text('not settings', encoding='utf-8')
+        (self.data / BACKUP_FOLDER).mkdir()
+        self.junction(self.data / BACKUP_FOLDER / 'elsewhere', private)
+        with self.assertRaises(data.MigrationError):
+            data.import_older_install(self.old, self.data, replace=True, now=NOW)
+        self.assertEqual((self.data / 'ShopRefreshGUI.ini').read_text(encoding='utf-8'), '[GUI]\n')
+        self.assertEqual(self.leftovers(), [])
+
+    def test_cloud_placeholder_files_are_copied(self):
+        self.fresh_start()
+        real_lstat = os.lstat
+
+        def placeholder(path, *args, **kwargs):
+            info = real_lstat(path, *args, **kwargs)
+            if Path(path).name == 'ADB_History.csv':  # OneDrive Files On-Demand: a reparse point, not a link
+                return SimpleNamespace(st_file_attributes=data.FILE_ATTRIBUTE_REPARSE_POINT,
+                                       st_reparse_tag=0x9000601A, st_mode=info.st_mode)
+            return info
+
+        with patch.object(data.os, 'lstat', placeholder):
+            data.import_older_install(self.old, self.data, now=NOW)
+        self.assertEqual((self.data / 'ShopRefreshHistory' / 'ADB_History.csv').read_text(encoding='utf-8'),
+                         'Duration\n12\n')
+
     def test_copy_failure_leaves_the_folder_as_it_was(self):
         self.fresh_start()
         data.record_fresh_start(self.data, now=NOW)
         before = snapshot(self.data)
-        real_copytree = shutil.copytree
+        real_copy2 = shutil.copy2
 
         def failing(source, target, *args, **kwargs):
             if BACKUP_FOLDER in str(target):
                 raise OSError(28, 'No space left on device')
-            return real_copytree(source, target, *args, **kwargs)
+            return real_copy2(source, target, *args, **kwargs)
 
-        with patch.object(data.shutil, 'copytree', failing), self.assertRaises(OSError):
+        with patch.object(data.shutil, 'copy2', failing), self.assertRaises(OSError):
             data.import_older_install(self.old, self.data, now=NOW)
         self.assertEqual(snapshot(self.data), before)
         self.assertEqual(self.leftovers(), [])
@@ -825,6 +946,92 @@ class GuiWiringTests(unittest.TestCase):
                 patch.object(self.gui, 'older_installs') as search:
             self.assertEqual(self.real_offer(self.data), [])
         search.assert_not_called()
+
+    def test_apply_choice_import_runaway_copy_is_a_clean_failure(self):
+        install = data.OlderInstall(self.root / 'old', self.root / 'old' / 'runtime', ('ShopRefreshHistory',), 0.0)
+        with patch.object(self.gui, 'import_older_install', side_effect=RecursionError('too deep')):
+            events = self.gui.apply_import_choice(('import', install), self.data)
+        self.assertIn('failed', events[0])
+
+    def later_import(self, *, relaunch_error=None, import_error=None):
+        """Settings › Advanced import on a stand-in window (no Tk): what happens after it."""
+        gui = self.gui
+        older = self.root / 'E7 0.2.7' / 'runtime'
+        older.mkdir(parents=True)
+        (older / 'ShopRefreshGUI.ini').write_text('[GUI]\ncontrol_mode = ADB\n', encoding='utf-8')
+        install = data.describe_install(older.parent)
+        self.data.mkdir()
+        (self.data / 'ShopRefreshGUI.ini').write_text('[GUI]\ncontrol_mode = Background\n', encoding='utf-8')
+
+        class Window:
+            process = None
+            _autosave_job = None
+            _dp = staticmethod(lambda value: value)
+            _restart_pending = gui.RefreshGui._restart_pending
+            start_refresh = gui.RefreshGui.start_refresh
+            _write_sound_preference = gui.RefreshGui._write_sound_preference
+            save_settings = gui.RefreshGui.save_settings
+
+            def __init__(self):
+                self.events, self.destroyed, self.loaded = [], False, False
+                self.control_mode = SimpleNamespace(get=lambda: 'Background')
+
+            def wait_window(self, _dialog): pass
+            def _flush_autosave(self): pass
+            def after_cancel(self, _job): pass
+            def _event(self, text): self.events.append(text)
+            def destroy(self): self.destroyed = True
+            def _load_config(self): self.loaded = True
+            def _start_background_refresh(self): raise AssertionError('a session started')
+
+        class Chosen:
+            def __init__(self, *args, **kwargs):
+                self.choice = ('import', install)
+
+        import e7_import_dialog
+        window = Window()
+        relaunch = patch.object(gui, 'relaunch_app', side_effect=relaunch_error)
+        messages = patch.multiple(gui.messagebox, showinfo=lambda *a, **k: None, showerror=lambda *a, **k: None,
+                                  askyesno=lambda *a, **k: True)
+        with relaunch as relaunched, messages, patch.object(e7_import_dialog, 'ImportDialog', Chosen), \
+                patch.object(gui, 'older_installs', return_value=[install]), \
+                patch.object(gui, 'import_older_install', side_effect=import_error,
+                             wraps=None if import_error else gui.import_older_install), \
+                patch.multiple(gui, DATA_DIR=self.data, APP_DIR=self.engine,
+                               GUI_CONFIG_FILE=self.data / 'ShopRefreshGUI.ini'):
+            gui.RefreshGui._import_older_settings(window)
+            if import_error is None:
+                window.start_refresh()  # must not start anything until the restart
+                window._write_sound_preference()  # must not write over the imported file
+                self.assertIsNone(window.save_settings())
+        return window, relaunched
+
+    def test_later_import_restarts_instead_of_reloading(self):
+        window, relaunched = self.later_import()
+        relaunched.assert_called_once_with()
+        self.assertTrue(window.destroyed)
+        self.assertFalse(window.loaded)
+        self.assertEqual((self.data / 'ShopRefreshGUI.ini').read_text(encoding='utf-8'), '[GUI]\ncontrol_mode = ADB\n')
+
+    def test_later_import_without_a_restart_blocks_start_and_saving(self):
+        window, _ = self.later_import(relaunch_error=OSError('cannot start'))
+        self.assertFalse(window.destroyed)
+        self.assertFalse(window.loaded)
+        self.assertTrue(any('could not restart' in text for text in window.events))
+        self.assertEqual((self.data / 'ShopRefreshGUI.ini').read_text(encoding='utf-8'), '[GUI]\ncontrol_mode = ADB\n')
+
+    def test_later_import_failure_keeps_the_window_as_it_was(self):
+        window, relaunched = self.later_import(import_error=RecursionError('too deep'))
+        relaunched.assert_not_called()
+        self.assertFalse(getattr(window, '_restart_required', False))
+        self.assertTrue(any('failed' in text for text in window.events))
+
+    def test_relaunch_starts_the_same_app_with_the_same_engine_folder(self):
+        with patch.object(self.gui.subprocess, 'Popen') as popen, patch.object(self.gui, 'APP_DIR', self.engine):
+            self.gui.relaunch_app()
+        command = popen.call_args.args[0]
+        self.assertIn('--engine-dir', command if isinstance(command, str) else ' '.join(command))
+        self.assertIn(str(self.engine.resolve()), command if isinstance(command, str) else ' '.join(command))
 
     def test_apply_choice_import_copies(self):
         older = self.root / 'E7 0.2.7' / 'runtime'
