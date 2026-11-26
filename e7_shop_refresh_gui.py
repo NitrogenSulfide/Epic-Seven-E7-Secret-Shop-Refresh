@@ -31,9 +31,12 @@ from e7_tracker import CompactTracker
 from e7_report import build_report, anonymize, latest_failure, system_name
 from e7_setup import missing_references, has_builtin_references, RecognitionSetup, verify_setup_engine
 from e7_native_mouse import activate_native_target, release_native_button, MouseElevationRequired
-from e7_elevation import restart_as_administrator, ElevationCancelled
+from e7_elevation import restart_as_administrator, restart_command, ElevationCancelled
 from e7_connection import check_connection, ConnectionCheck, endpoint_key
 from e7_windows_capture import WindowsCapture
+from e7_user_data import (prepare_data_directory, ENVIRONMENT_VARIABLE as DATA_DIR_VARIABLE, needs_import_choice,
+                          find_older_installs, default_search_roots, record_fresh_start, import_older_install,
+                          has_user_data, ImportRefused)
 
 PROJECT_DIR = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
 # Windows uses the installed player folder; elsewhere the source folder is the engine.
@@ -130,6 +133,9 @@ ADB_EXE = APP_DIR / "adb-assets" / "platform-tools" / "adb.exe"
 CONFIG_FILE = APP_DIR / "ADBconfig.ini"
 GUI_CONFIG_FILE = APP_DIR / "ShopRefreshGUI.ini"
 HISTORY_FILE = APP_DIR / "ShopRefreshHistory" / "ADB_History.csv"
+# Settings and history; main() points this at the per-user folder (e7_user_data).
+DATA_DIR = None
+DATA_EVENTS = []
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
@@ -215,6 +221,97 @@ def configure_engine_directory(directory):
     CONFIG_FILE = directory / "ADBconfig.ini"
     GUI_CONFIG_FILE = directory / "ShopRefreshGUI.ini"
     HISTORY_FILE = directory / "ShopRefreshHistory" / "ADB_History.csv"
+
+
+def configure_data_directory(directory, events=()):
+    """Point settings and history at directory; the engine gets it as E7_DATA_DIR."""
+    global DATA_DIR, DATA_EVENTS, CONFIG_FILE, GUI_CONFIG_FILE, HISTORY_FILE
+    DATA_DIR = Path(directory)
+    DATA_EVENTS = list(events)
+    CONFIG_FILE = DATA_DIR / "ADBconfig.ini"
+    GUI_CONFIG_FILE = DATA_DIR / "ShopRefreshGUI.ini"
+    HISTORY_FILE = DATA_DIR / "ShopRefreshHistory" / "ADB_History.csv"
+
+
+def _same_place(first, second):
+    try:
+        return Path(first).resolve() == Path(second).resolve()
+    except OSError:
+        return Path(first).absolute() == Path(second).absolute()
+
+
+def older_installs(data_dir=None):
+    """Older versions beside this one, on the Desktop or in Downloads (bounded search)."""
+    data_dir = data_dir or DATA_DIR or APP_DIR
+    return find_older_installs(default_search_roots(PROJECT_DIR), exclude=(APP_DIR, data_dir))
+
+
+def apply_import_choice(choice, data_dir):
+    """Carry out the import dialog's answer; returns Activity-log lines. Never raises."""
+    if choice is None:
+        return []  # cancelled
+    action, install = choice
+    if action == 'fresh':
+        try:
+            record_fresh_start(data_dir)
+        except OSError as error:
+            return [f'Could not record the choice to start fresh ({error}); you will be asked again next start.']
+        return ['Started with default settings. To bring settings from an older version later, use '
+                'Settings › Advanced › Import settings from an older version.']
+    try:
+        return import_older_install(install.runtime, data_dir)
+    except (ImportRefused, OSError, RecursionError) as error:
+        return [f'Import from {install.folder} failed: {error} Default settings are used; '
+                f'{install.folder} was not changed.']
+
+
+def relaunch_app():
+    """Start this app again with the same engine folder (not elevated); raises OSError."""
+    if os.name == 'nt':
+        executable, arguments, directory = restart_command(APP_DIR)
+        subprocess.Popen(f'"{executable}" {arguments}', cwd=directory, close_fds=True)
+        return
+    script = Path(__file__).resolve()
+    command = [sys.executable] if getattr(sys, 'frozen', False) else [sys.executable, str(script)]
+    subprocess.Popen([*command, '--engine-dir', str(Path(APP_DIR).resolve())], cwd=str(script.parent),
+                     start_new_session=True, close_fds=True)
+
+
+def offer_older_settings(data_dir):
+    """First start of a fresh extract: offer the settings and history of an older version.
+
+    Closing the question counts as Start fresh: the first start saves the GUI
+    settings anyway, after which the question could not be asked again, and
+    the Settings button stays available.
+    """
+    try:
+        enable_dpi_awareness()
+        root = tk.Tk()
+    except tk.TclError:
+        return []  # no display: nothing searched, ask next start
+    try:
+        root.withdraw()
+        try:
+            root.iconbitmap(default=str(ASSET_DIR / 'shopkeeper-v2.ico'))
+        except tk.TclError:
+            pass
+        from e7_import_dialog import ImportDialog
+        dialog = ImportDialog(root, older_installs(data_dir), startup=True)
+        root.wait_window(dialog)
+        choice = dialog.choice
+    except tk.TclError as error:
+        return [f'Could not show the question about older settings ({error}); you will be asked next start.']
+    finally:
+        try:
+            root.destroy()
+        except tk.TclError:
+            pass
+    return apply_import_choice(choice or ('fresh', None), data_dir)
+
+
+def engine_environment():
+    """Engines from 0.2.8 write session history under E7_DATA_DIR; older ones ignore it."""
+    return None if DATA_DIR is None else {**os.environ, DATA_DIR_VARIABLE: str(Path(DATA_DIR).absolute())}
 
 
 def session_log_folder(mode):
@@ -422,6 +519,8 @@ class RefreshGui(tk.Tk):
         self.after(10000, self._rescan_idle_devices)
         self.after(3000, self._poll_history)
         self._autosave_saved = self._autosave_snapshot()  # startup tidying is not an edit
+        for text in DATA_EVENTS:
+            self._event(text)
 
     def _configure_scaling(self):
         self.ui_scale = self.winfo_fpixels("1i") / 96.0
@@ -649,6 +748,69 @@ class RefreshGui(tk.Tk):
     def _maybe_show_credits(self):
         if self.winfo_viewable() and (not self.credits_seen.get() or self.credits_on_startup.get()):
             self._show_about()
+
+    def _import_older_settings(self):
+        """Settings › Advanced: import settings and history from an older version, after the first start."""
+        if self.process and self.process.poll() is None:
+            messagebox.showinfo('Import settings', 'Stop the session first.', parent=self)
+            return
+        if DATA_DIR is None or _same_place(DATA_DIR, APP_DIR):
+            messagebox.showinfo('Import settings', f'Settings are kept in {APP_DIR} for this run, so there is '
+                                'nothing to import into. Check the Activity log for the reason.', parent=self)
+            return
+        from e7_import_dialog import ImportDialog
+        dialog = ImportDialog(self, older_installs(), startup=False, scale=self._dp)
+        self.wait_window(dialog)
+        if dialog.choice is None:
+            return
+        install = dialog.choice[1]
+        try:
+            self._flush_autosave()  # first, so the check below and the backup see the latest settings
+            replace = has_user_data(DATA_DIR)
+        except OSError as error:
+            messagebox.showerror('Import settings', f'Nothing was imported.\n\n{error}', parent=self)
+            return
+        if replace and not messagebox.askyesno(
+                'Replace current settings?',
+                f'Replace the current settings and history with those from {install.folder}?\n\n'
+                f'The current ones are kept in {Path(DATA_DIR) / "legacy-backup"}.', parent=self):
+            return
+        self._autosave_suspended = True
+        try:
+            events = import_older_install(install.runtime, DATA_DIR, replace=replace)
+        except (ImportRefused, OSError, RecursionError) as error:
+            self._autosave_suspended = False
+            self._event(f'Import from {install.folder} failed: {error}')
+            messagebox.showerror('Import settings', f'Nothing was imported.\n\n{error}', parent=self)
+            return
+        # The imported files are loaded by a fresh start, not into this window:
+        # a reload here would mix them with what this window already holds
+        # (control mode and its target, settings the import did not include).
+        # Until then nothing is saved over them and no session starts.
+        self._restart_required = True
+        job = getattr(self, '_autosave_job', None)
+        if job is not None:
+            self.after_cancel(job)
+            self._autosave_job = None
+        for text in events:
+            self._event(text)
+        messagebox.showinfo('Import settings', f'Imported settings and history from {install.folder}.\n\n'
+                            'The app restarts now to load them.', parent=self)
+        try:
+            relaunch_app()
+        except OSError as error:
+            self._event(f'The app could not restart itself ({error}). Close and reopen it to use the imported settings.')
+            messagebox.showinfo('Import settings', 'The app could not restart itself. Close and reopen it to use '
+                                'the imported settings; Start Refresh is off until then.', parent=self)
+            return
+        self.destroy()
+
+    def _restart_pending(self):
+        if not getattr(self, '_restart_required', False):
+            return False
+        messagebox.showinfo('Restart needed', 'Imported settings are loaded when the app starts. Close and '
+                            'reopen it first.', parent=self)
+        return True
 
     def _show_about(self):
         if self.about_window is not None and self.about_window.winfo_exists():
@@ -1066,7 +1228,11 @@ class RefreshGui(tk.Tk):
         ttk.Label(advanced, text="ADB calibration pauses before each click.\nCheck the image, then press a key other than Esc to continue.", style="Muted.TLabel", wraplength=dp(350)).grid(row=5, column=0, sticky="w", pady=(0, dp(6)))
         self.reset_timing_button = ttk.Button(advanced, text='Reset to recommended', command=self._reset_recommended_timing)
         self.reset_timing_button.grid(row=6, column=0, sticky='w', pady=(0, dp(8)))
-        self.settings_widgets.extend([self.random_check, self.debug_check, self.reset_timing_button])
+        self.import_settings_button = ttk.Button(advanced, text='Import settings from an older version…',
+                                                 command=self._import_older_settings)
+        self.import_settings_button.grid(row=7, column=0, sticky='w', pady=(0, dp(8)))
+        self.settings_widgets.extend([self.random_check, self.debug_check, self.reset_timing_button,
+                                      self.import_settings_button])
         # Settings save themselves, so the dock holds only Start and Stop.
         action_dock.columnconfigure(0, weight=3, uniform='')
         action_dock.columnconfigure(1, weight=2, uniform='')
@@ -1431,6 +1597,8 @@ class RefreshGui(tk.Tk):
 
     def _write_engine_timing(self):
         """Store only the timing keys in ADBconfig.ini, leaving budget and stop key alone."""
+        if getattr(self, '_restart_required', False):
+            return  # imported files wait for the restart
         parser = configparser.ConfigParser()
         try:
             # read_file, not read: read() swallows open errors, and an empty
@@ -1452,6 +1620,8 @@ class RefreshGui(tk.Tk):
         self._timing_migration_pending = False
 
     def _write_sound_preference(self):
+        if getattr(self, '_restart_required', False):
+            return  # imported files wait for the restart
         # The original engine rewrites ADBconfig.ini, so GUI preferences need
         # their own file to survive a real refresh session.
         parser = configparser.ConfigParser()
@@ -1605,6 +1775,8 @@ class RefreshGui(tk.Tk):
             self._append_log(raw + "\n")
 
     def save_settings(self, settings=None):
+        if getattr(self, '_restart_required', False):
+            return None  # imported files wait for the restart; nothing is written over them
         try:
             settings = settings or self._settings()
             parser = configparser.ConfigParser()
@@ -1847,6 +2019,8 @@ class RefreshGui(tk.Tk):
         self._show_recognition_setup()
 
     def start_refresh(self):
+        if self._restart_pending():
+            return
         if self.control_mode.get() == 'Mouse':
             self._start_mouse_refresh()
             return
@@ -1956,6 +2130,17 @@ class RefreshGui(tk.Tk):
         self._close()
 
     def _begin_refresh(self, settings, *, mouse_target=None):
+        if DATA_DIR is not None and DATA_DIR != APP_DIR:
+            # Older engines write history beside themselves, where this GUI no longer reads it.
+            try:
+                check = subprocess.run([*engine_command(), '--verify'], stdin=subprocess.DEVNULL, cwd=APP_DIR, capture_output=True,
+                                       text=True, timeout=15, creationflags=NO_WINDOW)
+                if check.returncode or 'user data folder v1' not in check.stdout:
+                    raise ValueError(f'This engine is older than the GUI and would save history in {APP_DIR}, not in '
+                                     f'{DATA_DIR}. Use the complete player folder from the same release.')
+            except (ValueError, OSError, subprocess.SubprocessError) as error:
+                self._set_connection_warning(str(error), reveal=True)
+                return
         if not (settings.buy_covenant and settings.buy_mystic):
             try:
                 check = subprocess.run([*engine_command(), '--verify'], stdin=subprocess.DEVNULL, cwd=APP_DIR, capture_output=True,
@@ -2069,7 +2254,7 @@ class RefreshGui(tk.Tk):
         else:
             arguments += ['--gui-session', json.dumps(asdict(settings))] if self._structured_adb else ['--tap-jitter',str(settings.tap_jitter)]
         try:
-            process, self.process_tree = launch_engine(arguments, cwd=APP_DIR, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1, creationflags=NO_WINDOW)
+            process, self.process_tree = launch_engine(arguments, cwd=APP_DIR, env=engine_environment(), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1, creationflags=NO_WINDOW)
         except OSError as exc:
             self.status.set("Failed")
             self.remaining_time.set('Time remaining: —')
@@ -2744,7 +2929,7 @@ class RefreshGui(tk.Tk):
             return
         if not HISTORY_FILE.exists() or not self.history.get_children():
             return
-        if not messagebox.askyesno('Clear session history?', 'Archive all recorded sessions and clear the list? The archived CSV stays in ShopRefreshHistory/archive.', parent=self):
+        if not messagebox.askyesno('Clear session history?', f'Archive all recorded sessions and clear the list? The archived CSV stays in {HISTORY_FILE.parent / "archive"}.', parent=self):
             return
         try:
             original = HISTORY_FILE.read_bytes()
@@ -2874,6 +3059,8 @@ class RefreshGui(tk.Tk):
 
     def _autosave(self):
         self._autosave_job = None
+        if getattr(self, '_restart_required', False):
+            return  # imported files wait for the restart
         if self._checking_connection:
             # Start is checking the connection; if that fails, Start saves
             # nothing, so try again once it is over.
@@ -2913,6 +3100,8 @@ class RefreshGui(tk.Tk):
 
     def _write_engine_settings(self, settings):
         """Update ADBconfig.ini in place; an unreadable file is never replaced."""
+        if getattr(self, '_restart_required', False):
+            return  # imported files wait for the restart
         parser = configparser.ConfigParser()
         try:
             with CONFIG_FILE.open(encoding='utf-8-sig') as fh:
@@ -2981,6 +3170,12 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         configure_engine_directory(resolve_engine_directory(args.engine_dir))
+        if not args.verify:  # the offline check never creates or migrates user data
+            location = prepare_data_directory(APP_DIR)
+            events = list(location.events)
+            if needs_import_choice(location):
+                events += offer_older_settings(location.directory)
+            configure_data_directory(location.directory, events)
         if args.verify:
             from e7_appearance import Image
             if Image is None:
