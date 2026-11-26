@@ -18,7 +18,16 @@ class EngineLocationTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.saved = self.root / "engine-location.ini"
-        names = ("APP_DIR", "ENGINE_EXE", "ADB_EXE", "CONFIG_FILE", "GUI_CONFIG_FILE", "HISTORY_FILE")
+        names = ("APP_DIR", "ENGINE_EXE", "ADB_EXE", "CONFIG_FILE", "GUI_CONFIG_FILE", "HISTORY_FILE",
+                 "DATA_DIR", "DATA_EVENTS")
+        # main() prepares the per-user folder; keep it in this temporary tree.
+        data_patch = patch.dict(gui.os.environ, {"E7_DATA_DIR": str(self.root / "user data")})
+        data_patch.start()
+        self.addCleanup(data_patch.stop)
+        # A fresh data folder would offer an import: no dialog and no Desktop/Downloads search in tests.
+        offer_patch = patch.object(gui, "offer_older_settings", return_value=[])
+        offer_patch.start()
+        self.addCleanup(offer_patch.stop)
         globals_patch = patch.multiple(gui, **{name: getattr(gui, name) for name in names})
         # The installed-player layout is the Windows one on every platform here.
         platform_patch = patch.multiple(gui, ENGINE_NAME="E7ADBShopRefresh.exe", CONTROL_MODES=("ADB", "Mouse"))

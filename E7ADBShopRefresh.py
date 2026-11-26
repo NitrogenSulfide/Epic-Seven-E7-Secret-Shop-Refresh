@@ -25,6 +25,12 @@ from e7_stop_key import stop_key_monitor
 from e7_input_trace import InputTrace
 from e7_engine_protocol import validate_gold_cap, validate_item_choice
 
+
+def data_path(*parts):
+    """Settings/history path: under E7_DATA_DIR when the GUI sets it, else the working folder."""
+    folder = os.environ.get('E7_DATA_DIR', '').strip()
+    return os.path.join(folder, *parts) if folder else os.path.join(*parts)
+
 class E7Item:
     def __init__(self, image=None, price=0, count=0):
         self.image=image
@@ -76,7 +82,7 @@ class E7Inventory:
         record.update({'Duration': round(duration, 2), 'Skystone spent': skystone_spent,
                        'Gold spent': self.getTotalCost()})
         record.update({name: item.count for name, item in self.inventory.items()})
-        append_session(os.path.join('ShopRefreshHistory', 'ADB_History.csv'), record)
+        append_session(data_path('ShopRefreshHistory', 'ADB_History.csv'), record)
 
 class E7ADBShopRefresh(ObservedShopFlow):
     def __init__(self, tap_sleep:float = 0.3, budget=None, ip_port=None, stop_refresh_key='esc', random_offset = False, debug=False, tap_jitter=None, adb_runner=None, trace_input=False, buy_friendship=False, buy_covenant=True, buy_mystic=True, gold_cap=None):
@@ -677,7 +683,7 @@ def getDevices(print_output):
             devices.append(seq[0])
         return devices
 
-CONFIG_FILE = "ADBconfig.ini"
+CONFIG_FILE = data_path("ADBconfig.ini")
 
 def saveConfigFile(tap_sleep, budget, stop_refresh_key, random_offset, tap_jitter=None):
     config = configparser.ConfigParser()
@@ -816,7 +822,7 @@ if __name__ == '__main__':
         print('Private Secret Shop references prepared and checked offline.')
         sys.exit(0)
     if sys.argv[1:] == ['--verify']:
-        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; window mouse v9; global stop key v2; tap timing v2; gui session v1; input trace v1; friendship purchases v1; item choice v1; gold limit v1; background session v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
+        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; window mouse v9; global stop key v2; tap timing v2; gui session v1; input trace v1; friendship purchases v1; item choice v1; gold limit v1; background session v1; user data folder v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
         sys.exit(0)
     if sys.argv[1:2] == ['--check-navigation-frame']:
         import argparse

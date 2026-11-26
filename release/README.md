@@ -89,8 +89,13 @@ Normal fresh settings are 12 skystones, 0.3-second
 delay, backtick stop key and randomized offsets; saved settings take precedence.
 Live counters report engine-completed buys/refreshes, not confirmed balances.
 Insufficient-currency stopping remains unverified. Keep initial runs supervised.
-Settings, history and private recognition captures stay under `runtime`; back
-them up before updating or removing the extracted folder. No updater exists.
+Settings and session history live in `%LOCALAPPDATA%\E7 Secret Shop Refresh`
+(or `E7_DATA_DIR`) and carry over to new releases. Upgrading from 0.2.7 or
+older, the first start finds the previous version (beside this folder, on the
+Desktop or in Downloads) and offers to import its settings and history; the old
+folder is only read. **Settings › Advanced** can import later. Private
+recognition captures and diagnostic logs still stay under `runtime`; back those
+up before removing the extracted folder. No updater exists.
 
 GUI source is supplied beside the EXE, and matching engine source is in `runtime`.
 See [BUILDING.md](BUILDING.md), [ENGINE.md](ENGINE.md) and [UPSTREAM.md](UPSTREAM.md).

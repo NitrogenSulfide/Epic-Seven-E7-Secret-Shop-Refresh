@@ -126,8 +126,20 @@ hasn't been live-tested yet.
   anything unexpected rather than guessing. See
   [regression coverage](docs/AUTOMATION-REGRESSIONS.md).
 
-**Updating:** there's no auto-updater. Copy your `runtime` folder (settings and
-history) into the new extracted release.
+**Updating:** extract the new release into a fresh folder and run it. From
+0.2.8, settings and session history live in your user folder
+(`%LOCALAPPDATA%\E7 Secret Shop Refresh` on Windows,
+`~/.local/share/e7-shop-refresh` on Linux), so they carry over by themselves.
+Upgrading from 0.2.7 or older, the first start looks for your previous
+version next to the new folder, on the Desktop and in Downloads, and asks
+whether to import its settings and history (or lets you choose its folder, or
+start fresh). The import copies them with a backup under `legacy-backup` and
+notes it in the Activity log; the old folder is only read, never changed. You
+can import later from **Settings › Advanced › Import settings from an older
+version**. If that doesn't work for you, copy `ADBconfig.ini`,
+`ShopRefreshGUI.ini` and `ShopRefreshHistory` from the old `runtime` into the
+new one before the first start; they are then moved over automatically. Set
+`E7_DATA_DIR` to use a different folder. There's no auto-updater yet.
 
 ## Source and credits
 
