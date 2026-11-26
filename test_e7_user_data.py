@@ -300,6 +300,306 @@ class MigrationTests(unittest.TestCase):
         self.assertTrue(location.migrated)
 
 
+def older_install(folder, items=data.MIGRATED_ITEMS, *, budget=300, mtime=None):
+    """A fake older release folder: <folder>/runtime with the given user files."""
+    runtime = Path(folder) / 'runtime'
+    runtime.mkdir(parents=True)
+    (runtime / 'E7ADBShopRefresh.exe').write_bytes(b'fixture only; never execute')
+    if 'ADBconfig.ini' in items:
+        (runtime / 'ADBconfig.ini').write_text(f'[Settings]\nbudget = {budget}\n', encoding='utf-8')
+    if 'ShopRefreshGUI.ini' in items:
+        (runtime / 'ShopRefreshGUI.ini').write_text('[GUI]\ncontrol_mode = Mouse\n', encoding='utf-8')
+    if 'ShopRefreshHistory' in items:
+        (runtime / 'ShopRefreshHistory').mkdir()
+        (runtime / 'ShopRefreshHistory' / 'ADB_History.csv').write_text('Duration\n12\n', encoding='utf-8')
+    if mtime is not None:
+        for path in [runtime, *runtime.rglob('*')]:
+            os.utime(path, (mtime, mtime))
+    return runtime
+
+
+class SearchTests(unittest.TestCase):
+    """Bounded search for older versions; temporary trees stand in for Desktop and Downloads."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix='e7 search 日本語 ')
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.releases = self.root / 'Games'
+        self.app = self.releases / 'E7 Secret Shop Refresh 0.2.8'
+        self.own_runtime = self.app / 'runtime'
+        self.own_runtime.mkdir(parents=True)
+        self.desktop = self.root / 'Desktop'
+        self.downloads = self.root / 'Downloads'
+        self.desktop.mkdir()
+        self.downloads.mkdir()
+        self.data = self.root / 'LocalAppData' / 'E7 Secret Shop Refresh'
+
+    def roots(self):
+        return [(self.releases, 1), (self.desktop, 2), (self.downloads, 2)]
+
+    def find(self):
+        return data.find_older_installs(self.roots(), exclude=(self.own_runtime, self.data))
+
+    def test_none_found(self):
+        (self.desktop / 'photos' / 'runtime').mkdir(parents=True)  # a runtime without settings is not an install
+        self.assertEqual(self.find(), [])
+
+    def test_one_sibling_found(self):
+        older_install(self.releases / 'E7 Secret Shop Refresh 0.2.7')
+        found = self.find()
+        self.assertEqual([install.name for install in found], ['E7 Secret Shop Refresh 0.2.7'])
+        self.assertEqual(found[0].location, self.releases)
+        self.assertEqual(found[0].runtime, self.releases / 'E7 Secret Shop Refresh 0.2.7' / 'runtime')
+        self.assertEqual(sorted(found[0].items), sorted(data.MIGRATED_ITEMS))
+
+    def test_own_runtime_and_settings_folder_are_not_offered(self):
+        (self.own_runtime / 'ShopRefreshGUI.ini').write_text('[GUI]\n', encoding='utf-8')
+        self.assertEqual(self.find(), [])
+
+    def test_several_found_newest_history_first(self):
+        older_install(self.releases / 'old 0.2.5', mtime=1_700_000_000)
+        older_install(self.desktop / 'E7 0.2.7', mtime=1_760_000_000)
+        older_install(self.downloads / 'extracted' / 'E7 0.2.6', mtime=1_730_000_000)
+        self.assertEqual([install.name for install in self.find()], ['E7 0.2.7', 'E7 0.2.6', 'old 0.2.5'])
+
+    def test_depth_is_bounded(self):
+        older_install(self.downloads / 'a' / 'b' / 'too deep')
+        older_install(self.releases / 'nested' / 'not a sibling')
+        self.assertEqual(self.find(), [])
+
+    def test_partial_runtime_needs_the_gui_settings(self):
+        older_install(self.desktop / 'only engine settings', items=('ADBconfig.ini',))
+        older_install(self.desktop / 'gui settings only', items=('ShopRefreshGUI.ini',))
+        found = self.find()
+        self.assertEqual([install.name for install in found], ['gui settings only'])
+        self.assertEqual(found[0].items, ('ShopRefreshGUI.ini',))
+
+    def test_chosen_folder_accepts_runtime_or_partial_set(self):
+        runtime = older_install(self.desktop / 'only engine settings', items=('ADBconfig.ini',))
+        self.assertIsNone(data.describe_install(runtime.parent))
+        chosen = data.describe_install(runtime.parent, require_gui_settings=False)
+        self.assertEqual((chosen.runtime, chosen.items), (runtime, ('ADBconfig.ini',)))
+        self.assertEqual(data.describe_install(runtime, require_gui_settings=False).folder, runtime.parent)
+        self.assertIsNone(data.describe_install(self.desktop, require_gui_settings=False))
+
+    def test_unreadable_folders_are_skipped_quietly(self):
+        older_install(self.desktop / 'E7 0.2.7')
+        real_scandir = os.scandir
+
+        def denied(path):
+            if Path(path) == self.downloads:
+                raise PermissionError(13, 'Access is denied', str(path))
+            return real_scandir(path)
+
+        with patch.object(data.os, 'scandir', denied):
+            found = self.find()
+        self.assertEqual([install.name for install in found], ['E7 0.2.7'])
+        missing = [(self.root / 'no such folder', 2)]
+        self.assertEqual(data.find_older_installs(missing), [])
+
+    def test_symlinks_and_loops_are_not_followed(self):
+        older_install(self.root / 'elsewhere' / 'E7 linked')
+        try:
+            os.symlink(self.root / 'elsewhere', self.desktop / 'link', target_is_directory=True)
+            os.symlink(self.desktop, self.desktop / 'loop', target_is_directory=True)
+        except (OSError, NotImplementedError) as error:
+            self.skipTest(f'symlinks unavailable: {error}')
+        self.assertEqual(self.find(), [])
+
+    @unittest.skipUnless(os.name == 'nt', 'junctions are Windows-only')
+    def test_junctions_and_junction_loops_are_not_followed(self):
+        import subprocess
+        older_install(self.root / 'elsewhere' / 'E7 linked')
+        links = [(self.desktop / 'junction', self.root / 'elsewhere'), (self.desktop / 'loop', self.desktop)]
+        for link, target in links:
+            result = subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(target)], capture_output=True)
+            if result.returncode:
+                self.skipTest('mklink /J failed')
+            self.addCleanup(os.rmdir, link)  # removes the junction only, never its target
+        self.assertTrue((self.desktop / 'junction' / 'E7 linked' / 'runtime').exists())
+        self.assertEqual(self.find(), [])
+
+    def test_search_limit_keeps_it_bounded(self):
+        for index in range(12):
+            (self.desktop / f'folder {index:02}').mkdir()
+        older_install(self.desktop / 'zz E7 0.2.7')
+        with patch.object(data, 'SEARCH_LIMIT', 5):
+            self.assertEqual(self.find(), [])
+
+    def test_default_roots_use_known_folders(self):
+        known = {'Desktop': self.desktop, 'Downloads': self.downloads}
+        roots = data.default_search_roots(self.app, os_name='nt', known_folder=known.__getitem__)
+        self.assertEqual(roots, [(self.releases, 1), (self.desktop, 2), (self.downloads, 2)])
+        roots = data.default_search_roots(self.app, os_name='posix', home=self.root)
+        self.assertEqual(roots, [(self.releases, 1), (self.desktop, 2), (self.downloads, 2)])
+
+        def broken(_name):
+            raise OSError('no known folder')
+        roots = data.default_search_roots(self.app, os_name='nt', home=self.root, known_folder=broken)
+        self.assertEqual(roots[1:], [(self.desktop, 2), (self.downloads, 2)])
+
+    def test_default_roots_drop_duplicates(self):
+        app = self.desktop / 'E7 0.2.8'
+        known = {'Desktop': self.desktop, 'Downloads': self.desktop}
+        self.assertEqual(data.default_search_roots(app, os_name='nt', known_folder=known.__getitem__),
+                         [(self.desktop, 1)])
+
+    def test_dialog_text_for_none_one_and_several(self):
+        from e7_import_dialog import describe
+        self.assertIn('No settings from an older version were found', describe([])[0])
+        older_install(self.releases / 'E7 0.2.7')
+        self.assertEqual(describe(self.find())[0],
+                         f'Found settings and history from E7 0.2.7 ({self.releases}). Import them?')
+        older_install(self.desktop / 'E7 0.2.6')
+        self.assertIn('from 2 older versions', describe(self.find())[0])
+
+
+class ImportTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix='e7 import 日本語 ')
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.old = older_install(self.root / 'Desktop' / 'E7 0.2.7', budget=450)
+        self.data = self.root / 'LocalAppData' / 'E7 Secret Shop Refresh'
+        self.legacy = self.root / 'E7 0.2.8' / 'runtime'  # the new extract: nothing to move
+        self.legacy.mkdir(parents=True)
+
+    def fresh_start(self):
+        location = prepare_data_directory(self.legacy, self.data, now=NOW)
+        self.assertTrue(location.fresh)
+        self.assertTrue(data.needs_import_choice(location))
+        return location
+
+    def leftovers(self):
+        return [path.name for path in self.data.parent.iterdir() if path.name.startswith('.')]
+
+    def test_import_into_fresh_folder_copies_with_backup_and_leaves_source(self):
+        self.fresh_start()
+        before = snapshot(self.old)
+        events = data.import_older_install(self.old, self.data, now=NOW)
+        self.assertEqual(snapshot(self.old), before)
+        self.assertIn('budget = 450', (self.data / 'ADBconfig.ini').read_text(encoding='utf-8'))
+        self.assertEqual((self.data / 'ShopRefreshHistory' / 'ADB_History.csv').read_bytes(),
+                         before[str(Path('ShopRefreshHistory') / 'ADB_History.csv')])
+        backup = self.data / BACKUP_FOLDER / 'runtime-20261125-120000'
+        self.assertIn('budget = 450', (backup / 'ADBconfig.ini').read_text(encoding='utf-8'))
+        marker = json.loads((self.data / MARKER).read_text(encoding='utf-8'))
+        self.assertTrue(marker['imported'])
+        self.assertEqual(Path(marker['source']), self.old)
+        self.assertIn('Imported settings and history', events[0])
+        self.assertEqual(self.leftovers(), [])
+        # Imported is final: the next start neither asks nor moves anything.
+        location = prepare_data_directory(self.legacy, self.data, now=NOW)
+        self.assertFalse(location.fresh or location.migrated or data.needs_import_choice(location))
+
+    def test_import_when_the_folder_does_not_exist_yet(self):
+        data.import_older_install(self.old, self.data, now=NOW)
+        self.assertIn('budget = 450', (self.data / 'ADBconfig.ini').read_text(encoding='utf-8'))
+
+    def test_partial_runtime_imports_what_is_there(self):
+        partial = older_install(self.root / 'partial', items=('ShopRefreshGUI.ini',))
+        self.fresh_start()
+        data.import_older_install(partial, self.data, now=NOW)
+        self.assertEqual(data._user_files(self.data), sorted([BACKUP_FOLDER, 'ShopRefreshGUI.ini']))
+
+    def test_start_fresh_is_recorded_and_not_asked_again(self):
+        self.fresh_start()
+        data.record_fresh_start(self.data, now=NOW)
+        for _ in range(2):
+            location = prepare_data_directory(self.legacy, self.data, now=NOW)
+            self.assertFalse(data.needs_import_choice(location))
+            self.assertEqual(location.events, [])
+        self.assertFalse(data.has_user_data(self.data))
+        # The import stays possible later, from Settings.
+        data.import_older_install(self.old, self.data, now=NOW)
+        self.assertIn('budget = 450', (self.data / 'ADBconfig.ini').read_text(encoding='utf-8'))
+
+    def test_closing_the_dialog_asks_again(self):
+        self.fresh_start()
+        self.assertTrue(data.needs_import_choice(prepare_data_directory(self.legacy, self.data, now=NOW)))
+
+    def test_folder_with_settings_is_refused_without_replace(self):
+        self.fresh_start()
+        (self.data / 'ShopRefreshGUI.ini').write_text('[GUI]\nnewer = yes\n', encoding='utf-8')
+        before = snapshot(self.data)
+        with self.assertRaises(data.ImportRefused):
+            data.import_older_install(self.old, self.data, now=NOW)
+        self.assertEqual(snapshot(self.data), before)
+        self.assertEqual(self.leftovers(), [])
+        self.assertFalse(data.needs_import_choice(prepare_data_directory(self.legacy, self.data, now=NOW)))
+
+    def test_replace_keeps_the_current_settings_in_a_backup(self):
+        self.fresh_start()
+        (self.data / 'ShopRefreshGUI.ini').write_text('[GUI]\nnewer = yes\n', encoding='utf-8')
+        events = data.import_older_install(self.old, self.data, replace=True, now=NOW)
+        self.assertIn('budget = 450', (self.data / 'ADBconfig.ini').read_text(encoding='utf-8'))
+        replaced = self.data / BACKUP_FOLDER / 'replaced-20261125-120000' / 'ShopRefreshGUI.ini'
+        self.assertEqual(replaced.read_text(encoding='utf-8'), '[GUI]\nnewer = yes\n')
+        self.assertTrue(any('replaced are in' in event for event in events))
+        self.assertEqual(self.leftovers(), [])
+
+    def test_copy_failure_leaves_the_folder_as_it_was(self):
+        self.fresh_start()
+        data.record_fresh_start(self.data, now=NOW)
+        before = snapshot(self.data)
+        real_copytree = shutil.copytree
+
+        def failing(source, target, *args, **kwargs):
+            if BACKUP_FOLDER in str(target):
+                raise OSError(28, 'No space left on device')
+            return real_copytree(source, target, *args, **kwargs)
+
+        with patch.object(data.shutil, 'copytree', failing), self.assertRaises(OSError):
+            data.import_older_install(self.old, self.data, now=NOW)
+        self.assertEqual(snapshot(self.data), before)
+        self.assertEqual(self.leftovers(), [])
+
+    def test_failed_swap_puts_the_old_folder_back(self):
+        self.fresh_start()
+        data.record_fresh_start(self.data, now=NOW)
+        before = snapshot(self.data)
+        real_rename = os.rename
+
+        def failing(source, target):
+            if '.migrating-' in Path(source).name:
+                raise PermissionError(13, 'Access is denied', str(source))
+            return real_rename(source, target)
+
+        with patch.object(data.os, 'rename', failing), self.assertRaises(OSError):
+            data.import_older_install(self.old, self.data, now=NOW)
+        self.assertEqual(snapshot(self.data), before)
+        self.assertEqual(self.leftovers(), [])
+
+    def test_change_during_import_keeps_it_and_imports_nothing(self):
+        self.fresh_start()
+        real_stage = data._stage
+
+        def save_meanwhile(*args, **kwargs):
+            result = real_stage(*args, **kwargs)
+            (self.data / 'ShopRefreshGUI.ini').write_text('[GUI]\nsaved meanwhile\n', encoding='utf-8')
+            return result
+
+        with patch.object(data, '_stage', save_meanwhile), self.assertRaises(data.ImportRefused):
+            data.import_older_install(self.old, self.data, now=NOW)
+        self.assertEqual((self.data / 'ShopRefreshGUI.ini').read_text(encoding='utf-8'), '[GUI]\nsaved meanwhile\n')
+        self.assertFalse((self.data / 'ADBconfig.ini').exists())
+        self.assertEqual(self.leftovers(), [])
+
+    def test_empty_or_same_source_is_refused(self):
+        with self.assertRaises(data.ImportRefused):
+            data.import_older_install(self.legacy, self.data, now=NOW)
+        with self.assertRaises(data.ImportRefused):
+            data.import_older_install(self.old, self.old, now=NOW)
+
+    def test_migrated_or_fallback_locations_never_ask(self):
+        self.assertFalse(data.needs_import_choice(data.DataLocation(self.legacy, fallback=True, fresh=True)))
+        older = older_install(self.root / 'E7 0.2.7 in place')
+        location = prepare_data_directory(older, self.data, now=NOW)
+        self.assertTrue(location.migrated)
+        self.assertFalse(data.needs_import_choice(location))
+
+
 class GuiWiringTests(unittest.TestCase):
     def setUp(self):
         import e7_shop_refresh_gui as gui
@@ -322,6 +622,63 @@ class GuiWiringTests(unittest.TestCase):
         (self.engine / 'E7ADBShopRefresh.exe').write_bytes(b'fixture only; never execute')
         (self.engine / 'ADBconfig.ini').write_text('[Settings]\nbudget = 300\n', encoding='utf-8')
         self.data = self.root / 'user data'
+        # No dialog and no search of the real Desktop/Downloads from these tests.
+        offer = patch.object(gui, 'offer_older_settings', return_value=[])
+        self.offer = offer.start()
+        self.addCleanup(offer.stop)
+
+    def run_main(self, observed=None):
+        gui = self.gui
+
+        class FakeGui:
+            def __init__(self):
+                if observed is not None:
+                    observed.append(list(gui.DATA_EVENTS))
+
+            def mainloop(self):
+                pass
+
+        with patch.dict(os.environ, {'E7_DATA_DIR': str(self.data)}), patch.object(gui, 'RefreshGui', FakeGui):
+            self.assertEqual(gui.main(['--engine-dir', str(self.engine)]), 0)
+
+    def test_fresh_start_offers_older_settings_and_logs_the_result(self):
+        (self.engine / 'ADBconfig.ini').unlink()  # a fresh extract: nothing in its own runtime
+        self.offer.return_value = ['Imported settings and history from somewhere.']
+        observed = []
+        self.run_main(observed)
+        self.offer.assert_called_once_with(self.data)
+        self.assertEqual(observed, [['Imported settings and history from somewhere.']])
+
+    def test_migration_from_own_runtime_does_not_ask(self):
+        self.run_main()
+        self.offer.assert_not_called()
+
+    def test_apply_choice_start_fresh_is_remembered(self):
+        self.data.mkdir()
+        events = self.gui.apply_import_choice(('fresh', None), self.data)
+        self.assertIn('Import settings from an older version', events[0])
+        self.assertFalse(data.needs_import_choice(data.DataLocation(self.data, fresh=True)))
+
+    def test_apply_choice_closed_changes_nothing(self):
+        self.data.mkdir()
+        self.assertEqual(self.gui.apply_import_choice(None, self.data), [])
+        self.assertEqual(list(self.data.iterdir()), [])
+
+    def test_apply_choice_import_failure_is_logged_not_raised(self):
+        self.data.mkdir()
+        install = data.OlderInstall(self.root / 'empty', self.root / 'empty' / 'runtime', (), 0.0)
+        events = self.gui.apply_import_choice(('import', install), self.data)
+        self.assertIn('failed', events[0])
+        self.assertIn('was not changed', events[0])
+
+    def test_apply_choice_import_copies(self):
+        older = self.root / 'E7 0.2.7' / 'runtime'
+        older.mkdir(parents=True)
+        (older / 'ShopRefreshGUI.ini').write_text('[GUI]\n', encoding='utf-8')
+        install = data.describe_install(older.parent)
+        events = self.gui.apply_import_choice(('import', install), self.data)
+        self.assertIn('Imported', events[0])
+        self.assertTrue((self.data / 'ShopRefreshGUI.ini').exists())
 
     def test_main_migrates_before_gui_and_logs_the_event(self):
         gui = self.gui

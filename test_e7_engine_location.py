@@ -24,6 +24,10 @@ class EngineLocationTests(unittest.TestCase):
         data_patch = patch.dict(gui.os.environ, {"E7_DATA_DIR": str(self.root / "user data")})
         data_patch.start()
         self.addCleanup(data_patch.stop)
+        # A fresh data folder would offer an import: no dialog and no Desktop/Downloads search in tests.
+        offer_patch = patch.object(gui, "offer_older_settings", return_value=[])
+        offer_patch.start()
+        self.addCleanup(offer_patch.stop)
         globals_patch = patch.multiple(gui, **{name: getattr(gui, name) for name in names})
         # The installed-player layout is the Windows one on every platform here.
         platform_patch = patch.multiple(gui, ENGINE_NAME="E7ADBShopRefresh.exe", CONTROL_MODES=("ADB", "Mouse"))

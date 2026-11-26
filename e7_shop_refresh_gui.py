@@ -34,7 +34,9 @@ from e7_native_mouse import activate_native_target, release_native_button, Mouse
 from e7_elevation import restart_as_administrator, ElevationCancelled
 from e7_connection import check_connection, ConnectionCheck, endpoint_key
 from e7_windows_capture import WindowsCapture
-from e7_user_data import prepare_data_directory, ENVIRONMENT_VARIABLE as DATA_DIR_VARIABLE
+from e7_user_data import (prepare_data_directory, ENVIRONMENT_VARIABLE as DATA_DIR_VARIABLE, needs_import_choice,
+                          find_older_installs, default_search_roots, record_fresh_start, import_older_install,
+                          has_user_data, ImportRefused)
 
 PROJECT_DIR = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
 # Windows uses the installed player folder; elsewhere the source folder is the engine.
@@ -229,6 +231,53 @@ def configure_data_directory(directory, events=()):
     CONFIG_FILE = DATA_DIR / "ADBconfig.ini"
     GUI_CONFIG_FILE = DATA_DIR / "ShopRefreshGUI.ini"
     HISTORY_FILE = DATA_DIR / "ShopRefreshHistory" / "ADB_History.csv"
+
+
+def older_installs():
+    """Older versions beside this one, on the Desktop or in Downloads (bounded search)."""
+    return find_older_installs(default_search_roots(PROJECT_DIR), exclude=(APP_DIR, DATA_DIR or APP_DIR))
+
+
+def apply_import_choice(choice, data_dir):
+    """Carry out the import dialog's answer; returns Activity-log lines. Never raises."""
+    if choice is None:
+        return []  # closed: ask again next start
+    action, install = choice
+    if action == 'fresh':
+        try:
+            record_fresh_start(data_dir)
+        except OSError as error:
+            return [f'Could not record the choice to start fresh ({error}); you will be asked again next start.']
+        return ['Started with default settings. To bring settings from an older version later, use '
+                'Settings › Advanced › Import settings from an older version.']
+    try:
+        return import_older_install(install.runtime, data_dir)
+    except (ImportRefused, OSError) as error:
+        return [f'Import from {install.folder} failed: {error} Default settings are used; '
+                f'{install.folder} was not changed.']
+
+
+def offer_older_settings(data_dir):
+    """First start of a fresh extract: offer the settings and history of an older version."""
+    installs = older_installs()
+    try:
+        enable_dpi_awareness()
+        root = tk.Tk()
+    except tk.TclError:
+        return []  # no display: ask next start
+    root.withdraw()
+    try:
+        try:
+            root.iconbitmap(default=str(ASSET_DIR / 'shopkeeper-v2.ico'))
+        except tk.TclError:
+            pass
+        from e7_import_dialog import ImportDialog
+        dialog = ImportDialog(root, installs, startup=True)
+        root.wait_window(dialog)
+        choice = dialog.choice
+    finally:
+        root.destroy()
+    return apply_import_choice(choice, data_dir)
 
 
 def engine_environment():
@@ -671,6 +720,43 @@ class RefreshGui(tk.Tk):
         if self.winfo_viewable() and (not self.credits_seen.get() or self.credits_on_startup.get()):
             self._show_about()
 
+    def _import_older_settings(self):
+        """Settings › Advanced: import settings and history from an older version, after the first start."""
+        if self.process and self.process.poll() is None:
+            messagebox.showinfo('Import settings', 'Stop the session first.', parent=self)
+            return
+        if DATA_DIR is None or Path(DATA_DIR) == APP_DIR:
+            messagebox.showinfo('Import settings', f'Settings are kept in {APP_DIR} for this run, so there is '
+                                'nothing to import into. Check the Activity log for the reason.', parent=self)
+            return
+        from e7_import_dialog import ImportDialog
+        dialog = ImportDialog(self, older_installs(), startup=False, scale=self._dp)
+        self.wait_window(dialog)
+        if dialog.choice is None:
+            return
+        install = dialog.choice[1]
+        replace = has_user_data(DATA_DIR)
+        if replace and not messagebox.askyesno(
+                'Replace current settings?',
+                f'Replace the current settings and history with those from {install.folder}?\n\n'
+                f'The current ones are kept in {Path(DATA_DIR) / "legacy-backup"}.', parent=self):
+            return
+        self._flush_autosave()  # the backup then holds the latest settings
+        self._autosave_suspended = True
+        try:
+            events = import_older_install(install.runtime, DATA_DIR, replace=replace)
+        except (ImportRefused, OSError) as error:
+            self._event(f'Import from {install.folder} failed: {error}')
+            messagebox.showerror('Import settings', f'Nothing was imported.\n\n{error}', parent=self)
+            return
+        finally:
+            self._autosave_suspended = False
+        for text in events:
+            self._event(text)
+        self._load_config()  # show the imported settings; autosave starts from them
+        self._apply_theme()
+        self.refresh_history()
+
     def _show_about(self):
         if self.about_window is not None and self.about_window.winfo_exists():
             self.about_window.lift()
@@ -1087,7 +1173,11 @@ class RefreshGui(tk.Tk):
         ttk.Label(advanced, text="ADB calibration pauses before each click.\nCheck the image, then press a key other than Esc to continue.", style="Muted.TLabel", wraplength=dp(350)).grid(row=5, column=0, sticky="w", pady=(0, dp(6)))
         self.reset_timing_button = ttk.Button(advanced, text='Reset to recommended', command=self._reset_recommended_timing)
         self.reset_timing_button.grid(row=6, column=0, sticky='w', pady=(0, dp(8)))
-        self.settings_widgets.extend([self.random_check, self.debug_check, self.reset_timing_button])
+        self.import_settings_button = ttk.Button(advanced, text='Import settings from an older version…',
+                                                 command=self._import_older_settings)
+        self.import_settings_button.grid(row=7, column=0, sticky='w', pady=(0, dp(8)))
+        self.settings_widgets.extend([self.random_check, self.debug_check, self.reset_timing_button,
+                                      self.import_settings_button])
         # Settings save themselves, so the dock holds only Start and Stop.
         action_dock.columnconfigure(0, weight=3, uniform='')
         action_dock.columnconfigure(1, weight=2, uniform='')
@@ -3015,7 +3105,10 @@ def main(argv=None):
         configure_engine_directory(resolve_engine_directory(args.engine_dir))
         if not args.verify:  # the offline check never creates or migrates user data
             location = prepare_data_directory(APP_DIR)
-            configure_data_directory(location.directory, location.events)
+            events = list(location.events)
+            if needs_import_choice(location):
+                events += offer_older_settings(location.directory)
+            configure_data_directory(location.directory, events)
         if args.verify:
             from e7_appearance import Image
             if Image is None:

@@ -130,13 +130,16 @@ hasn't been live-tested yet.
 0.2.8, settings and session history live in your user folder
 (`%LOCALAPPDATA%\E7 Secret Shop Refresh` on Windows,
 `~/.local/share/e7-shop-refresh` on Linux), so they carry over by themselves.
-The first start of 0.2.8 or later copies them once from the `runtime` folder
-next to the app, keeps a backup under `legacy-backup`, and notes it in the
-Activity log; the old folder is left untouched. For that one upgrade from 0.2.7
-or older, copy `ADBconfig.ini`, `ShopRefreshGUI.ini` and `ShopRefreshHistory`
-from your old `runtime` into the new one before the first start (or extract
-over the old folder); after that, no copying is needed. Set `E7_DATA_DIR` to use a
-different folder. There's no auto-updater yet.
+Upgrading from 0.2.7 or older, the first start looks for your previous
+version next to the new folder, on the Desktop and in Downloads, and asks
+whether to import its settings and history (or lets you choose its folder, or
+start fresh). The import copies them with a backup under `legacy-backup` and
+notes it in the Activity log; the old folder is only read, never changed. You
+can import later from **Settings › Advanced › Import settings from an older
+version**. If that doesn't work for you, copy `ADBconfig.ini`,
+`ShopRefreshGUI.ini` and `ShopRefreshHistory` from the old `runtime` into the
+new one before the first start; they are then moved over automatically. Set
+`E7_DATA_DIR` to use a different folder. There's no auto-updater yet.
 
 ## Source and credits
 
