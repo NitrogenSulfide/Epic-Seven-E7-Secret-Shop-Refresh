@@ -106,7 +106,8 @@ including older entries. The workbook contains numeric counters, totals and
 available timestamps, outcomes and reasons. Tap delay must be above zero and no
 more than two seconds, including randomized timing. Sessions reload automatically;
 **Clear** archives all recorded sessions before clearing
-them and is disabled during a run. Archives remain in `ShopRefreshHistory/archive`.
+them and is disabled during a run. Archives remain in `ShopRefreshHistory/archive` inside the settings folder
+(`%LOCALAPPDATA%\E7 Secret Shop Refresh`).
 Tap delay, timing variation and calibration live under **Advanced** in the sidebar, with **Reset to recommended**. Updating from 0.2.5 or older resets custom timing once.
 The **Buy** tiles choose Covenant bookmarks, Mystic medals and Friendship Points; at least one must stay on.
 The blue-bean header button opens the existing About & Credits dialog.

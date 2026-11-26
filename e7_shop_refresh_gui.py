@@ -34,6 +34,7 @@ from e7_native_mouse import activate_native_target, release_native_button, Mouse
 from e7_elevation import restart_as_administrator, ElevationCancelled
 from e7_connection import check_connection, ConnectionCheck, endpoint_key
 from e7_windows_capture import WindowsCapture
+from e7_user_data import prepare_data_directory, ENVIRONMENT_VARIABLE as DATA_DIR_VARIABLE
 
 PROJECT_DIR = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
 # Windows uses the installed player folder; elsewhere the source folder is the engine.
@@ -130,6 +131,9 @@ ADB_EXE = APP_DIR / "adb-assets" / "platform-tools" / "adb.exe"
 CONFIG_FILE = APP_DIR / "ADBconfig.ini"
 GUI_CONFIG_FILE = APP_DIR / "ShopRefreshGUI.ini"
 HISTORY_FILE = APP_DIR / "ShopRefreshHistory" / "ADB_History.csv"
+# Settings and history; main() points this at the per-user folder (e7_user_data).
+DATA_DIR = None
+DATA_EVENTS = []
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
@@ -215,6 +219,21 @@ def configure_engine_directory(directory):
     CONFIG_FILE = directory / "ADBconfig.ini"
     GUI_CONFIG_FILE = directory / "ShopRefreshGUI.ini"
     HISTORY_FILE = directory / "ShopRefreshHistory" / "ADB_History.csv"
+
+
+def configure_data_directory(directory, events=()):
+    """Point settings and history at directory; the engine gets it as E7_DATA_DIR."""
+    global DATA_DIR, DATA_EVENTS, CONFIG_FILE, GUI_CONFIG_FILE, HISTORY_FILE
+    DATA_DIR = Path(directory)
+    DATA_EVENTS = list(events)
+    CONFIG_FILE = DATA_DIR / "ADBconfig.ini"
+    GUI_CONFIG_FILE = DATA_DIR / "ShopRefreshGUI.ini"
+    HISTORY_FILE = DATA_DIR / "ShopRefreshHistory" / "ADB_History.csv"
+
+
+def engine_environment():
+    """Engines from 0.2.8 write session history under E7_DATA_DIR; older ones ignore it."""
+    return None if DATA_DIR is None else {**os.environ, DATA_DIR_VARIABLE: str(DATA_DIR)}
 
 
 def session_log_folder(mode):
@@ -422,6 +441,8 @@ class RefreshGui(tk.Tk):
         self.after(10000, self._rescan_idle_devices)
         self.after(3000, self._poll_history)
         self._autosave_saved = self._autosave_snapshot()  # startup tidying is not an edit
+        for text in DATA_EVENTS:
+            self._event(text)
 
     def _configure_scaling(self):
         self.ui_scale = self.winfo_fpixels("1i") / 96.0
@@ -2069,7 +2090,7 @@ class RefreshGui(tk.Tk):
         else:
             arguments += ['--gui-session', json.dumps(asdict(settings))] if self._structured_adb else ['--tap-jitter',str(settings.tap_jitter)]
         try:
-            process, self.process_tree = launch_engine(arguments, cwd=APP_DIR, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1, creationflags=NO_WINDOW)
+            process, self.process_tree = launch_engine(arguments, cwd=APP_DIR, env=engine_environment(), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1, creationflags=NO_WINDOW)
         except OSError as exc:
             self.status.set("Failed")
             self.remaining_time.set('Time remaining: —')
@@ -2744,7 +2765,7 @@ class RefreshGui(tk.Tk):
             return
         if not HISTORY_FILE.exists() or not self.history.get_children():
             return
-        if not messagebox.askyesno('Clear session history?', 'Archive all recorded sessions and clear the list? The archived CSV stays in ShopRefreshHistory/archive.', parent=self):
+        if not messagebox.askyesno('Clear session history?', f'Archive all recorded sessions and clear the list? The archived CSV stays in {HISTORY_FILE.parent / "archive"}.', parent=self):
             return
         try:
             original = HISTORY_FILE.read_bytes()
@@ -2981,6 +3002,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         configure_engine_directory(resolve_engine_directory(args.engine_dir))
+        if not args.verify:  # the offline check never creates or migrates user data
+            location = prepare_data_directory(APP_DIR)
+            configure_data_directory(location.directory, location.events)
         if args.verify:
             from e7_appearance import Image
             if Image is None:
