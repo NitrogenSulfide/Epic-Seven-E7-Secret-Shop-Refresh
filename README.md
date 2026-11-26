@@ -55,9 +55,11 @@ window, or click **Stop Session**.
 
 ## What it looks like
 
-The main window after a finished Background run on Steam. Run history is blurred.
+The main window in v0.2.7 (dark theme), ready to start a Background run on Steam.
+Settings sit on the left and save themselves; the current session, activity log
+and run history are on the right. A light theme is one click away.
 
-<img src="docs/media/v0.2.1-full-window.png" alt="Main window after a finished Background run on Steam" width="800">
+<img src="docs/media/v0.2.7-main-window.png" alt="v0.2.7 main window in the dark theme, ready to start a Background run" width="800">
 
 While it runs, the app can shrink to a small always-on-top bar with purchases,
 Skystones spent, time left and a Stop button:
