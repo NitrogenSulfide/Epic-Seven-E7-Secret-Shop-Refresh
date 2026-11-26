@@ -23,7 +23,7 @@ from e7_history import append_session, new_session_metadata
 from e7_session_control import listen_for_stop
 from e7_stop_key import stop_key_monitor
 from e7_input_trace import InputTrace
-from e7_engine_protocol import validate_item_choice
+from e7_engine_protocol import validate_gold_cap, validate_item_choice
 
 class E7Item:
     def __init__(self, image=None, price=0, count=0):
@@ -79,10 +79,11 @@ class E7Inventory:
         append_session(os.path.join('ShopRefreshHistory', 'ADB_History.csv'), record)
 
 class E7ADBShopRefresh(ObservedShopFlow):
-    def __init__(self, tap_sleep:float = 0.3, budget=None, ip_port=None, stop_refresh_key='esc', random_offset = False, debug=False, tap_jitter=None, adb_runner=None, trace_input=False, buy_friendship=False, buy_covenant=True, buy_mystic=True):
+    def __init__(self, tap_sleep:float = 0.3, budget=None, ip_port=None, stop_refresh_key='esc', random_offset = False, debug=False, tap_jitter=None, adb_runner=None, trace_input=False, buy_friendship=False, buy_covenant=True, buy_mystic=True, gold_cap=None):
         if type(buy_friendship) is not bool or (debug and buy_friendship):
             raise ValueError('Friendship purchases require normal mode and an on/off setting.')
         validate_item_choice(buy_covenant, buy_mystic, buy_friendship)
+        self.gold_cap = validate_gold_cap(gold_cap)
         if budget is not None:
             if isinstance(budget, bool) or not math.isfinite(float(budget)) or int(budget) != float(budget) or int(budget) < 3:
                 raise ValueError('Skystone budget must be a whole number of at least 3.')
@@ -385,6 +386,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
             for key, value in self.storage.inventory.items():
                 pos = self._find_item_rechecked(screenshot, value.image)
                 if pos is not None:
+                    self._check_gold_limit(value)
                     if self.clickBuy(pos):
                         value.count += 1
                         brought.add(key)
@@ -436,6 +438,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
                     continue
                 pos = self._find_item_rechecked(screenshot, value.image)
                 if pos is not None:
+                    self._check_gold_limit(value)
                     if self.clickBuy(pos):
                         value.count += 1
                         # The game can ignore the next Confirm right after a
@@ -456,6 +459,7 @@ class E7ADBShopRefresh(ObservedShopFlow):
                 if self.refresh_count >= self.budget//3:
                     break
 
+            self._check_gold_limit()
             if self.clickRefresh():
                 self.refresh_count += 1
                 if trace is not None and trace.enabled:
@@ -721,12 +725,12 @@ def run_gui_session(arguments):
             raise ValueError('Invalid GUI session settings.')
         settings = validate_settings(data['device'], data['budget'], data['tap_sleep'], data['stop_key'],
                                      data['random_offset'], data['debug'], data['tap_jitter'], data.get('trace_input', False), data.get('buy_friendship', False),
-                                     data.get('buy_covenant', True), data.get('buy_mystic', True))
+                                     data.get('buy_covenant', True), data.get('buy_mystic', True), data.get('gold_cap'))
         app = E7ADBShopRefresh(tap_sleep=settings.tap_sleep, budget=settings.budget,
                               ip_port=settings.device, stop_refresh_key=settings.stop_key,
                               random_offset=settings.random_offset, debug=settings.debug, tap_jitter=settings.tap_jitter,
                               trace_input=settings.trace_input, buy_friendship=settings.buy_friendship,
-                              buy_covenant=settings.buy_covenant, buy_mystic=settings.buy_mystic)
+                              buy_covenant=settings.buy_covenant, buy_mystic=settings.buy_mystic, gold_cap=settings.gold_cap)
         threading.Thread(target=listen_for_stop, args=(sys.stdin, app), daemon=True).start()
         if settings.trace_input:
             print('E7GUI_TRACE_READY', flush=True)
@@ -812,7 +816,7 @@ if __name__ == '__main__':
         print('Private Secret Shop references prepared and checked offline.')
         sys.exit(0)
     if sys.argv[1:] == ['--verify']:
-        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; window mouse v9; global stop key v2; tap timing v2; gui session v1; input trace v1; friendship purchases v1; item choice v1; background session v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
+        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; window mouse v9; global stop key v2; tap timing v2; gui session v1; input trace v1; friendship purchases v1; item choice v1; gold limit v1; background session v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
         sys.exit(0)
     if sys.argv[1:2] == ['--check-navigation-frame']:
         import argparse

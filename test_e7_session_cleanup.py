@@ -183,10 +183,11 @@ class SessionCleanupTests(unittest.TestCase):
         fake.start.assert_called_once()
 
     def test_structured_adb_passes_friendship_selection_without_prompt_answers(self):
-        settings=dict(device='fake',budget=3,tap_sleep=.3,stop_key='esc',random_offset=False,debug=False,tap_jitter=0,buy_friendship=True)
+        settings=dict(device='fake',budget=3,tap_sleep=.3,stop_key='esc',random_offset=False,debug=False,tap_jitter=0,buy_friendship=True,gold_cap=18000)
         with patch('E7ADBShopRefresh.E7ADBShopRefresh') as engine,patch('E7ADBShopRefresh.threading.Thread'),contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(run_gui_session(['--gui-session',json.dumps(settings)]),0)
         self.assertTrue(engine.call_args.kwargs['buy_friendship'])
+        self.assertEqual(engine.call_args.kwargs['gold_cap'], 18000)
 
     def test_bug_link_prefills_version_and_mode_without_private_logs(self):
         from urllib.parse import parse_qs, urlparse

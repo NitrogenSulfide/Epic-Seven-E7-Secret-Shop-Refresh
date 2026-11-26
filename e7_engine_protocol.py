@@ -19,6 +19,15 @@ class RunSettings:
     buy_friendship: bool = False
     buy_covenant: bool = True
     buy_mystic: bool = True
+    gold_cap: int | None = None
+
+
+def validate_gold_cap(value):
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if not re.fullmatch(r'[0-9]+', str(value).strip()):
+        raise ValueError('The Gold spending limit must be a whole number of 0 or more, or blank for no limit.')
+    return int(value)
 
 
 def validate_item_choice(buy_covenant, buy_mystic, buy_friendship):
@@ -30,7 +39,7 @@ def validate_item_choice(buy_covenant, buy_mystic, buy_friendship):
 
 
 def validate_settings(device, budget, delay, stop_key, random_offset, debug, tap_jitter=0.03, trace_input=False, buy_friendship=False,
-                      buy_covenant=True, buy_mystic=True):
+                      buy_covenant=True, buy_mystic=True, gold_cap=None):
     if not re.fullmatch(r'[0-9]+', str(budget).strip()):
         raise ValueError("The skystone budget must be a whole number of at least 3.")
     try:
@@ -54,7 +63,7 @@ def validate_settings(device, budget, delay, stop_key, random_offset, debug, tap
         raise ValueError('Turn off Friendship purchases for ADB calibration.')
     validate_item_choice(buy_covenant, buy_mystic, buy_friendship)
     return RunSettings(device, amount, sleep, key, bool(random_offset), bool(debug), jitter, trace_input, buy_friendship,
-                       buy_covenant, buy_mystic)
+                       buy_covenant, buy_mystic, validate_gold_cap(gold_cap))
 
 
 class EngineProtocol:

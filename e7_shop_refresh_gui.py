@@ -354,6 +354,7 @@ class RefreshGui(tk.Tk):
         self.partial_line = ""
         self.raw_output = ""
         self.budget = tk.StringVar(value="12")
+        self.gold_cap = tk.StringVar()
         self.tap_sleep = tk.StringVar(value="0.3")
         self.stop_key = tk.StringVar(value="`")
         self.device = tk.StringVar(value="")
@@ -985,7 +986,8 @@ class RefreshGui(tk.Tk):
         ttk.Label(amounts, text='Skystone budget', image=self.buy_icons.get('spent', ''), compound='left',
                   style='Section.TLabel').grid(row=0, column=0, columnspan=2, sticky='w')
         self.budget_entry = entry = ttk.Entry(amounts, textvariable=self.budget, font=self.heading_font, width=7, justify='center')
-        entry.configure(validate='key', validatecommand=(self.register(lambda value: not value or re.fullmatch(r'[0-9]+', value) is not None), '%P'))
+        whole_number = (self.register(lambda value: not value or re.fullmatch(r'[0-9]+', value) is not None), '%P')
+        entry.configure(validate='key', validatecommand=whole_number)
         entry.grid(row=1, column=0, sticky='w', pady=(dp(4), 0))
         self.settings_widgets.append(entry)
         self.budget_position = tk.DoubleVar(value=0)
@@ -993,8 +995,15 @@ class RefreshGui(tk.Tk):
                                        command=self._slide_budget, style='TapTiming.Horizontal.TScale')
         self.budget_slider.grid(row=1, column=1, sticky='ew', padx=(dp(10), 0), pady=(dp(4), 0))
         self.settings_widgets.append(self.budget_slider)
+        ttk.Label(amounts, text='Gold spending limit', style='Section.TLabel').grid(
+            row=0, column=2, sticky='w', padx=(dp(10), 0))
+        self.gold_cap_entry = ttk.Entry(amounts, textvariable=self.gold_cap, font=self.heading_font, width=10,
+                                       justify='center', validate='key', validatecommand=whole_number)
+        self.gold_cap_entry.grid(row=1, column=2, sticky='ew', padx=(dp(10), 0), pady=(dp(4), 0))
+        ThemeHint(self.gold_cap_entry, lambda: 'Maximum gold to spend this session. Leave blank for no limit.')
+        self.settings_widgets.append(self.gold_cap_entry)
         picks = ttk.Frame(amounts)
-        picks.grid(row=2, column=0, columnspan=2, sticky='ew', pady=(dp(6), 0))
+        picks.grid(row=2, column=0, columnspan=3, sticky='ew', pady=(dp(6), 0))
         self.budget_picks = []
         for column, amount in enumerate(BUDGET_PICKS):
             picks.columnconfigure(column, weight=1, uniform='picks')
@@ -1005,7 +1014,7 @@ class RefreshGui(tk.Tk):
         self.settings_widgets.extend(self.budget_picks)
         self.budget_summary = tk.StringVar()
         ttk.Label(amounts, textvariable=self.budget_summary, style='Muted.TLabel', wraplength=dp(350)).grid(
-            row=3, column=0, columnspan=2, sticky='w', pady=(dp(6), 0))
+            row=3, column=0, columnspan=3, sticky='w', pady=(dp(6), 0))
         buys = ttk.Frame(controls)
         buys.grid(row=5, column=0, sticky='ew', pady=(0, dp(10)))
         ttk.Label(buys, text='Buy', style='Section.TLabel').grid(row=0, column=0, columnspan=3, sticky='w', pady=(0, dp(4)))
@@ -1109,7 +1118,7 @@ class RefreshGui(tk.Tk):
         self._update_tap_jitter()
         self.budget.trace_add('write', lambda *_: self._sync_budget_slider())
         self._sync_budget_slider()
-        for var in (self.budget, self.stop_key, self.buy_covenant, self.buy_mystic, self.buy_friendship,
+        for var in (self.budget, self.gold_cap, self.stop_key, self.buy_covenant, self.buy_mystic, self.buy_friendship,
                     self.tap_sleep, self.random_offset, self.tap_jitter, self.control_mode):
             var.trace_add('write', lambda *_: self._schedule_autosave())
         # Insert one compact mode section; existing session fields retain their
@@ -1353,6 +1362,7 @@ class RefreshGui(tk.Tk):
         try:
             parser = configparser.ConfigParser()
             parser.read(GUI_CONFIG_FILE)
+            self.gold_cap.set(parser.get('GUI', 'gold_cap', raw=True, fallback=''))
             self.sound_enabled.set(parser.getboolean("GUI", "sound_enabled", fallback=True))
             self.trace_input.set(parser.getboolean('GUI', 'trace_input', fallback=False))
             self.compact_tracker.set(parser.getboolean('GUI', 'compact_tracker', fallback=True))
@@ -1451,7 +1461,7 @@ class RefreshGui(tk.Tk):
         temp.replace(CONFIG_FILE)
         self._timing_migration_pending = False
 
-    def _write_sound_preference(self):
+    def _write_sound_preference(self, settings=None):
         # The original engine rewrites ADBconfig.ini, so GUI preferences need
         # their own file to survive a real refresh session.
         parser = configparser.ConfigParser()
@@ -1465,6 +1475,8 @@ class RefreshGui(tk.Tk):
         if not parser.has_section("GUI"):
             parser.add_section("GUI")
         parser["GUI"]["sound_enabled"] = str(self.sound_enabled.get())
+        if settings is not None:
+            parser['GUI']['gold_cap'] = '' if settings.gold_cap is None else str(settings.gold_cap)
         parser['GUI']['trace_input'] = str(self.trace_input.get())
         parser['GUI']['compact_tracker'] = str(self.compact_tracker.get())
         parser['GUI']['buy_friendship'] = str(self.buy_friendship.get())
@@ -1543,7 +1555,7 @@ class RefreshGui(tk.Tk):
         device = self._device_address() or ('native-mouse' if self.control_mode.get() != 'ADB' else '')
         self._raise_tap_delay_floor()
         return validate_settings(device, self.budget.get(), self.tap_sleep.get(), self.stop_key.get(), self.random_offset.get(), self.debug_mode.get(), round(self.tap_jitter.get(), 2), self.trace_input.get(), self.buy_friendship.get(),
-                                 self.buy_covenant.get(), self.buy_mystic.get())
+                                 self.buy_covenant.get(), self.buy_mystic.get(), gold_cap=self.gold_cap.get())
 
     def _raise_tap_delay_floor(self):
         """Show the raised value in the box; validation applies the same floor."""
@@ -1617,7 +1629,7 @@ class RefreshGui(tk.Tk):
                 parser.write(fh)
             temp.replace(CONFIG_FILE)
             self._timing_migration_pending = False  # the full file now holds the current timing
-            self._write_sound_preference()
+            self._write_sound_preference(settings)
         except (ValueError, OSError, configparser.Error) as exc:
             messagebox.showerror("Settings not saved", str(exc), parent=self)
             return None
@@ -1968,14 +1980,20 @@ class RefreshGui(tk.Tk):
             except (ValueError, OSError, subprocess.SubprocessError) as error:
                 self._set_connection_warning(str(error), reveal=True)
                 return
-        if settings.buy_friendship:
+        if settings.buy_friendship or settings.gold_cap is not None:
             try:
                 check = subprocess.run([*engine_command(), '--verify'], stdin=subprocess.DEVNULL, cwd=APP_DIR, capture_output=True,
                                        text=True, timeout=15, creationflags=NO_WINDOW)
-                if check.returncode or 'friendship purchases v1' not in check.stdout:
-                    raise ValueError('Friendship purchases need the matching new engine. Use a complete player folder built with Friendship support.')
-                if mouse_target is None and not self._structured_adb:
-                    raise ValueError('Friendship purchases require GUI session support from the matching new engine.')
+                if settings.gold_cap is not None:
+                    if check.returncode or not re.search(r'\bgold limit v1\b', check.stdout):
+                        raise ValueError('The Gold spending limit requires an engine with gold limit v1 support.')
+                    if mouse_target is None and not self._structured_adb:
+                        raise ValueError('The Gold spending limit requires GUI session support from the matching engine.')
+                if settings.buy_friendship:
+                    if check.returncode or 'friendship purchases v1' not in check.stdout:
+                        raise ValueError('Friendship purchases need the matching new engine. Use a complete player folder built with Friendship support.')
+                    if mouse_target is None and not self._structured_adb:
+                        raise ValueError('Friendship purchases require GUI session support from the matching new engine.')
             except (ValueError, OSError, subprocess.SubprocessError) as error:
                 self._set_connection_warning(str(error), reveal=True)
                 return
@@ -2066,8 +2084,15 @@ class RefreshGui(tk.Tk):
             if settings.buy_friendship:
                 arguments.append('--buy-friendship')
             arguments += skip_items
+        elif self._structured_adb:
+            payload = asdict(settings)
+            if settings.gold_cap is None:
+                del payload['gold_cap']
+            arguments += ['--gui-session', json.dumps(payload)]
         else:
-            arguments += ['--gui-session', json.dumps(asdict(settings))] if self._structured_adb else ['--tap-jitter',str(settings.tap_jitter)]
+            arguments += ['--tap-jitter',str(settings.tap_jitter)]
+        if mouse_target is not None and settings.gold_cap is not None:
+            arguments += ['--gold-cap', str(settings.gold_cap)]
         try:
             process, self.process_tree = launch_engine(arguments, cwd=APP_DIR, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1, creationflags=NO_WINDOW)
         except OSError as exc:
@@ -2861,7 +2886,7 @@ class RefreshGui(tk.Tk):
         self._autosave_job = self.after(AUTOSAVE_DELAY_MS, self._autosave)
 
     def _autosave_snapshot(self):
-        return (self.budget.get(), self.stop_key.get(), self.buy_covenant.get(), self.buy_mystic.get(),
+        return (self.budget.get(), self.gold_cap.get(), self.stop_key.get(), self.buy_covenant.get(), self.buy_mystic.get(),
                 self.buy_friendship.get(), self.tap_sleep.get(), self.random_offset.get(), round(self.tap_jitter.get(), 2),
                 self.control_mode.get())
 
@@ -2893,7 +2918,7 @@ class RefreshGui(tk.Tk):
             settings = validate_settings('autosave', self.budget.get(), self.tap_sleep.get(), self.stop_key.get(),
                                          self.random_offset.get(), False, round(self.tap_jitter.get(), 2),
                                          self.trace_input.get(), self.buy_friendship.get(),
-                                         self.buy_covenant.get(), self.buy_mystic.get())
+                                         self.buy_covenant.get(), self.buy_mystic.get(), gold_cap=self.gold_cap.get())
             problem = ''
         except ValueError as exc:
             settings, problem = None, str(exc)
@@ -2904,7 +2929,7 @@ class RefreshGui(tk.Tk):
             return
         try:
             self._write_engine_settings(settings)
-            self._write_sound_preference()
+            self._write_sound_preference(settings)
         except (OSError, UnicodeError, configparser.Error) as exc:
             self.setting_notice.set(f'Settings could not be saved: {exc}')
             return
