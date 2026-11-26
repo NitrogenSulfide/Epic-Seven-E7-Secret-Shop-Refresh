@@ -162,16 +162,19 @@ class SharedFlowTests(unittest.TestCase):
         app.wait = Mock()
         state['screen'] = 'shop'
         del app.storage.writeToCSV  # Exercise the real history writer in the temporary directory.
+        output = io.StringIO()
         with tempfile.TemporaryDirectory() as folder:
             history = Path(folder) / 'history.csv'
             with patch('E7ADBShopRefresh.append_session', side_effect=lambda _, row: append_session(history, row)), \
                  patch('e7_shop_flow.np.linspace', return_value=np.array([1.])), \
                  patch('e7_shop_flow.read_ui_text', side_effect=lambda *a, **kw: app._fake_shop_ocr()), \
-                 contextlib.redirect_stdout(io.StringIO()), self.assertRaises(MouseStopped) as stop:
+                 contextlib.redirect_stdout(output):
                 app.start()
             [session] = read_sessions(history)
         self.assertEqual(session['Outcome'], 'stopped')
-        self.assertEqual(session['Reason'], str(stop.exception))
+        events = [json.loads(line.split(' ', 1)[1]) for line in output.getvalue().splitlines()
+                  if line.startswith('E7GUI_GOLD_LIMIT_REACHED ')]
+        self.assertEqual(events, [{'reason': session['Reason']}])
         self.assertEqual(int(session['Gold spent']), app.storage.getTotalCost())
         return session['Reason']
 

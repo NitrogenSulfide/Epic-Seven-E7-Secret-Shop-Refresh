@@ -14,7 +14,7 @@ import configparser
 import json
 import math
 from e7_shop_navigation import create_navigator, NavigationSetupRequired, prepare_references
-from e7_shop_flow import ObservedShopFlow, UnclearShopRow, IncompleteCurrencyRow, list_view, LIST_MOVED, INVENTORY_SETTLE_SECONDS
+from e7_shop_flow import ObservedShopFlow, GoldLimitReached, UnclearShopRow, IncompleteCurrencyRow, list_view, LIST_MOVED, INVENTORY_SETTLE_SECONDS
 from e7_mouse_confirmation import read_confirmation_text,read_ui_text
 from e7_native_mouse import MouseStopped
 from e7_frame import normalize_game_frame
@@ -170,6 +170,10 @@ class E7ADBShopRefresh(ObservedShopFlow):
             if self._stop_requested.is_set():
                 raise MouseStopped(self._stop_reason)
             self.refreshShop()
+        except GoldLimitReached as stop:
+            self.record_session('stopped', str(stop))
+            print('E7GUI_GOLD_LIMIT_REACHED ' + json.dumps({'reason': str(stop)}), flush=True)
+            self.printResult()
         except Exception as error:
             self.record_session('stopped' if self._stop_requested.is_set() and not getattr(self,'_stop_key_error','') else 'failed',
                                 self._stop_reason or str(error))

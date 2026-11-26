@@ -443,6 +443,7 @@ class RefreshGui(tk.Tk):
         self.stopping = False
         self.finished = False
         self._mouse_failure = None
+        self._gold_stop_reason = None
         self._native_mouse_run = False
         self._structured_adb = False
         self._graceful_stop = False
@@ -2199,6 +2200,7 @@ class RefreshGui(tk.Tk):
         run_id = self.run_id
         self.stopping = self.finished = False
         self._mouse_failure = None
+        self._gold_stop_reason = None
         self._report_since = time.time()-1
         self._show_report_actions()
         background = self.control_mode.get() == 'Background' and mouse_target is not None
@@ -2395,7 +2397,7 @@ class RefreshGui(tk.Tk):
             self.pointer_alert.set('')
 
     def _update_remaining_time(self, observed_at=None):
-        if not self._session_started or self.finished or self.stopping or self.stop_key_pressed or self._mouse_failure:
+        if not self._session_started or self.finished or self.stopping or self.stop_key_pressed or self._mouse_failure or self._gold_stop_reason:
             return
         estimate = self.session_estimate
         if self.run_settings.debug:
@@ -2440,14 +2442,18 @@ class RefreshGui(tk.Tk):
         if line == 'E7GUI_STARTED':
             self._engine_started()
             return
-        if line.startswith(('E7GUI_MOUSE_PAUSED ','E7GUI_MOUSE_STOPPED ', 'E7GUI_STOPPED ')):
+        if line.startswith(('E7GUI_MOUSE_PAUSED ', 'E7GUI_MOUSE_STOPPED ', 'E7GUI_STOPPED ', 'E7GUI_GOLD_LIMIT_REACHED ')):
             try:
                 reason = str(json.loads(line.split(' ',1)[1])['reason'])
             except (ValueError,KeyError,TypeError):
                 return
-            if line.startswith(('E7GUI_MOUSE_STOPPED ', 'E7GUI_STOPPED ')):
-                self._mouse_failure = reason
-                self.status.set('Needs attention')
+            if not line.startswith('E7GUI_MOUSE_PAUSED '):
+                if line.startswith('E7GUI_GOLD_LIMIT_REACHED '):
+                    self._gold_stop_reason = reason
+                    self.status.set('Stopped')
+                else:
+                    self._mouse_failure = reason
+                    self.status.set('Needs attention')
                 self.remaining_time.set('Time remaining: Session stopped')
                 self._freeze_elapsed()
                 self._set_compact_hint('')
@@ -2573,7 +2579,7 @@ class RefreshGui(tk.Tk):
                         var.set(value)
         if "---Result---" in line:
             self.finished = True
-            self.remaining_time.set('Time remaining: Session stopped' if self.stopping or self.stop_key_pressed or self._mouse_failure else 'Time remaining: Complete')
+            self.remaining_time.set('Time remaining: Session stopped' if self.stopping or self.stop_key_pressed or self._mouse_failure or self._gold_stop_reason else 'Time remaining: Complete')
             self._freeze_elapsed()
             self._event("Refresh ended. Recording session results.")
         for label, var in (("Covenant bookmark", self.covenant), ("Mystic medal", self.mystic), ('Friendship points', self.friendship), ("Skystone spent", self.spent)):
@@ -2683,9 +2689,10 @@ class RefreshGui(tk.Tk):
             self.status.set('Needs attention')
             self.detail.set(self._mouse_failure)
             self.progress_text.set('Session stopped · see the reason above')
-        elif self.stopping or self.stop_key_pressed or (process.returncode == 0 and self.run_settings and self.run_settings.debug and self._session_started and not self.finished):
+        elif self.stopping or self.stop_key_pressed or (process.returncode == 0 and (
+                self._gold_stop_reason or (self.run_settings and self.run_settings.debug and self._session_started and not self.finished))):
             self.status.set("Stopped")
-            self.detail.set("Session stopped. History contains only runs recorded by the engine.")
+            self.detail.set(self._gold_stop_reason or "Session stopped. History contains only runs recorded by the engine.")
             self.progress_text.set("Stopped")
             self._play_session_sound("stopped")
         elif process.returncode == 0 and self.finished:
