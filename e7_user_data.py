@@ -9,10 +9,13 @@ update meant copying that folder by hand. They now live in a per-user folder:
 * E7_DATA_DIR overrides both.
 
 On first start the files are copied once from the old engine folder. The old
-folder is never changed or deleted; a second, timestamped copy also goes to
-<data>/legacy-backup/. A copy that fails leaves the GUI on the old folder for
-that run, exactly as before, and the next start retries. Every step is safe to
-repeat: nothing in the per-user folder is ever overwritten by the migration.
+folder is never changed or deleted; a second copy also goes to
+<data>/legacy-backup/. The move is all or nothing: everything is copied and
+checked in a staging folder beside the new one, which then becomes the new
+folder in one rename. Until that rename the new folder does not exist, so a
+failure (or a crash) leaves the GUI on the old folder for that run, exactly as
+before, and the next start retries. A per-user folder that already holds files
+is never overwritten or merged into.
 
 Diagnostics (session logs, mouse-failures, previews, setup captures) and
 prepared navigation references stay beside the engine for now.
@@ -24,6 +27,8 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import shutil
+import stat
+import sys
 import uuid
 
 APP_FOLDER_WINDOWS = 'E7 Secret Shop Refresh'
@@ -51,17 +56,35 @@ class DataLocation:
 def default_data_directory(environ=None, os_name=None, home=None):
     environ = os.environ if environ is None else environ
     os_name = os.name if os_name is None else os_name
-    selected = (environ.get(ENVIRONMENT_VARIABLE) or '').strip()
+    selected = os.path.expandvars((environ.get(ENVIRONMENT_VARIABLE) or '').strip()).strip()
     if selected:
-        return Path(os.path.expandvars(selected)).expanduser()
-    home = Path.home() if home is None else Path(home)
+        # Absolute, so the engine (started in the engine folder) uses the same place.
+        return Path(selected).expanduser().absolute()
+
+    def user_home():
+        return Path.home() if home is None else Path(home)
     if os_name == 'nt':
         base = (environ.get('LOCALAPPDATA') or '').strip()
-        return (Path(base) if base else home / 'AppData' / 'Local') / APP_FOLDER_WINDOWS
+        return (Path(base) if base else user_home() / 'AppData' / 'Local') / APP_FOLDER_WINDOWS
     base = (environ.get('XDG_DATA_HOME') or '').strip()
     # XDG says a relative XDG_DATA_HOME is invalid and must be ignored.
-    base = Path(base) if base and PurePosixPath(base).is_absolute() else home / '.local' / 'share'
+    base = Path(base) if base and PurePosixPath(base).is_absolute() else user_home() / '.local' / 'share'
     return base / APP_FOLDER_POSIX
+
+
+def _remove_tree(folder):
+    """Remove a staging folder, including copies that kept a read-only attribute."""
+    def make_writable(function, path, _error):
+        try:
+            os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+            function(path)
+        except OSError:
+            pass
+    if folder.exists():
+        if sys.version_info >= (3, 12):
+            shutil.rmtree(folder, onexc=make_writable)
+        else:
+            shutil.rmtree(folder, onerror=make_writable)
 
 
 def legacy_items(folder):
@@ -106,42 +129,28 @@ def _writable(folder):
         return False
 
 
-def _migrate(legacy, data, items, now):
-    """Copy items into data without overwriting; returns (copied, kept)."""
+def _stage(legacy, staging, items, now):
+    """Copy items and a backup into staging, check every byte, then write the marker."""
     stamp = now.strftime('%Y%m%d-%H%M%S')
-    staging = data / f'.migrating-{uuid.uuid4().hex}'
-    backup = data / BACKUP_FOLDER / f'runtime-{stamp}-{uuid.uuid4().hex[:6]}'
-    copied, kept = [], []
+    backup_name = f'runtime-{stamp}'
+    staging.mkdir()
+    for name in items:
+        source = legacy / name
+        for target in (staging / name, staging / BACKUP_FOLDER / backup_name / name):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            _copy(source, target)
+            _verify(source, target)
+    (staging / MARKER).write_text(json.dumps(dict(
+        source=str(legacy), migrated_at=now.isoformat(timespec='seconds'), copied=list(items),
+        backup=f'{BACKUP_FOLDER}/{backup_name}'), indent=2), encoding='utf-8')
+    return backup_name
+
+
+def _is_empty_folder(folder):
     try:
-        staging.mkdir()
-        backup.mkdir(parents=True)
-        for name in items:
-            source = legacy / name
-            # The backup is a full second copy, made and checked before anything is placed.
-            _copy(source, backup / name)
-            _verify(source, backup / name)
-            if (data / name).exists():
-                kept.append(name)
-                continue
-            _copy(source, staging / name)
-            _verify(source, staging / name)
-        for name in items:
-            if name in kept:
-                continue
-            target = data / name
-            if target.exists():  # another GUI instance finished first
-                kept.append(name)
-                continue
-            os.rename(staging / name, target)  # never replaces an existing file
-            copied.append(name)
-        (data / MARKER).write_text(json.dumps(dict(
-            source=str(legacy), migrated_at=now.isoformat(timespec='seconds'),
-            copied=copied, kept_existing=kept, backup=str(backup)), indent=2), encoding='utf-8')
-    except OSError as error:
-        raise MigrationError(f'Copy from {legacy} failed: {error}') from error
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
-    return copied, kept, backup
+        return folder.is_dir() and not any(folder.iterdir())
+    except OSError:
+        return False
 
 
 def prepare_data_directory(legacy_folder, data_folder=None, *, environ=None, now=None):
@@ -151,40 +160,65 @@ def prepare_data_directory(legacy_folder, data_folder=None, *, environ=None, now
     is used, as in earlier releases, and the reason is in `events`.
     """
     legacy = Path(legacy_folder)
-    data = Path(data_folder) if data_folder is not None else default_data_directory(environ)
+    try:
+        data = Path(data_folder) if data_folder is not None else default_data_directory(environ)
+    except (RuntimeError, OSError) as error:  # no home folder at all
+        return DataLocation(legacy, [f'No per-user settings folder is available ({error}); '
+                                     f'settings and history stay in {legacy}.'], fallback=True)
+    data = data.absolute()
     now = now or datetime.datetime.now()
     location = DataLocation(data)
     if _same_folder(legacy, data):
         return location
-    items = legacy_items(legacy)
 
     def fall_back(reason):
         location.directory, location.fallback = legacy, True
         location.events.append(f'{reason} Settings and history stay in {legacy} for this run; nothing was deleted.')
         return location
 
-    try:
-        data.mkdir(parents=True, exist_ok=True)
-    except OSError as error:
-        return fall_back(f'Could not create the settings folder {data}: {error}.')
-    marker = data / MARKER
-    if marker.exists():
-        return location  # migrated on an earlier start; the old folder is left alone
-    if not _writable(data):
-        if legacy_items(data):
+    def use_existing():
+        if not _writable(data):
             location.events.append(f'Warning: the settings folder {data} is read-only; changes cannot be saved.')
-            return location
-        return fall_back(f'The settings folder {data} is read-only.')
-    if not items:
-        return location  # fresh install
+        return location
+
+    items = legacy_items(legacy)
+    if (data / MARKER).exists():
+        return use_existing()  # migrated on an earlier start; the old folder is left alone
+    if data.exists() and not _is_empty_folder(data):
+        if not data.is_dir():
+            return fall_back(f'The settings folder {data} is not a folder.')
+        if items:
+            # Never merge into or overwrite a folder that is already in use.
+            location.events.append(f'Settings folder {data} is already in use, so the old settings in {legacy} '
+                                   'were not imported; they are left unchanged there.')
+            try:  # say it once, not on every start
+                (data / MARKER).write_text(json.dumps(dict(
+                    source=str(legacy), migrated_at=now.isoformat(timespec='seconds'), copied=[],
+                    skipped='settings folder already in use'), indent=2), encoding='utf-8')
+            except OSError:
+                pass
+        return use_existing()
+    if not items:  # fresh install
+        try:
+            data.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            return fall_back(f'Could not create the settings folder {data}: {error}.')
+        if not _writable(data):
+            return fall_back(f'The settings folder {data} is read-only.')
+        return location
+    staging = data.parent / f'.{data.name}.migrating-{uuid.uuid4().hex}'
     try:
-        copied, kept, backup = _migrate(legacy, data, items, now)
-    except MigrationError as error:
-        return fall_back(f'Settings migration failed: {error}.')
+        data.parent.mkdir(parents=True, exist_ok=True)
+        backup_name = _stage(legacy, staging, items, now)
+        if _is_empty_folder(data):
+            data.rmdir()  # an empty folder left by an earlier fresh start
+        os.rename(staging, data)  # one step; fails if another start created the folder first
+    except OSError as error:
+        _remove_tree(staging)
+        if (data / MARKER).exists():
+            return use_existing()  # another GUI instance finished the same move first
+        return fall_back(f'Settings migration to {data} failed: {error}.')
     location.migrated = True
-    if copied:
-        location.events.append(f'Settings and history moved to {data} ({", ".join(copied)}).')
-    if kept:
-        location.events.append(f'Kept the existing {", ".join(kept)} already in {data}; the old copy was not used.')
-    location.events.append(f'The old copies stay in {legacy}; a backup is in {backup}.')
+    location.events.append(f'Settings and history moved to {data} ({", ".join(items)}).')
+    location.events.append(f'The old copies stay in {legacy}; a backup is in {data / BACKUP_FOLDER / backup_name}.')
     return location

@@ -91,7 +91,9 @@ Live counters report engine-completed buys/refreshes, not confirmed balances.
 Insufficient-currency stopping remains unverified. Keep initial runs supervised.
 Settings and session history live in `%LOCALAPPDATA%\E7 Secret Shop Refresh`
 (or `E7_DATA_DIR`) and carry over to new releases; the first start copies them
-once from an older `runtime` folder and leaves that folder untouched. Private
+once from the `runtime` folder beside it and leaves that folder untouched (for
+the first upgrade from 0.2.7 or older, copy your old settings and
+`ShopRefreshHistory` into the new `runtime` before starting). Private
 recognition captures and diagnostic logs still stay under `runtime`; back those
 up before removing the extracted folder. No updater exists.
 

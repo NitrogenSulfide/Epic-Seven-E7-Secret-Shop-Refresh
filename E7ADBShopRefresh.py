@@ -818,7 +818,7 @@ if __name__ == '__main__':
         print('Private Secret Shop references prepared and checked offline.')
         sys.exit(0)
     if sys.argv[1:] == ['--verify']:
-        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; window mouse v9; global stop key v2; tap timing v2; gui session v1; input trace v1; friendship purchases v1; item choice v1; background session v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
+        print('E7 engine: live counters v1; verified shop navigation v3; native mouse v3; window mouse v9; global stop key v2; tap timing v2; gui session v1; input trace v1; friendship purchases v1; item choice v1; background session v1; user data folder v1; built-in recognition and setup fallback; visible UI startup wait; sleeping stop-key poll; imports OK')
         sys.exit(0)
     if sys.argv[1:2] == ['--check-navigation-frame']:
         import argparse

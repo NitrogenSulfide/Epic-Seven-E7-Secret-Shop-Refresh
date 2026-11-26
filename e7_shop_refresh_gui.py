@@ -233,7 +233,7 @@ def configure_data_directory(directory, events=()):
 
 def engine_environment():
     """Engines from 0.2.8 write session history under E7_DATA_DIR; older ones ignore it."""
-    return None if DATA_DIR is None else {**os.environ, DATA_DIR_VARIABLE: str(DATA_DIR)}
+    return None if DATA_DIR is None else {**os.environ, DATA_DIR_VARIABLE: str(Path(DATA_DIR).absolute())}
 
 
 def session_log_folder(mode):
@@ -1977,6 +1977,17 @@ class RefreshGui(tk.Tk):
         self._close()
 
     def _begin_refresh(self, settings, *, mouse_target=None):
+        if DATA_DIR is not None and DATA_DIR != APP_DIR:
+            # Older engines write history beside themselves, where this GUI no longer reads it.
+            try:
+                check = subprocess.run([*engine_command(), '--verify'], stdin=subprocess.DEVNULL, cwd=APP_DIR, capture_output=True,
+                                       text=True, timeout=15, creationflags=NO_WINDOW)
+                if check.returncode or 'user data folder v1' not in check.stdout:
+                    raise ValueError(f'This engine is older than the GUI and would save history in {APP_DIR}, not in '
+                                     f'{DATA_DIR}. Use the complete player folder from the same release.')
+            except (ValueError, OSError, subprocess.SubprocessError) as error:
+                self._set_connection_warning(str(error), reveal=True)
+                return
         if not (settings.buy_covenant and settings.buy_mystic):
             try:
                 check = subprocess.run([*engine_command(), '--verify'], stdin=subprocess.DEVNULL, cwd=APP_DIR, capture_output=True,

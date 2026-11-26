@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -39,7 +40,11 @@ class DefaultFolderTests(unittest.TestCase):
 
     def test_override_wins(self):
         self.assertEqual(data.default_data_directory({'E7_DATA_DIR': '/custom', 'LOCALAPPDATA': '/l'}, 'nt'),
-                         Path('/custom'))
+                         Path('/custom').absolute())
+
+    def test_relative_override_becomes_absolute(self):
+        folder = data.default_data_directory({'E7_DATA_DIR': 'relative data'}, 'nt')
+        self.assertEqual(folder, Path.cwd() / 'relative data')
 
 
 class MigrationTests(unittest.TestCase):
@@ -63,6 +68,10 @@ class MigrationTests(unittest.TestCase):
 
     def prepare(self, **kwargs):
         return prepare_data_directory(self.legacy, self.data, now=NOW, **kwargs)
+
+    def leftover_staging(self):
+        parent = self.data.parent
+        return [path for path in parent.iterdir() if '.migrating-' in path.name] if parent.exists() else []
 
     def test_fresh_install_uses_new_empty_folder(self):
         before = snapshot(self.legacy)
@@ -91,7 +100,8 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(Path(marker['source']), self.legacy)
         self.assertEqual(sorted(marker['copied']), sorted(data.MIGRATED_ITEMS))
         self.assertTrue(any('moved to' in event for event in location.events))
-        self.assertFalse(any(path.name.startswith('.migrating-') for path in self.data.iterdir()))
+        self.assertTrue(any('backup is in' in event for event in location.events))
+        self.assertEqual(self.leftover_staging(), [])
 
     def test_rerun_after_migration_changes_nothing(self):
         self.old_install()
@@ -106,38 +116,92 @@ class MigrationTests(unittest.TestCase):
         self.assertEqual(snapshot(self.data), after_first)
         self.assertIn('budget = 900', (self.data / 'ADBconfig.ini').read_text(encoding='utf-8'))
 
-    def test_existing_new_files_are_never_overwritten(self):
-        self.old_install()
+    def test_folder_already_in_use_is_never_overwritten_or_merged(self):
+        before = self.old_install()
         self.data.mkdir(parents=True)
-        (self.data / 'ShopRefreshGUI.ini').write_text('[GUI]\nnewer = yes\n', encoding='utf-8')
+        (self.data / 'ShopRefreshGUI.ini').write_bytes(b'[GUI]\nnewer = yes\n')
+        location = self.prepare()
+        self.assertFalse(location.migrated or location.fallback)
+        self.assertEqual(location.directory, self.data)
+        self.assertEqual(snapshot(self.data)['ShopRefreshGUI.ini'], b'[GUI]\nnewer = yes\n')
+        self.assertEqual(sorted(snapshot(self.data)), ['ShopRefreshGUI.ini', MARKER])
+        self.assertIn('were not imported', location.events[0])
+        self.assertEqual(snapshot(self.legacy), before)
+        self.assertEqual(self.prepare().events, [])  # told once, not on every start
+
+    def test_empty_override_variable_uses_the_default(self):
+        with patch.dict(os.environ, {'E7_EMPTY_FOR_TEST': ''}):
+            folder = data.default_data_directory({'E7_DATA_DIR': '$E7_EMPTY_FOR_TEST', 'LOCALAPPDATA': str(self.root)}, 'nt')
+        self.assertEqual(folder, self.root / 'E7 Secret Shop Refresh')
+
+    def test_missing_home_falls_back_without_raising(self):
+        self.old_install()
+        with patch.object(data, 'default_data_directory', side_effect=RuntimeError('Could not determine home directory')):
+            location = prepare_data_directory(self.legacy, now=NOW)
+        self.assertEqual(location.directory, self.legacy)
+        self.assertTrue(location.fallback)
+
+    def test_read_only_legacy_files_leave_no_staging_behind(self):
+        self.old_install()
+        os.chmod(self.legacy / 'ADBconfig.ini', 0o444)
+        self.addCleanup(os.chmod, self.legacy / 'ADBconfig.ini', 0o666)
+        real_write = Path.write_text
+
+        def failing_write(path, *args, **kwargs):
+            if path.name == MARKER:
+                raise OSError(28, 'No space left on device')
+            return real_write(path, *args, **kwargs)
+
+        with patch.object(Path, 'write_text', failing_write):
+            self.assertTrue(self.prepare().fallback)
+        self.assertEqual(self.leftover_staging(), [])
+
+    def test_empty_folder_from_a_fresh_start_still_migrates(self):
+        self.prepare()  # a fresh start creates the empty folder
+        self.old_install()
         location = self.prepare()
         self.assertTrue(location.migrated)
-        self.assertEqual((self.data / 'ShopRefreshGUI.ini').read_text(encoding='utf-8'), '[GUI]\nnewer = yes\n')
         self.assertIn('budget = 300', (self.data / 'ADBconfig.ini').read_text(encoding='utf-8'))
-        self.assertTrue(any('Kept the existing ShopRefreshGUI.ini' in event for event in location.events))
-        backup = next((self.data / BACKUP_FOLDER).iterdir())
-        self.assertIn('control_mode = Mouse', (backup / 'ShopRefreshGUI.ini').read_text(encoding='utf-8'))
 
     def test_destination_that_cannot_be_created_falls_back_to_runtime(self):
         before = self.old_install()
-        blocker = self.root / 'LocalAppData'
-        blocker.write_text('a file where the folder should be', encoding='utf-8')
+        (self.root / 'LocalAppData').write_text('a file where the folder should be', encoding='utf-8')
         location = self.prepare()
         self.assertEqual(location.directory, self.legacy)
         self.assertTrue(location.fallback)
-        self.assertIn('Could not create', location.events[0])
+        self.assertIn('failed', location.events[0])
         self.assertIn('nothing was deleted', location.events[0])
         self.assertEqual(snapshot(self.legacy), before)
 
+    def test_fresh_destination_that_cannot_be_created_falls_back(self):
+        (self.root / 'LocalAppData').write_text('a file where the folder should be', encoding='utf-8')
+        location = self.prepare()
+        self.assertTrue(location.fallback)
+        self.assertIn('Could not create', location.events[0])
+
     def test_read_only_destination_falls_back_without_touching_runtime(self):
         before = self.old_install()
+        real_mkdir = Path.mkdir
+
+        def denied(path, *args, **kwargs):
+            if '.migrating-' in path.name:
+                raise PermissionError(13, 'Access is denied', str(path))
+            return real_mkdir(path, *args, **kwargs)
+
+        with patch.object(Path, 'mkdir', denied):
+            location = self.prepare()
+        self.assertEqual(location.directory, self.legacy)
+        self.assertTrue(location.fallback)
+        self.assertIn('Access is denied', location.events[0])
+        self.assertEqual(snapshot(self.legacy), before)
+        self.assertFalse(self.data.exists())
+
+    def test_read_only_fresh_destination_falls_back(self):
         with patch.object(data, '_writable', return_value=False):
             location = self.prepare()
         self.assertEqual(location.directory, self.legacy)
         self.assertTrue(location.fallback)
         self.assertIn('read-only', location.events[0])
-        self.assertEqual(snapshot(self.legacy), before)
-        self.assertFalse((self.data / MARKER).exists())
 
     def test_read_only_destination_already_holding_data_is_kept_with_warning(self):
         self.data.mkdir(parents=True)
@@ -151,11 +215,9 @@ class MigrationTests(unittest.TestCase):
     def test_copy_failure_falls_back_cleans_up_and_retries_next_start(self):
         before = self.old_install()
         real_copytree = shutil.copytree
-        calls = []
 
         def failing_copytree(source, target, *args, **kwargs):
-            calls.append(target)
-            if '.migrating-' in str(target):
+            if BACKUP_FOLDER in str(target):
                 raise OSError(28, 'No space left on device')
             return real_copytree(source, target, *args, **kwargs)
 
@@ -163,17 +225,51 @@ class MigrationTests(unittest.TestCase):
             location = self.prepare()
         self.assertEqual(location.directory, self.legacy)
         self.assertTrue(location.fallback)
-        self.assertIn('migration failed', location.events[0])
+        self.assertIn('migration', location.events[0])
         self.assertEqual(snapshot(self.legacy), before)
-        self.assertFalse((self.data / MARKER).exists())
-        self.assertFalse(any(path.name.startswith('.migrating-') for path in self.data.iterdir()))
+        self.assertFalse(self.data.exists())
+        self.assertEqual(self.leftover_staging(), [])
         # The next start completes the move from the untouched runtime folder.
         location = self.prepare()
         self.assertEqual(location.directory, self.data)
         self.assertTrue(location.migrated)
-        self.assertTrue((self.data / MARKER).exists())
         self.assertEqual((self.data / 'ShopRefreshHistory' / 'ADB_History.csv').read_bytes(),
                          before[str(Path('ShopRefreshHistory') / 'ADB_History.csv')])
+
+    def test_marker_write_failure_leaves_no_half_moved_folder(self):
+        before = self.old_install()
+        real_write = Path.write_text
+
+        def failing_write(path, *args, **kwargs):
+            if path.name == MARKER:
+                raise OSError(28, 'No space left on device')
+            return real_write(path, *args, **kwargs)
+
+        with patch.object(Path, 'write_text', failing_write):
+            location = self.prepare()
+        self.assertTrue(location.fallback)
+        self.assertEqual(location.directory, self.legacy)
+        # Saves this run go to runtime; no stale copy waits in the new folder for later.
+        self.assertFalse(self.data.exists())
+        self.assertEqual(self.leftover_staging(), [])
+        self.assertEqual(snapshot(self.legacy), before)
+
+    def test_losing_a_race_to_another_instance_uses_its_result(self):
+        self.old_install()
+        real_rename = os.rename
+
+        def other_instance_wins(source, target):
+            with patch.object(data.os, 'rename', real_rename):
+                other = prepare_data_directory(self.legacy, self.data, now=NOW)
+            self.assertTrue(other.migrated)
+            return real_rename(source, target)
+
+        with patch.object(data.os, 'rename', other_instance_wins):
+            location = self.prepare()
+        self.assertEqual(location.directory, self.data)
+        self.assertFalse(location.fallback)
+        self.assertEqual(self.leftover_staging(), [])
+        self.assertEqual(len(list((self.data / BACKUP_FOLDER).iterdir())), 1)
 
     def test_mismatched_copy_is_rejected(self):
         before = self.old_install()
@@ -181,7 +277,7 @@ class MigrationTests(unittest.TestCase):
 
         def corrupting_copy(source, target, *args, **kwargs):
             result = real_copy2(source, target, *args, **kwargs)
-            if '.migrating-' in str(target):
+            if BACKUP_FOLDER not in str(target):
                 Path(target).write_bytes(b'corrupt')
             return result
 
@@ -189,7 +285,7 @@ class MigrationTests(unittest.TestCase):
             location = self.prepare()
         self.assertTrue(location.fallback)
         self.assertEqual(location.directory, self.legacy)
-        self.assertFalse((self.data / 'ADBconfig.ini').exists())
+        self.assertFalse(self.data.exists())
         self.assertEqual(snapshot(self.legacy), before)
 
     def test_same_folder_is_a_no_op(self):
@@ -256,6 +352,32 @@ class GuiWiringTests(unittest.TestCase):
     def test_engine_environment_is_inherited_until_configured(self):
         self.gui.DATA_DIR = None
         self.assertIsNone(self.gui.engine_environment())
+
+
+    def begin_with_engine(self, verify_output):
+        gui = self.gui
+        fake = self.root / 'fake_engine.py'
+        fake.write_text(f'print({verify_output!r})\n', encoding='utf-8')
+        warnings = []
+        window = type('FakeWindow', (), {'_set_connection_warning': lambda _, text, reveal=False: warnings.append(text),
+                                         'save_settings': lambda _, settings: None})()
+        settings = type('Settings', (), dict(buy_covenant=True, buy_mystic=True, buy_friendship=False, debug=False))()
+        with patch.object(gui, 'engine_command', lambda: [sys.executable, str(fake)]), \
+                patch.multiple(gui, DATA_DIR=self.data, APP_DIR=self.engine):
+            gui.RefreshGui._begin_refresh(window, settings)
+        return warnings
+
+    def test_older_engine_is_refused_when_data_moved(self):
+        warnings = self.begin_with_engine('E7 engine: gui session v1; background session v1; imports OK')
+        self.assertEqual(len(warnings), 1)
+        self.assertIn('older than the GUI', warnings[0])
+
+    def test_matching_engine_is_accepted(self):
+        self.assertEqual(self.begin_with_engine('E7 engine: background session v1; user data folder v1; imports OK'), [])
+
+    def test_shipped_engine_advertises_the_data_folder(self):
+        text = (Path(__file__).parent / 'E7ADBShopRefresh.py').read_text(encoding='utf-8')
+        self.assertIn('user data folder v1', text)
 
 
 class EngineHistoryPathTests(unittest.TestCase):
