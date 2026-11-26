@@ -10,6 +10,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import e7_user_data as data
@@ -423,9 +424,55 @@ class SearchTests(unittest.TestCase):
     def test_search_limit_keeps_it_bounded(self):
         for index in range(12):
             (self.desktop / f'folder {index:02}').mkdir()
-        older_install(self.desktop / 'zz E7 0.2.7')
+        older_install(self.desktop / 'folder 00' / 'E7 0.2.7')  # one level down: never reached
         with patch.object(data, 'SEARCH_LIMIT', 5):
             self.assertEqual(self.find(), [])
+        self.assertEqual(len(self.find()), 1)
+
+    def test_search_limit_stops_the_whole_root(self):
+        for index in range(12):
+            (self.desktop / f'folder {index:02}' / 'inner').mkdir(parents=True)
+        scanned = []
+        real_scandir = os.scandir
+
+        def counting(folder):
+            scanned.append(Path(folder))
+            return real_scandir(folder)
+
+        with patch.object(data, 'SEARCH_LIMIT', 5), patch.object(data.os, 'scandir', counting):
+            data.find_older_installs([(self.desktop, 2)])
+        self.assertEqual(scanned, [self.desktop])  # budget spent on the first level: no deeper listing
+
+    def test_cloud_placeholder_folders_are_searched_but_links_are_not(self):
+        older_install(self.desktop / 'E7 0.2.7')
+        real_lstat = os.lstat
+
+        def tagged(tag):
+            def fake(path, *args, **kwargs):
+                info = real_lstat(path, *args, **kwargs)
+                if Path(path).name == 'E7 0.2.7':
+                    return SimpleNamespace(st_file_attributes=data.FILE_ATTRIBUTE_REPARSE_POINT | 0x10,
+                                           st_reparse_tag=tag, st_mode=info.st_mode)
+                return info
+            return fake
+
+        with patch.object(data.os, 'lstat', tagged(0x9000601A)):  # OneDrive Files On-Demand
+            self.assertEqual([install.name for install in self.find()], ['E7 0.2.7'])
+        with patch.object(data.os, 'lstat', tagged(0xA0000003)):  # a junction
+            self.assertEqual(self.find(), [])
+
+    def test_linked_runtime_inside_a_folder_is_not_followed(self):
+        import subprocess
+        if os.name != 'nt':
+            self.skipTest('junctions are Windows-only')
+        target = older_install(self.root / 'elsewhere' / 'E7 hidden')
+        link = self.desktop / 'E7 decoy' / 'runtime'
+        link.parent.mkdir()
+        result = subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(target)], capture_output=True)
+        if result.returncode:
+            self.skipTest('mklink /J failed')
+        self.addCleanup(os.rmdir, link)
+        self.assertEqual(self.find(), [])
 
     def test_default_roots_use_known_folders(self):
         known = {'Desktop': self.desktop, 'Downloads': self.downloads}
@@ -439,11 +486,11 @@ class SearchTests(unittest.TestCase):
         roots = data.default_search_roots(self.app, os_name='nt', home=self.root, known_folder=broken)
         self.assertEqual(roots[1:], [(self.desktop, 2), (self.downloads, 2)])
 
-    def test_default_roots_drop_duplicates(self):
-        app = self.desktop / 'E7 0.2.8'
+    def test_default_roots_drop_duplicates_keeping_the_deeper_search(self):
+        app = self.desktop / 'E7 0.2.8'  # extracted straight onto the Desktop
         known = {'Desktop': self.desktop, 'Downloads': self.desktop}
         self.assertEqual(data.default_search_roots(app, os_name='nt', known_folder=known.__getitem__),
-                         [(self.desktop, 1)])
+                         [(self.desktop, 2)])
 
     def test_dialog_text_for_none_one_and_several(self):
         from e7_import_dialog import describe
@@ -453,6 +500,13 @@ class SearchTests(unittest.TestCase):
                          f'Found settings and history from E7 0.2.7 ({self.releases}). Import them?')
         older_install(self.desktop / 'E7 0.2.6')
         self.assertIn('from 2 older versions', describe(self.find())[0])
+
+    def test_dialog_text_survives_impossible_times(self):
+        from e7_import_dialog import describe, _shorten
+        for when in (-1e12, 1e15, float('nan')):
+            install = data.OlderInstall(self.desktop / 'E7', self.desktop / 'E7' / 'runtime', (), when)
+            self.assertIn('date unknown', describe([install])[1])
+        self.assertEqual(len(_shorten('x' * 400)), 110)
 
 
 class ImportTests(unittest.TestCase):
@@ -539,6 +593,84 @@ class ImportTests(unittest.TestCase):
         self.assertTrue(any('replaced are in' in event for event in events))
         self.assertEqual(self.leftovers(), [])
 
+    def test_repeated_replace_keeps_backups_flat(self):
+        self.fresh_start()
+        (self.data / 'ShopRefreshGUI.ini').write_text('[GUI]\nfirst = yes\n', encoding='utf-8')
+        data.import_older_install(self.old, self.data, replace=True, now=NOW)
+        later = NOW + datetime.timedelta(minutes=5)
+        data.import_older_install(self.old, self.data, replace=True, now=later)
+        backups = sorted(path.name for path in (self.data / BACKUP_FOLDER).iterdir())
+        self.assertEqual(backups, ['replaced-20261125-120000', 'replaced-20261125-120500',
+                                   'runtime-20261125-120000', 'runtime-20261125-120500'])
+        self.assertFalse((self.data / BACKUP_FOLDER / 'replaced-20261125-120500' / BACKUP_FOLDER).exists())
+        self.assertEqual((self.data / BACKUP_FOLDER / 'replaced-20261125-120000' / 'ShopRefreshGUI.ini')
+                         .read_text(encoding='utf-8'), '[GUI]\nfirst = yes\n')
+
+    def test_source_and_settings_folder_inside_one_another_are_refused(self):
+        self.fresh_start()
+        (self.data / 'ShopRefreshGUI.ini').write_text('[GUI]\n', encoding='utf-8')
+        data.import_older_install(self.old, self.data, replace=True, now=NOW)
+        backup = self.data / BACKUP_FOLDER / 'runtime-20261125-120000'
+        before = snapshot(self.data)
+        with self.assertRaises(data.ImportRefused):
+            data.import_older_install(backup, self.data, replace=True, now=NOW)
+        self.assertEqual(snapshot(self.data), before)
+        inside = self.old / 'ShopRefreshHistory' / 'nested settings'
+        old_before = snapshot(self.old)
+        with self.assertRaises(data.ImportRefused):
+            data.import_older_install(self.old, inside, replace=True, now=NOW)
+        self.assertEqual(snapshot(self.old), old_before)
+
+    def test_failed_rollback_names_where_the_settings_are(self):
+        self.fresh_start()
+        (self.data / 'ShopRefreshGUI.ini').write_text('[GUI]\nmine\n', encoding='utf-8')
+        real_rename = os.rename
+
+        def failing(source, target):
+            if '.migrating-' in Path(source).name or '.replaced-' in Path(source).name:
+                raise PermissionError(13, 'Access is denied', str(source))
+            return real_rename(source, target)
+
+        with patch.object(data.os, 'rename', failing), self.assertRaises(OSError) as raised:
+            data.import_older_install(self.old, self.data, replace=True, now=NOW)
+        aside = [path for path in self.data.parent.iterdir() if '.replaced-' in path.name]
+        self.assertEqual(len(aside), 1)
+        self.assertIn(str(aside[0]), str(raised.exception))
+        self.assertEqual((aside[0] / 'ShopRefreshGUI.ini').read_text(encoding='utf-8'), '[GUI]\nmine\n')
+
+    def test_cleanup_failure_after_the_swap_does_not_fail_the_import(self):
+        self.fresh_start()
+        (self.data / 'ShopRefreshGUI.ini').write_text('[GUI]\n', encoding='utf-8')
+        real_remove = data._remove_tree
+
+        def failing(folder):
+            if '.replaced-' in Path(folder).name:
+                raise OSError(32, 'in use')
+            return real_remove(folder)
+
+        with patch.object(data, '_remove_tree', failing):
+            events = data.import_older_install(self.old, self.data, replace=True, now=NOW)
+        self.assertIn('Imported', events[0])
+        self.assertIn('budget = 450', (self.data / 'ADBconfig.ini').read_text(encoding='utf-8'))
+
+    def test_edit_inside_an_existing_file_during_import_is_noticed(self):
+        self.fresh_start()
+        history = self.data / 'ShopRefreshHistory'
+        history.mkdir()
+        (history / 'ADB_History.csv').write_text('Duration\n1\n', encoding='utf-8')
+        real_stage = data._stage
+
+        def append_meanwhile(*args, **kwargs):
+            result = real_stage(*args, **kwargs)
+            with open(history / 'ADB_History.csv', 'a', encoding='utf-8') as file:
+                file.write('2\n')
+            return result
+
+        with patch.object(data, '_stage', append_meanwhile), self.assertRaises(data.ImportRefused):
+            data.import_older_install(self.old, self.data, replace=True, now=NOW)
+        self.assertEqual((history / 'ADB_History.csv').read_text(encoding='utf-8'), 'Duration\n1\n2\n')
+        self.assertEqual(self.leftovers(), [])
+
     def test_copy_failure_leaves_the_folder_as_it_was(self):
         self.fresh_start()
         data.record_fresh_start(self.data, now=NOW)
@@ -623,6 +755,7 @@ class GuiWiringTests(unittest.TestCase):
         (self.engine / 'ADBconfig.ini').write_text('[Settings]\nbudget = 300\n', encoding='utf-8')
         self.data = self.root / 'user data'
         # No dialog and no search of the real Desktop/Downloads from these tests.
+        self.real_offer = gui.offer_older_settings
         offer = patch.object(gui, 'offer_older_settings', return_value=[])
         self.offer = offer.start()
         self.addCleanup(offer.stop)
@@ -670,6 +803,28 @@ class GuiWiringTests(unittest.TestCase):
         events = self.gui.apply_import_choice(('import', install), self.data)
         self.assertIn('failed', events[0])
         self.assertIn('was not changed', events[0])
+
+    def test_closing_the_startup_question_counts_as_start_fresh(self):
+        import e7_import_dialog
+        self.data.mkdir()
+
+        class Closed:
+            def __init__(self, *args, **kwargs):
+                self.choice = None
+
+        with patch.object(self.gui.tk, 'Tk'), patch.object(self.gui, 'enable_dpi_awareness'), \
+                patch.object(self.gui, 'older_installs', return_value=[]), \
+                patch.object(e7_import_dialog, 'ImportDialog', Closed):
+            events = self.real_offer(self.data)
+        self.assertIn('Import settings from an older version', events[0])
+        self.assertTrue((self.data / MARKER).exists())
+
+    def test_no_display_searches_nothing_and_asks_next_start(self):
+        with patch.object(self.gui.tk, 'Tk', side_effect=self.gui.tk.TclError('no display')), \
+                patch.object(self.gui, 'enable_dpi_awareness'), \
+                patch.object(self.gui, 'older_installs') as search:
+            self.assertEqual(self.real_offer(self.data), [])
+        search.assert_not_called()
 
     def test_apply_choice_import_copies(self):
         older = self.root / 'E7 0.2.7' / 'runtime'

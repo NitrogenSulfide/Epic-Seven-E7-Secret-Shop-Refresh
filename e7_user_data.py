@@ -147,6 +147,14 @@ def _stage(legacy, staging, items, now, replaced=None, **details):
             _verify(source, target)
     if replaced is not None:
         for name in _user_files(replaced):
+            if name == BACKUP_FOLDER:  # earlier backups move along flat, never nested a level deeper
+                for old in sorted((replaced / name).iterdir()):
+                    target = staging / BACKUP_FOLDER / old.name
+                    if target.exists():
+                        raise MigrationError(f'{target} already exists')
+                    _copy(old, target)
+                    _verify(old, target)
+                continue
             target = staging / BACKUP_FOLDER / f'replaced-{stamp}' / name
             target.parent.mkdir(parents=True, exist_ok=True)
             _copy(replaced / name, target)
@@ -255,6 +263,8 @@ def prepare_data_directory(legacy_folder, data_folder=None, *, environ=None, now
 
 INSTALL_MARKER = 'ShopRefreshGUI.ini'  # an older install is recognised by its GUI settings
 FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+# Symlinks and junctions are "name surrogates"; OneDrive's cloud placeholders are not, and are searched.
+IO_REPARSE_TAG_NAME_SURROGATE = 0x20000000
 SEARCH_LIMIT = 3000  # folders looked at per search root; keeps a start fast on cluttered folders
 
 
@@ -296,6 +306,8 @@ def describe_install(folder, *, require_gui_settings=True):
     if not require_gui_settings:  # a folder the player chose: accept the runtime folder itself too
         places.append((folder, folder.parent if folder.name.lower() == 'runtime' else folder))
     for runtime, release in places:
+        if runtime != folder and _is_link(runtime):  # a linked runtime folder is not followed either
+            continue
         try:
             items = tuple(legacy_items(runtime))
         except OSError:
@@ -310,10 +322,15 @@ def _is_link(entry):
     try:
         if entry.is_symlink():
             return True
+        path = getattr(entry, 'path', entry)
         isjunction = getattr(os.path, 'isjunction', None)
-        if isjunction is not None and isjunction(entry.path):
+        if isjunction is not None and isjunction(path):
             return True
-        return bool(getattr(entry.stat(follow_symlinks=False), 'st_file_attributes', 0) & FILE_ATTRIBUTE_REPARSE_POINT)
+        info = os.lstat(path)
+        if not getattr(info, 'st_file_attributes', 0) & FILE_ATTRIBUTE_REPARSE_POINT:
+            return False
+        tag = getattr(info, 'st_reparse_tag', 0)
+        return not tag or bool(tag & IO_REPARSE_TAG_NAME_SURROGATE)
     except OSError:
         return True
 
@@ -336,30 +353,41 @@ def find_older_installs(roots, exclude=()):
     excluded = {_resolved(path) for path in exclude}
     found = {}
     for root, depth in roots:
-        level, looked_at = [Path(root)], 0
+        level, budget = [Path(root)], [SEARCH_LIMIT]
         for _ in range(depth):
             deeper = []
             for folder in level:
-                try:
-                    with os.scandir(folder) as entries:
-                        children = [entry for entry in entries if entry.is_dir(follow_symlinks=False)]
-                except OSError:
-                    continue
-                for entry in children:
-                    looked_at += 1
-                    if looked_at > SEARCH_LIMIT:
-                        break
-                    if _is_link(entry):
-                        continue
-                    install = describe_install(entry.path)
-                    if install is None:
-                        deeper.append(Path(entry.path))
-                        continue
-                    key = _resolved(install.runtime)
-                    if key not in excluded:
-                        found.setdefault(key, install)
+                if budget[0] <= 0:
+                    break
+                deeper += _search_folder(folder, budget, excluded, found)
             level = deeper
     return sorted(found.values(), key=lambda install: install.last_used, reverse=True)
+
+
+def _search_folder(folder, budget, excluded, found):
+    """Look at one folder's subfolders; returns those to look inside next. Stops when `budget` runs out."""
+    deeper = []
+    try:
+        with os.scandir(folder) as entries:
+            for entry in entries:
+                if budget[0] <= 0:
+                    break
+                try:
+                    if not entry.is_dir(follow_symlinks=False) or _is_link(entry):
+                        continue
+                except OSError:
+                    continue  # one unreadable entry does not end the search of its folder
+                budget[0] -= 1
+                install = describe_install(entry.path)
+                if install is None:
+                    deeper.append(Path(entry.path))
+                    continue
+                key = _resolved(install.runtime)
+                if key not in excluded:
+                    found.setdefault(key, install)
+    except OSError:
+        pass
+    return deeper
 
 
 def _known_folder(name):
@@ -376,6 +404,8 @@ def _known_folder(name):
     path = ctypes.c_wchar_p()
     ctypes.oledll.shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None, ctypes.byref(path))
     try:
+        if not path.value:
+            raise OSError(f'no {name} folder')
         return Path(path.value)
     finally:
         ctypes.windll.ole32.CoTaskMemFree(path)
@@ -390,7 +420,7 @@ def default_search_roots(app_folder, *, os_name=None, home=None, known_folder=No
         if os_name == 'nt':
             try:
                 folder = (known_folder or _known_folder)(name)
-            except (OSError, AttributeError, ValueError):
+            except (OSError, AttributeError, ValueError, TypeError):
                 folder = None
         if folder is None:
             try:
@@ -398,13 +428,12 @@ def default_search_roots(app_folder, *, os_name=None, home=None, known_folder=No
             except (RuntimeError, OSError):
                 continue
         roots.append((Path(folder), 2))
-    unique, seen = [], set()
+    unique = {}  # the same folder twice (e.g. this release sits in Downloads): keep the deeper search
     for folder, depth in roots:
         key = _resolved(folder)
-        if key not in seen:
-            seen.add(key)
-            unique.append((folder, depth))
-    return unique
+        if key not in unique or unique[key][1] < depth:
+            unique[key] = (unique[key][0] if key in unique else folder, depth)
+    return list(unique.values())
 
 
 def needs_import_choice(location):
@@ -425,6 +454,24 @@ def record_fresh_start(data_folder, now=None):
         skipped='started fresh; no older settings imported'), indent=2), encoding='utf-8')
 
 
+def _fingerprint(folder):
+    """Every file in a settings folder with its size and time, to notice a save during an import."""
+    folder = Path(folder)
+    result = []
+    for path in sorted(folder.rglob('*')) if folder.is_dir() else ():
+        relative = path.relative_to(folder)
+        if relative.parts[0] == MARKER or relative.parts[0].startswith('.write-test-'):
+            continue
+        try:
+            info = path.stat()
+        except OSError:
+            continue
+        is_file = path.is_file()
+        result.append((relative.as_posix(), is_file, info.st_size if is_file else 0,
+                       info.st_mtime_ns if is_file else 0))
+    return result
+
+
 def has_user_data(data_folder):
     """True when the settings folder already holds settings or history (not just bookkeeping)."""
     return bool(_user_files(data_folder))
@@ -440,37 +487,54 @@ def import_older_install(source_runtime, data_folder, *, replace=False, now=None
     are then kept, checked, under legacy-backup/replaced-<stamp>/.
     Returns Activity-log lines; raises ImportRefused or OSError.
     """
-    source, data = Path(source_runtime), Path(data_folder).absolute()
+    source = Path(source_runtime)
+    data = _resolved(data_folder)  # a linked settings folder: work on what it points to, keep the link
     now = now or datetime.datetime.now()
     items = legacy_items(source)
     if not items:
         raise ImportRefused(f'No settings or history were found in {source}.')
     if _same_folder(source, data):
         raise ImportRefused(f'{source} is already the settings folder.')
+    real_source = _resolved(source)
+    if data in real_source.parents or real_source in data.parents or data.parent == data:
+        raise ImportRefused(f"{source} and the settings folder {data} are inside one another; "
+                            "choose an older version's own folder.")
     current = _user_files(data)
     if current and not replace:
         raise ImportRefused(f'The settings folder {data} already holds settings; nothing was imported.')
+    before = _fingerprint(data)
     staging = data.parent / f'.{data.name}.migrating-{uuid.uuid4().hex}'
     aside = data.parent / f'.{data.name}.replaced-{uuid.uuid4().hex}'
+    swapped = False
     try:
         data.parent.mkdir(parents=True, exist_ok=True)
         backup_name = _stage(source, staging, items, now, replaced=data if current else None, imported=True)
         if data.exists():
             os.rename(data, aside)  # holds only what the backup above already has
-            if _user_files(aside) != current:  # something was saved meanwhile: keep it, import nothing
-                os.rename(aside, data)
-                raise ImportRefused(f'The settings folder {data} changed during the import; nothing was imported.')
             try:
+                if _fingerprint(aside) != before:  # something was saved meanwhile: keep it, import nothing
+                    raise ImportRefused(f'The settings folder {data} changed during the import; nothing was imported.')
                 os.rename(staging, data)
-            except OSError:
-                os.rename(aside, data)
+                swapped = True
+            except BaseException as error:
+                try:
+                    os.rename(aside, data)
+                except OSError as undo:
+                    raise MigrationError(f'{error}; the current settings could not be put back ({undo}) and '
+                                         f'are in {aside}: rename that folder to {data.name}.') from error
                 raise
-            _remove_tree(aside)
         else:
             os.rename(staging, data)
+            swapped = True
     except BaseException:
-        _remove_tree(staging)
+        if not swapped:
+            _remove_tree(staging)
         raise
+    if aside.exists():
+        try:
+            _remove_tree(aside)  # the swap is done; a copy left behind never fails the import
+        except OSError:
+            pass
     stamp = now.strftime('%Y%m%d-%H%M%S')
     events = [f'Imported settings and history from {source} into {data} ({", ".join(items)}).',
               f'{source} was not changed; a backup of what was imported is in {data / BACKUP_FOLDER / backup_name}.']

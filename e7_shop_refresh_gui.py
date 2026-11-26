@@ -233,15 +233,23 @@ def configure_data_directory(directory, events=()):
     HISTORY_FILE = DATA_DIR / "ShopRefreshHistory" / "ADB_History.csv"
 
 
-def older_installs():
+def _same_place(first, second):
+    try:
+        return Path(first).resolve() == Path(second).resolve()
+    except OSError:
+        return Path(first).absolute() == Path(second).absolute()
+
+
+def older_installs(data_dir=None):
     """Older versions beside this one, on the Desktop or in Downloads (bounded search)."""
-    return find_older_installs(default_search_roots(PROJECT_DIR), exclude=(APP_DIR, DATA_DIR or APP_DIR))
+    data_dir = data_dir or DATA_DIR or APP_DIR
+    return find_older_installs(default_search_roots(PROJECT_DIR), exclude=(APP_DIR, data_dir))
 
 
 def apply_import_choice(choice, data_dir):
     """Carry out the import dialog's answer; returns Activity-log lines. Never raises."""
     if choice is None:
-        return []  # closed: ask again next start
+        return []  # cancelled
     action, install = choice
     if action == 'fresh':
         try:
@@ -258,26 +266,35 @@ def apply_import_choice(choice, data_dir):
 
 
 def offer_older_settings(data_dir):
-    """First start of a fresh extract: offer the settings and history of an older version."""
-    installs = older_installs()
+    """First start of a fresh extract: offer the settings and history of an older version.
+
+    Closing the question counts as Start fresh: the first start saves the GUI
+    settings anyway, after which the question could not be asked again, and
+    the Settings button stays available.
+    """
     try:
         enable_dpi_awareness()
         root = tk.Tk()
     except tk.TclError:
-        return []  # no display: ask next start
-    root.withdraw()
+        return []  # no display: nothing searched, ask next start
     try:
+        root.withdraw()
         try:
             root.iconbitmap(default=str(ASSET_DIR / 'shopkeeper-v2.ico'))
         except tk.TclError:
             pass
         from e7_import_dialog import ImportDialog
-        dialog = ImportDialog(root, installs, startup=True)
+        dialog = ImportDialog(root, older_installs(data_dir), startup=True)
         root.wait_window(dialog)
         choice = dialog.choice
+    except tk.TclError as error:
+        return [f'Could not show the question about older settings ({error}); you will be asked next start.']
     finally:
-        root.destroy()
-    return apply_import_choice(choice, data_dir)
+        try:
+            root.destroy()
+        except tk.TclError:
+            pass
+    return apply_import_choice(choice or ('fresh', None), data_dir)
 
 
 def engine_environment():
@@ -725,7 +742,7 @@ class RefreshGui(tk.Tk):
         if self.process and self.process.poll() is None:
             messagebox.showinfo('Import settings', 'Stop the session first.', parent=self)
             return
-        if DATA_DIR is None or Path(DATA_DIR) == APP_DIR:
+        if DATA_DIR is None or _same_place(DATA_DIR, APP_DIR):
             messagebox.showinfo('Import settings', f'Settings are kept in {APP_DIR} for this run, so there is '
                                 'nothing to import into. Check the Activity log for the reason.', parent=self)
             return
@@ -735,13 +752,17 @@ class RefreshGui(tk.Tk):
         if dialog.choice is None:
             return
         install = dialog.choice[1]
-        replace = has_user_data(DATA_DIR)
+        try:
+            self._flush_autosave()  # first, so the check below and the backup see the latest settings
+            replace = has_user_data(DATA_DIR)
+        except OSError as error:
+            messagebox.showerror('Import settings', f'Nothing was imported.\n\n{error}', parent=self)
+            return
         if replace and not messagebox.askyesno(
                 'Replace current settings?',
                 f'Replace the current settings and history with those from {install.folder}?\n\n'
                 f'The current ones are kept in {Path(DATA_DIR) / "legacy-backup"}.', parent=self):
             return
-        self._flush_autosave()  # the backup then holds the latest settings
         self._autosave_suspended = True
         try:
             events = import_older_install(install.runtime, DATA_DIR, replace=replace)

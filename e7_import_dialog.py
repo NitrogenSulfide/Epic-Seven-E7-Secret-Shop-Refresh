@@ -6,7 +6,7 @@ returns the player's choice in `choice`:
 
 * ('import', OlderInstall)  import from that install
 * ('fresh', None)           start with default settings (startup only)
-* None                      closed or cancelled: nothing changes
+* None                      closed or cancelled (at startup the caller treats this as Start fresh)
 """
 import datetime
 import tkinter as tk
@@ -17,10 +17,23 @@ from e7_user_data import describe_install
 TITLE = 'Settings from an older version'
 
 
+LIST_WIDTH_LIMIT = 110  # characters; longer paths are cut in the middle, not the dialog widened
+
+
 def _when(install):
-    if not install.last_used:
-        return 'date unknown'
-    return datetime.datetime.fromtimestamp(install.last_used).strftime('%Y-%m-%d %H:%M')
+    try:
+        if install.last_used:
+            return datetime.datetime.fromtimestamp(install.last_used).strftime('%Y-%m-%d %H:%M')
+    except (OSError, OverflowError, ValueError):  # a 1970 or far-future time from an unzip tool
+        pass
+    return 'date unknown'
+
+
+def _shorten(text, limit=LIST_WIDTH_LIMIT):
+    if len(text) <= limit:
+        return text
+    keep = (limit - 1) // 2
+    return f'{text[:keep]}…{text[-(limit - 1 - keep):]}'
 
 
 def describe(installs):
@@ -56,7 +69,8 @@ class ImportDialog(tk.Toplevel):
         ttk.Label(body, text=detail, wraplength=dp(540)).grid(row=1, column=0, sticky='w', pady=(dp(6), 0))
         self.listbox = None
         if len(self.installs) > 1:
-            lines = [f'{install.name}  —  {install.location}  —  last used {_when(install)}' for install in self.installs]
+            lines = [_shorten(f'{install.name}  —  {install.location}  —  last used {_when(install)}')
+                     for install in self.installs]
             self.listbox = tk.Listbox(body, height=min(len(lines), 6), width=max(60, max(map(len, lines)) + 2),
                                       activestyle='none', exportselection=False)
             for line in lines:
@@ -71,18 +85,30 @@ class ImportDialog(tk.Toplevel):
             self.import_button = ttk.Button(buttons, text='Import', command=self._import, default='active')
             self.import_button.grid(row=0, column=column, padx=(0, dp(6)))
             column += 1
-            self.bind('<Return>', lambda _event: self._import())
+            self.bind('<Return>', self._on_return)
         ttk.Button(buttons, text='Choose another folder…', command=self._choose).grid(
             row=0, column=column, padx=(0, dp(6)))
         closing = ('Start fresh', self._fresh) if startup else ('Cancel', self.destroy)
         ttk.Button(buttons, text=closing[0], command=closing[1]).grid(row=0, column=column + 1)
         self.bind('<Escape>', lambda _event: self.destroy())
-        self.protocol('WM_DELETE_WINDOW', self.destroy)  # closing asks again next start
+        self.protocol('WM_DELETE_WINDOW', self.destroy)
         self.update_idletasks()
         self._center(master)
         self.deiconify()
-        self.grab_set()  # modal: the main window waits for the answer
+        try:
+            if self.tk.call('tk', 'windowingsystem') == 'x11':
+                self.wait_visibility()  # X11 maps windows asynchronously; a grab needs a viewable window
+            self.grab_set()  # modal: the main window waits for the answer
+        except tk.TclError:
+            pass  # still usable without the grab
         self.focus_set()
+
+    def _on_return(self, event):
+        """Enter presses the focused button; elsewhere it means Import."""
+        if isinstance(event.widget, ttk.Button):
+            event.widget.invoke()
+        else:
+            self._import()
 
     def _center(self, master):
         if master.winfo_viewable():
