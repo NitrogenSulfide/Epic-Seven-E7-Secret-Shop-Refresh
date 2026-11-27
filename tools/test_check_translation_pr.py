@@ -56,7 +56,10 @@ def body():
     gui = git('show', 'origin/main:e7_shop_refresh_gui.py', cwd=SRC)
     engine = git('show', 'origin/main:E7ADBShopRefresh.py', cwd=SRC)
     write('e7_shop_refresh_gui.py', gui); write('E7ADBShopRefresh.py', engine)
-    write('e7_about.py', 'TEXT = "hello"\n'); write('build_release.ps1', 'Write-Host hi\n')
+    build = git('show', 'origin/main:build_release.ps1', cwd=SRC)
+    dialog = git('show', 'origin/main:e7_import_dialog.py', cwd=SRC)
+    write('e7_about.py', 'TEXT = "hello"\n'); write('build_release.ps1', build)
+    write('e7_import_dialog.py', dialog)
     base = commit('base')
 
     good = (gui
@@ -108,6 +111,35 @@ def body():
     scenario('build-script', 1, {'build_release.ps1': 'Write-Host bye\n'}, ['build_release.ps1'], mode='files')
     scenario('duplicate-key', 1, {'e7_shop_refresh_gui.py': good, 'locales/en.json':
                                   '{"budget.label": "Skystone budget", "budget.label": "x"}'}, ['appears twice'])
+
+    # Issue #7: the import dialog is GUI-only; the release script may gain package entries.
+    dialog_en = json.dumps({**EN, 'import.button': 'Import'})
+    dialog_good = dialog.replace("text='Import'", "text=t('import.button')").replace(
+        'import tkinter as tk\n', 'import tkinter as tk\nfrom e7_i18n import t\n', 1)
+    assert "t('import.button')" in dialog_good and 'from e7_i18n import t' in dialog_good
+    scenario('import-dialog', 0, {'e7_import_dialog.py': dialog_good, 'locales/en.json': dialog_en,
+                                  'e7_i18n.py': i18n}, ['e7_import_dialog.py: 1 text moves, nothing else'])
+    entry = "    'e7_import_dialog.py' = 'e7_import_dialog.py'\n"
+    assert entry in build
+
+    def packaged(*lines):
+        return build.replace(entry, entry + ''.join(f'    {line}\n' for line in lines))
+    ok_build = packaged("'e7_i18n.py' = 'e7_i18n.py'", "'locales/en.json' = 'locales/en.json'")
+    refused = ['build_release.ps1: changed. Build']
+    scenario('packaging-ok', 0, {'build_release.ps1': ok_build, 'e7_shop_refresh_gui.py': good, **std},
+             ['only adding e7_i18n.py'])
+    scenario('packaging-ok-files', 0, {'build_release.ps1': ok_build}, ['Read the hunk'], mode='files')
+    scenario('packaging-crlf', 0, {'build_release.ps1': ok_build.replace('\n', '\r\n').encode()},
+             ['only adding e7_i18n.py'], mode='files')
+    scenario('packaging-rename', 1, {'build_release.ps1': packaged("'e7_i18n.py' = 'E7 Secret Shop Refresh.exe'")},
+             refused, mode='files')
+    scenario('packaging-other-file', 1, {'build_release.ps1': packaged("'evil.py' = 'evil.py'")}, refused, mode='files')
+    scenario('packaging-extra-command', 1, {'build_release.ps1': ok_build.replace(
+        '$files = [ordered]@{}', '$files = [ordered]@{}\nRemove-Item C:\\x')}, refused, mode='files')
+    scenario('packaging-outside-map', 1, {'build_release.ps1': build.replace(
+        '$files = [ordered]@{}', "    'e7_i18n.py' = 'e7_i18n.py'\n$files = [ordered]@{}")}, refused, mode='files')
+    scenario('packaging-removed-line', 1, {'build_release.ps1': ok_build.replace("    'VERSION' = 'VERSION'\n", ''),
+                                           'e7_shop_refresh_gui.py': good, **std}, refused)
 
     # Bypasses Neon found (2026-11-25 review).
     cookie = ('# -*- coding: utf-7 -*-\n' + good).encode('utf-8')

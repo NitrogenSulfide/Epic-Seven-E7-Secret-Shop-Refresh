@@ -42,12 +42,14 @@ import subprocess
 import sys
 import tokenize
 
-# Modules only the GUI imports (checked against origin/main 0.2.7). The engine
-# never loads these, so moving their text into t() cannot change engine output.
+# Modules only the GUI imports (checked against origin/main 0.2.7, plus the
+# older-version import dialog from 90d4538). The engine never loads these, so
+# moving their text into t() cannot change engine output.
 GUI_FILES = {
     'e7_shop_refresh_gui.py', 'e7_about.py', 'e7_appearance.py', 'e7_connection.py',
     'e7_setup.py', 'e7_tracker.py', 'e7_report.py', 'e7_session_estimate.py',
     'e7_elevation.py', 'e7_links.py', 'e7_process.py', 'e7_window_preview.py',
+    'e7_import_dialog.py',
 }
 NEW_CODE_FILES = {'e7_i18n.py'}
 LOCALE_DIR = 'locales/'
@@ -76,6 +78,12 @@ MATCHED_TEXT = [
 # The Activity log picks a colour by searching for these words (e7_shop_refresh_gui._event).
 COLOUR_WORDS = re.compile(r'failed|error|exception|traceback|not recognized|could not|'
                           r'cannot|stop|pause|waiting|cancel|needs help', re.I)
+# The release script copies an explicit file list into the package, so the
+# translation PR has to add e7_i18n.py and the locale files to it. That one kind
+# of change is allowed: new entries inside the $mapping block, nothing removed.
+PACKAGING_SCRIPT = 'build_release.ps1'
+PACKAGING_ENTRY = re.compile(r"^ {4}'(e7_i18n\.py|locales/[A-Za-z_]+\.json)' = '(?P<member>[^']*)'$")
+MAPPING_START = '$mapping = [ordered]@{'
 PLAIN_NAME = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 
 
@@ -141,6 +149,38 @@ def sensitive(path):
     return any(fnmatch.fnmatchcase(lower, pattern) for pattern in SENSITIVE)
 
 
+def packaging_entries_only(repo, base, head):
+    """True if base..head only adds e7_i18n.py / locales/*.json entries to the
+    release script's $mapping block, each copied under its own name."""
+    old, new = show_bytes(repo, base, PACKAGING_SCRIPT), show_bytes(repo, head, PACKAGING_SCRIPT)
+    if old is None or new is None:
+        return False
+    try:
+        old_lines = old.decode('utf-8').splitlines()
+        new_lines = new.decode('utf-8').splitlines()
+    except UnicodeDecodeError:
+        return False
+    if MAPPING_START not in old_lines or new_lines.count(MAPPING_START) != 1:
+        return False
+    start = new_lines.index(MAPPING_START)
+    end = next((i for i in range(start + 1, len(new_lines)) if new_lines[i] == '}'), None)
+    if end is None:
+        return False
+    added = 0
+    matcher = difflib.SequenceMatcher(a=old_lines, b=new_lines, autojunk=False)
+    for tag, _i1, _i2, j1, j2 in matcher.get_opcodes():
+        if tag == 'equal':
+            continue
+        if tag != 'insert':
+            return False
+        for j in range(j1, j2):
+            match = PACKAGING_ENTRY.match(new_lines[j])
+            if not (start < j < end and match and match.group('member') == match.group(1)):
+                return False
+            added += 1
+    return added > 0
+
+
 def check_files(repo, base, head, report):
     files = changed_files(repo, base, head)
     if not files:
@@ -149,6 +189,9 @@ def check_files(repo, base, head, report):
         label = {'A': 'added', 'D': 'deleted', 'M': 'changed'}.get(status, f'status {status}')
         if binary:
             report.problem(f'{path}: binary file {label}. Ask why before going further.')
+        elif path == PACKAGING_SCRIPT and status == 'M' and packaging_entries_only(repo, base, head):
+            report.read(f'{path}: {label}, only adding e7_i18n.py / locales/*.json to the package '
+                        'file list. Read the hunk.')
         elif sensitive(path):
             report.problem(f'{path}: {label}. Build, asset, CI, config or licence file; '
                            'a normal PR should not touch it.')
@@ -467,8 +510,8 @@ def check_extraction(repo, base, head, report):
                            'Code using those keys is not re-checked; review those callers by hand.')
     used = set()
     for status, path, _binary in files:
-        if path == ENGLISH:
-            continue
+        if path == ENGLISH or (path == PACKAGING_SCRIPT and status == 'M'):
+            continue  # check_files already judged the release script
         if status == 'D':
             report.problem(f'{path}: deleted. An extraction commit should not delete files.')
         elif path.startswith(LOCALE_DIR):
