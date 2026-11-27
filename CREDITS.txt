@@ -1,4 +1,5 @@
 GUI, enhancements and Windows launcher: NitrogenSulfide (Blue Natto).
+Brazilian Portuguese (PT-BR) localization: Gabriel (Fish7w7).
 
 Original refresh engine: Solunium.
 https://github.com/Solunium/Epic-Seven-E7-Secret-Shop-Refresh

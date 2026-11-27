@@ -1008,7 +1008,7 @@ class GuiTests(unittest.TestCase):
     def test_mouse_scan_results_and_switch_back_preserve_adb_choice(self):
         before=self.app._device_address()
         target=self.choose_mouse_fixture()
-        self.app.log_queue.put((None,'windows',(self.app._connection_check_id,[target],'',None)))
+        self.app.log_queue.put((None,'windows',(self.app._connection_check_id,[target],'',None,None)))
         self.app._drain_log_queue()
         self.assertEqual(self.app.device_box.cget('textvariable'),str(self.app.mouse_target))
         self.app.control_mode.set('ADB');self.app._change_control_mode()

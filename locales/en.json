@@ -47,6 +47,8 @@
   "budget.summary_refreshes": "{count:,} refreshes",
   "common.cancel": "Cancel",
   "common.close": "Close",
+  "common.off": "off",
+  "common.on": "on",
   "connection.adb_check_failed": "ADB check failed. Open your emulator with ADB enabled, then retry.",
   "connection.adb_target": "Emulator / ADB device",
   "connection.adb_unreachable": "Could not reach ADB. Open your emulator, enable/authorize ADB, then retry.",

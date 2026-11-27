@@ -47,6 +47,8 @@
   "budget.summary_refreshes": "{count:,} atualizações",
   "common.cancel": "Cancelar",
   "common.close": "Fechar",
+  "common.off": "desativado",
+  "common.on": "ativado",
   "connection.adb_check_failed": "Falha ao verificar o ADB. Abra o emulador com ADB ativado e tente novamente.",
   "connection.adb_target": "Emulador / dispositivo ADB",
   "connection.adb_unreachable": "Não foi possível acessar o ADB. Abra o emulador, ative e autorize o ADB e tente novamente.",

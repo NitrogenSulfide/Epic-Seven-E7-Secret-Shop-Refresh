@@ -2913,11 +2913,10 @@ class RefreshGui(tk.Tk):
 
     def _update_diagnostics_summary(self):
         settings=self.run_settings
-        enabled, disabled = ('ativado', 'desativado') if current_locale() == 'pt_BR' else ('on', 'off')
 
         def state_label(name):
             active = getattr(settings, name) if settings else getattr(self, name).get()
-            return enabled if active else disabled
+            return t('common.on') if active else t('common.off')
 
         self.diagnostics_summary.set(t('diagnostics.purchase_summary',
             covenant=self.covenant.get(),
