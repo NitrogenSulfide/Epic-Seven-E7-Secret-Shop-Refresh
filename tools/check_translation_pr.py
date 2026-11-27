@@ -84,6 +84,12 @@ COLOUR_WORDS = re.compile(r'failed|error|exception|traceback|not recognized|coul
 PACKAGING_SCRIPT = 'build_release.ps1'
 PACKAGING_ENTRY = re.compile(r"^ {4}'(e7_i18n\.py|locales/[A-Za-z_]+\.json)' = '(?P<member>[^']*)'$")
 MAPPING_START = '$mapping = [ordered]@{'
+MAPPING_KEY = re.compile(r"^\s*'([^']*)'\s*=")
+OTHER_BREAKS = '\r\x0b\x0c\x1c\x1d\x1e\x85  '
+# Values code compares exactly (e7_import_dialog.py choice markers checked in
+# e7_shop_refresh_gui.apply_import_choice). Matched case-sensitively, so the
+# button label 'Import' can still be translated.
+PROTOCOL_VALUES = {'import', 'fresh'}
 PLAIN_NAME = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 
 
@@ -149,22 +155,36 @@ def sensitive(path):
     return any(fnmatch.fnmatchcase(lower, pattern) for pattern in SENSITIVE)
 
 
+def lf_lines(data):
+    """Lines split on LF or CRLF only, or None if the text has any other line
+    break (lone CR, U+2028, NEL, form feed...) that could hide a change."""
+    try:
+        text = data.decode('utf-8').replace('\r\n', '\n')
+    except UnicodeDecodeError:
+        return None
+    if any(c in text for c in OTHER_BREAKS):
+        return None
+    return text.split('\n')
+
+
 def packaging_entries_only(repo, base, head):
     """True if base..head only adds e7_i18n.py / locales/*.json entries to the
     release script's $mapping block, each copied under its own name."""
     old, new = show_bytes(repo, base, PACKAGING_SCRIPT), show_bytes(repo, head, PACKAGING_SCRIPT)
     if old is None or new is None:
         return False
-    try:
-        old_lines = old.decode('utf-8').splitlines()
-        new_lines = new.decode('utf-8').splitlines()
-    except UnicodeDecodeError:
+    old_lines, new_lines = lf_lines(old), lf_lines(new)
+    if old_lines is None or new_lines is None:
         return False
     if MAPPING_START not in old_lines or new_lines.count(MAPPING_START) != 1:
         return False
     start = new_lines.index(MAPPING_START)
     end = next((i for i in range(start + 1, len(new_lines)) if new_lines[i] == '}'), None)
     if end is None:
+        return False
+    # PowerShell refuses duplicate hashtable keys (case-insensitive), which would break the build.
+    keys = [m.group(1).lower() for line in new_lines[start + 1:end] if (m := MAPPING_KEY.match(line))]
+    if len(keys) != len(set(keys)):
         return False
     added = 0
     matcher = difflib.SequenceMatcher(a=old_lines, b=new_lines, autojunk=False)
@@ -501,6 +521,9 @@ def check_extraction(repo, base, head, report):
             if prefix in value:
                 report.problem(f'{ENGLISH}: {key!r} contains {prefix!r}, which the app matches by '
                                'wording. It must stay hard-coded English.')
+        if value.strip() in PROTOCOL_VALUES:
+            report.problem(f'{ENGLISH}: {key!r} is {value!r}, a marker the code compares exactly. '
+                           'It must stay hard-coded.')
     old_en_text = show_text(repo, base, ENGLISH, report)
     if old_en_text is not None:
         old_english = load_locale(old_en_text, f'{base}:{ENGLISH}', report) or {}

@@ -140,6 +140,20 @@ def body():
         '$files = [ordered]@{}', "    'e7_i18n.py' = 'e7_i18n.py'\n$files = [ordered]@{}")}, refused, mode='files')
     scenario('packaging-removed-line', 1, {'build_release.ps1': ok_build.replace("    'VERSION' = 'VERSION'\n", ''),
                                            'e7_shop_refresh_gui.py': good, **std}, refused)
+    # Codex review 2026-11-26.
+    scenario('packaging-u2028', 1, {'build_release.ps1': ok_build.replace(
+        'Set-StrictMode -Version Latest\n', 'Set-StrictMode -Version Latest ', 1)}, refused, mode='files')
+    scenario('packaging-lone-cr', 1, {'build_release.ps1': ok_build.replace(
+        'Set-StrictMode -Version Latest\n', 'Set-StrictMode -Version Latest\r', 1)}, refused, mode='files')
+    scenario('packaging-duplicate', 1, {'build_release.ps1': packaged("'e7_i18n.py' = 'e7_i18n.py'",
+                                                                      "'e7_i18n.py' = 'e7_i18n.py'")}, refused, mode='files')
+    scenario('packaging-case-duplicate', 1, {'build_release.ps1': packaged(
+        "'locales/en.json' = 'locales/en.json'", "'locales/EN.json' = 'locales/EN.json'")}, refused, mode='files')
+    fresh_dialog = dialog_good.replace("self.choice = ('fresh', None)", "self.choice = (t('choice.fresh'), None)")
+    assert fresh_dialog != dialog_good
+    scenario('protocol-marker', 1, {'e7_import_dialog.py': fresh_dialog, 'e7_i18n.py': i18n, 'locales/en.json':
+                                    json.dumps({**EN, 'import.button': 'Import', 'choice.fresh': 'fresh'})},
+             ["'choice.fresh' is 'fresh', a marker"])
 
     # Bypasses Neon found (2026-11-25 review).
     cookie = ('# -*- coding: utf-7 -*-\n' + good).encode('utf-8')
