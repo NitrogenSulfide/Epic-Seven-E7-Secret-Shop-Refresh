@@ -56,3 +56,10 @@ the owner's paid ElevenLabs subscription and chosen by the owner from six
 candidates. Files: purchase-covenant.wav, purchase-mystic.wav. Edits: silence
 trimmed, 30 ms fade-out, gain lowered to sit near the start/end chimes.
 Settings, source and output hashes are recorded in provenance.json.
+
+Gold spending limit coin: Epic Seven Gold coin crop supplied by the owner on
+2026-11-26. The grey background was removed with a colour mask and the rim
+smoothed with a fitted ellipse; coin pixels are otherwise unchanged. Derivative of
+game artwork, not an original project drawing. Epic Seven artwork belongs to its
+respective rightsholders; project GPL does not relicense it.
+Source/output hashes and the edit steps are recorded in provenance.json.

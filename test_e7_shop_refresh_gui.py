@@ -1355,7 +1355,7 @@ class GuiTests(unittest.TestCase):
     def test_currency_art_preserves_transparency_and_fits_counter_size(self):
         from e7_appearance import currency_icons
         images = currency_icons(self.app, PACKAGED_ASSETS, 40)
-        self.assertEqual(set(images), {'spent', 'covenant', 'mystic','friendship'})
+        self.assertEqual(set(images), {'spent', 'covenant', 'mystic', 'friendship', 'gold'})
         for image in images.values():
             self.assertEqual((image.width(),image.height()), (40,40))
 

@@ -1158,8 +1158,13 @@ class RefreshGui(tk.Tk):
                                        command=self._slide_budget, style='TapTiming.Horizontal.TScale')
         self.budget_slider.grid(row=1, column=1, sticky='ew', padx=(dp(10), 0), pady=(dp(4), 0))
         self.settings_widgets.append(self.budget_slider)
-        ttk.Label(amounts, text='Gold spending limit', style='Section.TLabel').grid(
-            row=0, column=2, sticky='w', padx=(dp(10), 0))
+        # The round coin fills its icon tile, so it gets a small gap of its own
+        # before the text (the narrow Skystone gem has that space built in).
+        gold_heading = ttk.Frame(amounts)
+        gold_heading.grid(row=0, column=2, sticky='w', padx=(dp(10), 0))
+        if self.buy_icons.get('gold'):
+            ttk.Label(gold_heading, image=self.buy_icons['gold'], style='Section.TLabel').pack(side='left', padx=(0, dp(5)))
+        ttk.Label(gold_heading, text='Gold spending limit', style='Section.TLabel').pack(side='left')
         self.gold_cap_entry = ttk.Entry(amounts, textvariable=self.gold_cap, font=self.heading_font, width=10,
                                        justify='center', validate='key', validatecommand=whole_number)
         self.gold_cap_entry.grid(row=1, column=2, sticky='ew', padx=(dp(10), 0), pady=(dp(4), 0))

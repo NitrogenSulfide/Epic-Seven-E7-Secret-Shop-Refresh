@@ -167,5 +167,18 @@
         "sha256": "100e39b7e2556cfd69ccbf043a3b07beeff0df7ce9e15962cd8c817ccad07495"
       }
     }
+  },
+  "gold_limit_coin": {
+    "output": "gold-coin.png",
+    "output_sha256": "31c368b98233f849e80b99cabbc0189438ddce00f529466646f1ec0de8207a3a",
+    "input_sha256": "f4824da9696c363e4a008b6f8b354d311bda5c475031e0aab2e26c7ef6e7465d",
+    "input_size": [
+      172,
+      178
+    ],
+    "source": "Owner-supplied Epic Seven Gold coin crop, pasted 2026-11-26",
+    "edit": "Background removed with a colour mask (HSV saturation > 140 and value > 100, largest region, holes filled), rim smoothed by a fitted ellipse drawn anti-aliased at 4x, cropped to the coin (142 x 143). Coin pixels unchanged; no generative tool.",
+    "ui_render": "Shown left of 'Gold spending limit' at the same size as the Skystone budget icon; resized in memory",
+    "rights": "Derivative game artwork; respective rightsholders retain rights. Project GPL does not relicense artwork."
   }
 }
