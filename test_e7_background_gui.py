@@ -24,6 +24,7 @@ def os_named(name):
 
 
 GAME = gui.BackgroundTarget('Epic Seven (Steam)', 'Epic Seven (Steam)', 0xa600005, 0, (0, 0, 3840, 2016))
+LIST_BACKGROUND_GAMES = gui.list_background_games
 
 
 class BackgroundGuiTests(unittest.TestCase):
@@ -74,6 +75,34 @@ class BackgroundGuiTests(unittest.TestCase):
         self.assertIn('never moves your pointer', self.app.device_notice.get())
         self.assertTrue(self.app.debug_check.instate(['disabled']))
         self.assertEqual(str(self.app.start_button.cget('state')), 'normal')
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows background scanner')
+    def test_missing_windows_game_is_localized_in_both_notices(self):
+        self.addCleanup(gui.set_locale, gui.current_locale())
+        english = 'Epic Seven (Steam or STOVE) is not running. Start the game, then try again.'
+        other_error = 'More than one Epic Seven game window is open. Close the extra one, then try again.'
+        self.pump_until(lambda: not self.app._mouse_scan_busy)
+        with patch.object(gui, 'list_background_games', LIST_BACKGROUND_GAMES), \
+                patch('e7_background.WinGameWindow') as window, \
+                patch.object(gui.WindowsCapture, 'list_windows', return_value=[]), \
+                patch.object(gui, 'suggested_mode', wraps=gui.suggested_mode) as suggested_mode:
+            for locale, error, expected in (
+                ('en', ValueError(english), english),
+                ('pt_BR', ValueError(english),
+                 'O Epic Seven (Steam ou STOVE) não está em execução. Abra o jogo e tente novamente.'),
+                ('pt_BR', ValueError(other_error), other_error),
+                ('pt_BR', RuntimeError(english), english),
+            ):
+                with self.subTest(locale=locale, error=repr(error)):
+                    gui.set_locale(locale)
+                    window.side_effect = error
+                    self.app._scan_game_windows()
+                    self.pump_until(lambda: not self.app._mouse_scan_busy)
+                    self.assertEqual(self.app.home_ui_hint.get(), expected)
+                    self.assertEqual(self.app.device_notice.get(), expected)
+                    suggested_mode.assert_called_with(True, [], str(error))
+                    self.assertIsNone(self.app.mode_suggestion)
+                    self.assertTrue(self.app.start_button.instate(['disabled']))
 
     def test_start_launches_the_background_engine_without_native_mouse(self):
         self.pump_until(lambda: self.app.mouse_target.get() == 'Epic Seven (Steam)')

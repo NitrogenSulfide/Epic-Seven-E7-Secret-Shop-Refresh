@@ -4,6 +4,7 @@ import subprocess
 import os
 import re
 from pathlib import Path
+from e7_i18n import t
 
 NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 
@@ -150,7 +151,7 @@ def check_connection(adb, runtime, target=None, *, runner=None, window_probe=Non
     try:
         result = run('devices', '-l')
         if result.returncode:
-            return report((), 'ADB check failed. Open your emulator with ADB enabled, then retry.', ''.join(output))
+            return report((), t('connection.adb_check_failed'), ''.join(output))
         connected = devices(result)
         # Only an explicit Start attempts the selected network endpoint. Scans
         # never connect, choose other devices, or kill an existing ADB server.
@@ -159,10 +160,10 @@ def check_connection(adb, runtime, target=None, *, runner=None, window_probe=Non
             result = run('devices', '-l')
             connected = devices(result) if result.returncode == 0 else ()
         if target and target not in connected:
-            warning = 'Selected emulator is not connected. Open it, enable/authorize ADB, then press Start again.'
+            warning = t('connection.selected_emulator_disconnected')
         elif not connected:
-            warning = ('BlueStacks detected. Select its named endpoint, then press Start to connect.' if endpoints else
-                       'No connected emulator detected. Open your emulator with ADB enabled, then press Start.')
+            warning = (t('connection.bluestacks_detected') if endpoints else
+                       t('connection.no_emulator'))
         else:
             warning = ''
         if warning:
@@ -176,16 +177,16 @@ def check_connection(adb, runtime, target=None, *, runner=None, window_probe=Non
         if google_device:
             visible = (window_probe or google_play_window_open)()
             if visible is not True:
-                warning = ('Emulator connected in the background. Open its window and Epic Seven, then press Start.'
-                           if visible is False else 'Could not verify the Google Play Games window. Open it and retry.')
+                warning = (t('connection.emulator_in_background')
+                           if visible is False else t('connection.google_window_unverified'))
                 return report(connected, warning, ''.join(output))
         activity = run('-s', selected, 'shell', 'dumpsys', 'activity', 'activities')
         # Activity dumps can contain unrelated app history. Do not store them in
         # Diagnostics; only retain the minimal result of this read-only check.
         output.pop()
         if activity.returncode or not epic_seven_resumed(activity.stdout):
-            warning = 'Emulator connected, but Epic Seven is not active. Open Epic Seven in it, then press Start.'
+            warning = t('connection.game_inactive')
             return report(connected, warning, ''.join(output))
         return report(connected, '', ''.join(output), bool(target))
     except (OSError, subprocess.SubprocessError):
-        return report((), 'Could not reach ADB. Open your emulator, enable/authorize ADB, then retry.', ''.join(output))
+        return report((), t('connection.adb_unreachable'), ''.join(output))

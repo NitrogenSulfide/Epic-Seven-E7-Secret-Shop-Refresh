@@ -1,0 +1,63 @@
+"""Look up GUI text in the JSON catalogs shipped with the application."""
+
+from functools import lru_cache
+import json
+from pathlib import Path
+import re
+import sys
+
+LANGUAGES = {'en': 'English', 'pt_BR': 'Português (Brasil)'}
+_locale = 'en'
+
+
+def supported_locale(locale):
+    return locale if locale in LANGUAGES else 'en'
+
+
+def set_locale(locale):
+    """Select the language for this launch before constructing any windows."""
+    global _locale
+    _locale = supported_locale(locale)
+
+
+def current_locale():
+    return _locale
+
+
+def _locale_directory():
+    app = Path(sys.executable) if getattr(sys, 'frozen', False) else Path(__file__)
+    return app.resolve().parent / 'locales'
+
+
+def _unique_strings(pairs):
+    catalog = {}
+    for key, text in pairs:
+        if key in catalog or not isinstance(text, str):
+            raise ValueError('Expected unique keys with string values')
+        catalog[key] = text
+    return catalog
+
+
+@lru_cache(maxsize=16)
+def _load_catalog(locale):
+    if not re.fullmatch(r'[A-Za-z0-9_-]+', locale):
+        return {}
+    try:
+        data = json.loads((_locale_directory() / f'{locale}.json').read_text(encoding='utf-8-sig'),
+                          object_pairs_hook=_unique_strings)
+    except (OSError, ValueError, RecursionError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def t(key, locale=None, /, **values):
+    """Format text in the requested locale, falling back to English, then to the key."""
+    locale = _locale if locale is None else locale
+    for language in (locale, 'en') if locale != 'en' else ('en',):
+        template = _load_catalog(language).get(key)
+        if template is not None:
+            try:
+                return template.format(**values)
+            except (AttributeError, IndexError, KeyError, ValueError):
+                continue
+    return key

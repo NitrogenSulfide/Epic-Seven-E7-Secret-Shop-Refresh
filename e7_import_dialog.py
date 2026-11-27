@@ -13,9 +13,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from e7_user_data import describe_install
-
-TITLE = 'Settings from an older version'
-
+from e7_i18n import t
 
 LIST_WIDTH_LIMIT = 110  # characters; longer paths are cut in the middle, not the dialog widened
 
@@ -26,7 +24,7 @@ def _when(install):
             return datetime.datetime.fromtimestamp(install.last_used).strftime('%Y-%m-%d %H:%M')
     except (OSError, OverflowError, ValueError):  # a 1970 or far-future time from an unzip tool
         pass
-    return 'date unknown'
+    return t('import_settings.date_unknown')
 
 
 def _shorten(text, limit=LIST_WIDTH_LIMIT):
@@ -39,14 +37,14 @@ def _shorten(text, limit=LIST_WIDTH_LIMIT):
 def describe(installs):
     """The question for these search results (kept apart from Tk for tests)."""
     if not installs:
-        return ('No settings from an older version were found next to this one, on the Desktop or in Downloads.',
-                'If you used an older version, choose its folder to bring your settings and history along.')
+        return (t('import_settings.none_found'),
+                t('import_settings.choose_folder_hint'))
     if len(installs) == 1:
         install = installs[0]
-        return (f'Found settings and history from {install.name} ({install.location}). Import them?',
-                f'Last used {_when(install)}. The older folder is only read, never changed.')
-    return (f'Found settings and history from {len(installs)} older versions. Import the selected one?',
-            'The most recently used is selected. The older folders are only read, never changed.')
+        return (t('import_settings.one_found', name=install.name, location=install.location),
+                t('import_settings.last_used', date=_when(install)))
+    return (t('import_settings.several_found', count=len(installs)),
+            t('import_settings.most_recent_selected'))
 
 
 class ImportDialog(tk.Toplevel):
@@ -57,7 +55,7 @@ class ImportDialog(tk.Toplevel):
         ratio = self.winfo_fpixels('1i') / 96.0
         dp = scale or (lambda value: max(1, round(value * ratio)))
         self.withdraw()  # shown once laid out and centred: no flicker in a corner
-        self.title(TITLE)
+        self.title(t('import_settings.title'))
         self.resizable(False, False)
         if master.winfo_viewable():
             self.transient(master)
@@ -69,8 +67,11 @@ class ImportDialog(tk.Toplevel):
         ttk.Label(body, text=detail, wraplength=dp(540)).grid(row=1, column=0, sticky='w', pady=(dp(6), 0))
         self.listbox = None
         if len(self.installs) > 1:
-            lines = [_shorten(f'{install.name}  —  {install.location}  —  last used {_when(install)}')
-                     for install in self.installs]
+            lines = [
+                _shorten(t('import_settings.install_row', name=install.name,
+                           location=install.location, date=_when(install)))
+                for install in self.installs
+            ]
             self.listbox = tk.Listbox(body, height=min(len(lines), 6), width=max(60, max(map(len, lines)) + 2),
                                       activestyle='none', exportselection=False)
             for line in lines:
@@ -82,13 +83,13 @@ class ImportDialog(tk.Toplevel):
         buttons.grid(row=3, column=0, sticky='e', pady=(dp(16), 0))
         column = 0
         if self.installs:
-            self.import_button = ttk.Button(buttons, text='Import', command=self._import, default='active')
+            self.import_button = ttk.Button(buttons, text=t('import_settings.import'), command=self._import, default='active')
             self.import_button.grid(row=0, column=column, padx=(0, dp(6)))
             column += 1
             self.bind('<Return>', self._on_return)
-        ttk.Button(buttons, text='Choose another folder…', command=self._choose).grid(
+        ttk.Button(buttons, text=t('import_settings.choose_another_folder'), command=self._choose).grid(
             row=0, column=column, padx=(0, dp(6)))
-        closing = ('Start fresh', self._fresh) if startup else ('Cancel', self.destroy)
+        closing = (t('import_settings.start_fresh'), self._fresh) if startup else (t('common.cancel'), self.destroy)
         ttk.Button(buttons, text=closing[0], command=closing[1]).grid(row=0, column=column + 1)
         self.bind('<Escape>', lambda _event: self.destroy())
         self.protocol('WM_DELETE_WINDOW', self.destroy)
@@ -138,13 +139,12 @@ class ImportDialog(tk.Toplevel):
         self.destroy()
 
     def _choose(self):
-        folder = filedialog.askdirectory(parent=self, title='Choose the older version\'s folder', mustexist=True)
+        folder = filedialog.askdirectory(parent=self, title=t('import_settings.choose_folder'), mustexist=True)
         if not folder:
             return
         install = describe_install(folder, require_gui_settings=False)
         if install is None:
-            messagebox.showwarning(TITLE, f'No settings or history were found in {folder}.\n\n'
-                                   'Choose the folder of the older version (the one that holds "runtime").',
+            messagebox.showwarning(t('import_settings.title'), t('import_settings.no_data_found', folder=folder),
                                    parent=self)
             return
         self.choice = ('import', install)
