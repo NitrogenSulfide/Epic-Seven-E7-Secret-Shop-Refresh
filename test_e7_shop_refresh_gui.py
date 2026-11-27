@@ -167,6 +167,21 @@ prompt("press enter to exit...", "")
 
 
 class GuiTests(unittest.TestCase):
+    def test_language_choice_saves_without_changing_the_open_window(self):
+        self.assertEqual(self.app.language_box.get(), 'English')
+        self.app.language_box.current(1)
+        self.app.language_box.event_generate('<<ComboboxSelected>>')
+        self.app.update()
+        self.assertEqual(gui.load_language(self.gui_config), 'pt_BR')
+        self.assertEqual(self.app.start_button.cget('text'), 'Start Refresh')
+        self.assertIn('Restart', self.app.language_notice.get())
+
+        self.app.language_box.current(0)
+        self.app.language_box.event_generate('<<ComboboxSelected>>')
+        self.app.update()
+        self.assertEqual(gui.load_language(self.gui_config), 'en')
+        self.assertEqual(self.app.language_notice.get(), '')
+
     def test_purchase_callouts_follow_counts_and_toggles(self):
         for name in ('purchase-covenant.wav', 'purchase-mystic.wav'):
             shutil.copyfile(PACKAGED_ASSETS / name, self.assets / name)
@@ -916,7 +931,7 @@ class GuiTests(unittest.TestCase):
         self.assertIn('Quickstart', titles); self.assertIn('Release notes', titles)
         quickstart = dialog.readers[titles.index('Quickstart')].get('1.0', 'end')
         self.assertIn('Mouse mode', quickstart); self.assertIn('ADB mode', quickstart)
-        self.assertIn(e7_about.TESTED_CLIENTS, quickstart)
+        self.assertIn(e7_about.t('about.tested_clients'), quickstart)
         self.assertIn('Also buy Friendship Points', quickstart)
         self.assertNotIn('unavailable', dialog.readers[titles.index('Release notes')].get('1.0', 'end'))
         self.assertFalse(hasattr(dialog, 'github_button'))

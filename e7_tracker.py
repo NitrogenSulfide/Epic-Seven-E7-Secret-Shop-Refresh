@@ -12,16 +12,30 @@ import tkinter as tk
 from tkinter import ttk
 
 from e7_appearance import ThemeHint, currency_icons
-from e7_i18n import t
+from e7_i18n import current_locale, t
 
 # Statuses that end compact view: the session is stopping, has ended or
 # needs the user. Paused and Waiting for game stay compact and show on the bar.
 RESTORE_STATUSES = frozenset({'Stopping', 'Stopped', 'Finished', 'Needs attention', 'Failed'})
 
+REMAINING_PREFIX = 'Time remaining: '
+
+
+def _remaining_value(value):
+    key = {'Starting…': 'session.remaining_starting',
+           'Unavailable during calibration': 'session.estimate_calibration',
+           'Session stopped': 'session.remaining_stopped',
+           'Complete': 'session.remaining_complete'}.get(value)
+    return t(key) if key else value
+
+
+def remaining_label(text):
+    return t('session.remaining_label', remaining=_remaining_value(text.removeprefix(REMAINING_PREFIX)))
+
 
 def short_remaining(text):
-    value = text.removeprefix('Time remaining: ')
-    return t('tracker.time_left', remaining=value[1:]) if value.startswith('~') else value
+    value = text.removeprefix(REMAINING_PREFIX)
+    return t('tracker.time_left', remaining=value[1:]) if value.startswith('~') else _remaining_value(value)
 
 
 class CompactTracker:
@@ -34,7 +48,8 @@ class CompactTracker:
         self.frame = frame = ttk.Frame(root, padding=(dp(12), dp(8)))
         self.icons = currency_icons(root, assets, dp(22))
         column = 0
-        status = ttk.Label(frame, textvariable=root.status, style='Status.TLabel', font=root.heading_font, width=10)
+        status = ttk.Label(frame, textvariable=root.status_label, style='Status.TLabel', font=root.heading_font,
+                           width=10 if current_locale() == 'en' else 0)
         status.grid(row=0, column=column, sticky='w', padx=(0, dp(10)))
         column += 1
         self.counters = {}

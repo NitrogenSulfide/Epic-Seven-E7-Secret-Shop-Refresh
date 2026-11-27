@@ -19,7 +19,7 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from tkinter import font as tkfont, messagebox, ttk, filedialog
 from e7_process import launch_engine
-from e7_i18n import t
+from e7_i18n import LANGUAGES, current_locale, set_locale, supported_locale, t
 from e7_timing import MIN_TAP_DELAY
 from e7_engine_protocol import RunSettings, validate_settings, EngineProtocol
 from e7_history import history_mode, read_sessions, export_sessions
@@ -28,7 +28,7 @@ from e7_session_estimate import SessionEstimate
 from e7_appearance import Scenery, ThemeHint, currency_icons, theme_icon, avatar_icon, coffee_icon, github_icon, bug_icon
 from e7_links import PROFILE, release_url, bug_report_url
 from e7_about import AboutDialog
-from e7_tracker import CompactTracker
+from e7_tracker import CompactTracker, remaining_label
 from e7_report import build_report, anonymize, latest_failure, system_name
 from e7_setup import missing_references, has_builtin_references, RecognitionSetup, verify_setup_engine
 from e7_native_mouse import activate_native_target, release_native_button, MouseElevationRequired
@@ -66,15 +66,15 @@ def pointer_pause_text(reason, seconds_left):
 # Each maps an engine message to what is happening and what (if anything) to do.
 COMPACT_HINT_SECONDS = 15
 NAVIGATION_HINTS = (
-    ('Waiting for visible game controls.', t('tracker.close_game_popups')),
-    ('The Secret Shop did not open', t('tracker.shop_click_missed')),
+    ('Waiting for visible game controls.', 'tracker.close_game_popups'),
+    ('The Secret Shop did not open', 'tracker.shop_click_missed'),
     ('The pointer passed over the game and the same confirmation',
-     t('tracker.confirm_click_missed')),
-    ('The game did not take the Confirm click', t('tracker.confirm_retry')),
-    ('The game did not open the Buy dialog', t('tracker.buy_retry')),
-    ('The game did not open the Refresh dialog', t('tracker.refresh_retry')),
-    ('Looking for the home Secret Shop menu', t('tracker.finding_shop')),
-    ('Visibility restored', t('tracker.visibility_restored')),
+     'tracker.confirm_click_missed'),
+    ('The game did not take the Confirm click', 'tracker.confirm_retry'),
+    ('The game did not open the Buy dialog', 'tracker.buy_retry'),
+    ('The game did not open the Refresh dialog', 'tracker.refresh_retry'),
+    ('Looking for the home Secret Shop menu', 'tracker.finding_shop'),
+    ('Visibility restored', 'tracker.visibility_restored'),
 )
 CLEAR_HINT_NAVIGATION = ('Secret Shop screen verified',)
 
@@ -92,9 +92,9 @@ def pause_hint(reason):
 
 def navigation_hint(message):
     """The hint for a Navigation line, '' to clear it, or None to keep the current one."""
-    for prefix, hint in NAVIGATION_HINTS:
+    for prefix, key in NAVIGATION_HINTS:
         if message.startswith(prefix):
-            return hint
+            return t(key)
     return '' if message.startswith(CLEAR_HINT_NAVIGATION) else None
 
 
@@ -104,8 +104,23 @@ def mode_label(mode):
                            else 'Background · Steam (recommended)'),
             'Mouse': 'Mouse · emulators, takes over your pointer',
             'ADB': 'ADB · emulators'}.get(mode, mode)
+
+
+def mode_title(mode):
+    return t('mode.background_title') if mode == 'Background' else mode
+
+
 # One short line under each mode card; the hint shows the full mode_label.
-MODE_CARD_NOTES = {'Background': t('mode.recommended'), 'Mouse': t('mode.uses_pointer'), 'ADB': t('mode.emulators')}
+MODE_CARD_NOTES = {'Background': 'mode.recommended', 'Mouse': 'mode.uses_pointer', 'ADB': 'mode.emulators'}
+STATUS_LABELS = {
+    'Ready': 'status.ready', 'Checking connection': 'status.checking_connection',
+    'Not ready': 'status.not_ready', 'Not connected': 'status.not_connected',
+    'Setup required': 'status.setup_required', 'Starting': 'status.starting',
+    'Failed': 'status.failed', 'Calibrating': 'status.calibrating', 'Running': 'status.running',
+    'Stopped': 'status.stopped', 'Needs attention': 'status.needs_attention', 'Paused': 'status.paused',
+    'Waiting for game': 'status.waiting_for_game', 'Waiting for game window': 'status.waiting_for_game_window',
+    'Stopping': 'status.stopping', 'Finished': 'status.finished',
+}
 # Quick budget picks under the slider, in skystones.
 BUDGET_PICKS = (150, 300, 1000, 3000)
 BUDGET_SLIDER_RANGE = (30, 6000)
@@ -230,6 +245,39 @@ def configure_data_directory(directory, events=()):
     CONFIG_FILE = DATA_DIR / "ADBconfig.ini"
     GUI_CONFIG_FILE = DATA_DIR / "ShopRefreshGUI.ini"
     HISTORY_FILE = DATA_DIR / "ShopRefreshHistory" / "ADB_History.csv"
+
+
+def _read_gui_preferences(path):
+    parser = configparser.ConfigParser()
+    try:
+        # A failed read must not turn into an empty file on the next save.
+        with path.open(encoding='utf-8-sig') as stream:
+            parser.read_file(stream)
+    except FileNotFoundError:
+        pass
+    return parser
+
+
+def _write_gui_preferences(path, parser):
+    temp = path.with_suffix('.ini.tmp')
+    with temp.open('w', encoding='utf-8') as stream:
+        parser.write(stream)
+    temp.replace(path)
+
+
+def load_language(path):
+    try:
+        return supported_locale(_read_gui_preferences(path).get('GUI', 'language', raw=True, fallback='en'))
+    except (OSError, UnicodeError, configparser.Error):
+        return 'en'
+
+
+def save_language(path, locale):
+    parser = _read_gui_preferences(path)
+    if not parser.has_section('GUI'):
+        parser.add_section('GUI')
+    parser.set('GUI', 'language', supported_locale(locale))
+    _write_gui_preferences(path, parser)
 
 
 def _same_place(first, second):
@@ -468,6 +516,8 @@ class RefreshGui(tk.Tk):
         self.details_expanded = False
         self._history_signature = None
         self.status = tk.StringVar(value="Ready")
+        self.status_label = tk.StringVar(value=t('status.ready'))
+        self.status.trace_add('write', self._update_status_label)
         self.detail = tk.StringVar(value=t('session.open_shop'))
         self.home_ui_hint = tk.StringVar(value=t('session.home_or_shop'))
         self.home_ui_hint_dismissed = False
@@ -476,6 +526,9 @@ class RefreshGui(tk.Tk):
         self.history_notice = tk.StringVar(value="")
         self.elapsed = tk.StringVar(value="0m 00s")
         self.remaining_time = tk.StringVar(value='Time remaining: —')
+        self.remaining_display = tk.StringVar(value=remaining_label(self.remaining_time.get()))
+        self.remaining_time.trace_add('write', lambda *_: self.remaining_display.set(
+            remaining_label(self.remaining_time.get())))
         self.spent = tk.StringVar(value="—")
         self.spent_display = tk.StringVar(value="0 / 12")
         self.spent.trace_add('write', lambda *_: self._update_spent_display())
@@ -522,6 +575,11 @@ class RefreshGui(tk.Tk):
         self._autosave_saved = self._autosave_snapshot()  # startup tidying is not an edit
         for text in DATA_EVENTS:
             self._event(text)
+
+    def _update_status_label(self, *_):
+        state = self.status.get()
+        key = STATUS_LABELS.get(state)
+        self.status_label.set(t(key) if key else state)
 
     def _configure_scaling(self):
         self.ui_scale = self.winfo_fpixels("1i") / 96.0
@@ -849,7 +907,7 @@ class RefreshGui(tk.Tk):
             reminder = t('mode.background_detected')
         self.home_ui_hint.set(self.connection_warning or reminder)
         if suggestion:
-            self.home_ui_action.configure(text=t('mode.switch_to', mode=suggestion))
+            self.home_ui_action.configure(text=t('mode.switch_to', mode=mode_title(suggestion)))
             self.home_ui_action.grid()
         else:
             self.home_ui_action.grid_remove()
@@ -1061,7 +1119,7 @@ class RefreshGui(tk.Tk):
                                          command=lambda: webbrowser.open(release_url(APP_VERSION)), cursor='hand2')
         self.version_button.pack(side='left', padx=(dp(10), 0))
         self.version_hint = ThemeHint(self.version_button, lambda: t('app.release_history') if '-rc' in APP_VERSION else t('app.release_notes_hint'))
-        ttk.Label(header, textvariable=self.status, font=("Segoe UI", 12, "bold"), style='Status.TLabel').grid(row=0, column=1, sticky="e")
+        ttk.Label(header, textvariable=self.status_label, font=("Segoe UI", 12, "bold"), style='Status.TLabel').grid(row=0, column=1, sticky="e")
         header_actions = ttk.Frame(header)
         header_actions.grid(row=1,column=1,sticky='e')
         self.coffee_image = coffee_icon(self, dp(20))
@@ -1317,13 +1375,28 @@ class RefreshGui(tk.Tk):
         self.mode_cards = {}
         for column, mode in enumerate(CONTROL_MODES):
             cards.columnconfigure(column, weight=1, uniform='modes')
-            card = ttk.Radiobutton(cards, text=f'{mode}\n{MODE_CARD_NOTES.get(mode, "")}'.rstrip(), value=mode_label(mode),
+            note = MODE_CARD_NOTES.get(mode)
+            card = ttk.Radiobutton(cards, text=f'{mode_title(mode)}\n{t(note) if note else ""}'.rstrip(),
+                                   value=mode_label(mode),
                                    variable=self.mode_label, command=self._select_control_mode,
                                    style='Tile.TRadiobutton', cursor='hand2')
             card.grid(row=0, column=column, sticky='nsew', padx=(0 if column == 0 else dp(6), 0))
             ThemeHint(card, lambda mode=mode: mode_label(mode))
             self.mode_cards[mode] = card
         self.settings_widgets.extend([self.mode_box, *self.mode_cards.values()])
+        language = ttk.Frame(advanced)
+        language.grid(row=8, column=0, sticky='ew', pady=(dp(8), 0))
+        ttk.Label(language, text=t('settings.language')).grid(row=0, column=0, sticky='w')
+        self.language_box = ttk.Combobox(language, values=tuple(LANGUAGES.values()),
+                                         state='readonly', width=18, font=self.ui_font)
+        self._saved_language = current_locale()
+        self.language_box.current(tuple(LANGUAGES).index(self._saved_language))
+        self.language_box.grid(row=1, column=0, sticky='w', pady=(dp(3), 0))
+        self.language_notice = tk.StringVar(value='')
+        ttk.Label(language, textvariable=self.language_notice, style='Muted.TLabel',
+                  wraplength=dp(325)).grid(row=2, column=0, sticky='w')
+        self.language_box.bind('<<ComboboxSelected>>', self._save_language_choice)
+        self.settings_widgets.append(self.language_box)
         self.settings_details.grid_remove()
         def bind_wheel(widget):
             def scroll_settings(event):
@@ -1410,7 +1483,7 @@ class RefreshGui(tk.Tk):
         self.progress = ttk.Progressbar(progress, maximum=100)
         self.progress.grid(row=0, column=0, sticky="ew")
         ttk.Label(progress, textvariable=self.progress_text, style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(4, 0))
-        self.remaining_label = ttk.Label(progress, textvariable=self.remaining_time, style='Muted.TLabel')
+        self.remaining_label = ttk.Label(progress, textvariable=self.remaining_display, style='Muted.TLabel')
         self.remaining_label.grid(row=2, column=0, sticky='w', pady=(dp(3), 0))
         self.pointer_alert_label = ttk.Label(progress, textvariable=self.pointer_alert, style='Alert.TLabel',
                                              font=self.heading_font)
@@ -1507,6 +1580,26 @@ class RefreshGui(tk.Tk):
         self.history_label.grid(row=7, column=0, sticky="w", pady=(dp(6), 0))
         right.bind("<Configure>", self._schedule_layout)
         self._event(t('diagnostics.ready'))
+
+    def _save_language_choice(self, _event=None):
+        languages = tuple(LANGUAGES)
+        selection = self.language_box.current()
+        if selection < 0:
+            return
+        locale = languages[selection]
+        if locale != self._saved_language:
+            try:
+                if getattr(self, '_restart_required', False):
+                    self.language_notice.set(t('import_settings.restart_needed'))
+                    self.language_box.current(languages.index(self._saved_language))
+                    return
+                save_language(GUI_CONFIG_FILE, locale)
+            except (OSError, UnicodeError, configparser.Error) as error:
+                self.language_box.current(languages.index(self._saved_language))
+                self.language_notice.set(t('settings.save_error', error=error))
+                return
+            self._saved_language = locale
+        self.language_notice.set(t('settings.language_restart') if locale != current_locale() else '')
 
     def _load_config(self):
         # Loading is not an edit: keep autosave quiet while values arrive.
@@ -1641,14 +1734,7 @@ class RefreshGui(tk.Tk):
             return  # imported files wait for the restart
         # The original engine rewrites ADBconfig.ini, so GUI preferences need
         # their own file to survive a real refresh session.
-        parser = configparser.ConfigParser()
-        try:
-            # read_file, not read: read() swallows open errors, and writing
-            # back an empty parser would erase the other preferences.
-            with GUI_CONFIG_FILE.open(encoding='utf-8-sig') as fh:
-                parser.read_file(fh)
-        except FileNotFoundError:
-            pass
+        parser = _read_gui_preferences(GUI_CONFIG_FILE)
         if not parser.has_section("GUI"):
             parser.add_section("GUI")
         parser["GUI"]["sound_enabled"] = str(self.sound_enabled.get())
@@ -1671,10 +1757,7 @@ class RefreshGui(tk.Tk):
         parser["GUI"]["device"] = self._device_address()
         parser['GUI']['control_mode'] = self.control_mode.get()
         parser['GUI']['tap_jitter'] = str(round(self.tap_jitter.get(), 2))
-        temp = GUI_CONFIG_FILE.with_suffix(".ini.tmp")
-        with temp.open("w", encoding="utf-8") as fh:
-            parser.write(fh)
-        temp.replace(GUI_CONFIG_FILE)
+        _write_gui_preferences(GUI_CONFIG_FILE, parser)
 
     def _save_sound_preference(self):
         try:
@@ -1916,7 +1999,7 @@ class RefreshGui(tk.Tk):
         except (OSError, UnicodeError, configparser.Error) as exc:
             self._append_log(f'Control mode preference save failed: {exc}\n')
 
-    def _apply_mouse_windows(self, windows, error, suggestion=None):
+    def _apply_mouse_windows(self, windows, error, suggestion=None, *, notice_key=None):
         selected = self.mouse_windows.get(self.mouse_target.get())
         titles = [window.title for window in windows]
         choices = {}
@@ -1935,7 +2018,8 @@ class RefreshGui(tk.Tk):
         self.mouse_target.set(selection)
         self.device_box.configure(values=list(choices))
         self.device_button.configure(state=tk.NORMAL)
-        warning = error or (t('connection.no_game_window') if not windows else '')
+        notice = t(notice_key) if notice_key else error
+        warning = notice or (t('connection.no_game_window') if not windows else '')
         previous = self.mode_suggestion
         self.mode_suggestion = (suggestion if suggestion in CONTROL_MODES and suggestion != self.control_mode.get()
                                 else None)
@@ -1947,8 +2031,8 @@ class RefreshGui(tk.Tk):
             self.home_ui_banner.grid()
         self._set_connection_warning(warning)
         self._update_mouse_selection()
-        if error:
-            self.device_notice.set(error)
+        if notice:
+            self.device_notice.set(notice)
 
     def _scan_game_windows(self):
         if self._mouse_scan_busy or (self.process and self.process.poll() is None):
@@ -1960,13 +2044,17 @@ class RefreshGui(tk.Tk):
             self.device_notice.set(t('connection.scanning_windows'))
         background = self.control_mode.get() == 'Background'  # read Tk state on this thread only
         def scan():
+            notice_key = None
             try:
                 windows, error = (list_background_games() if background
                                   else WindowsCapture().list_windows()), ''
             except Exception as exc:  # e.g. Xlib BadWindow when the game closes mid-scan
                 windows, error = [], str(exc) or type(exc).__name__
+                if (background and os.name == 'nt' and isinstance(exc, ValueError)
+                        and error == 'Epic Seven (Steam or STOVE) is not running. Start the game, then try again.'):
+                    notice_key = 'connection.windows_game_not_running'
             suggestion = suggested_mode(background, windows, error)
-            self.log_queue.put((None,'windows',(token,windows,error,suggestion)))
+            self.log_queue.put((None,'windows',(token,windows,error,suggestion,notice_key)))
         threading.Thread(target=scan,daemon=True).start()
 
     def _start_connection_check(self, settings):
@@ -2776,10 +2864,10 @@ class RefreshGui(tk.Tk):
             elif kind == 'connection':
                 self._complete_connection_check(*value)
             elif kind == 'windows':
-                token, windows, error, suggestion = value
+                token, windows, error, suggestion, notice_key = value
                 self._mouse_scan_busy = False
                 if token == self._connection_check_id and self.control_mode.get() != 'ADB':
-                    self._apply_mouse_windows(windows, error, suggestion)
+                    self._apply_mouse_windows(windows, error, suggestion, notice_key=notice_key)
         if output:
             self._handle_output_batch(output)
         self.after(100, self._drain_log_queue)
@@ -2825,14 +2913,19 @@ class RefreshGui(tk.Tk):
 
     def _update_diagnostics_summary(self):
         settings=self.run_settings
-        on=lambda name:'on' if (getattr(settings,name) if settings else getattr(self,name).get()) else 'off'
+        enabled, disabled = ('ativado', 'desativado') if current_locale() == 'pt_BR' else ('on', 'off')
+
+        def state_label(name):
+            active = getattr(settings, name) if settings else getattr(self, name).get()
+            return enabled if active else disabled
+
         self.diagnostics_summary.set(t('diagnostics.purchase_summary',
             covenant=self.covenant.get(),
-            covenant_state=on('buy_covenant'),
+            covenant_state=state_label('buy_covenant'),
             mystic=self.mystic.get(),
-            mystic_state=on('buy_mystic'),
+            mystic_state=state_label('buy_mystic'),
             friendship=self.friendship.get(),
-            friendship_state=on('buy_friendship'),
+            friendship_state=state_label('buy_friendship'),
             stop_key=getattr(self, '_stop_key_status', 'No active session')))
 
     def _copy_diagnostics(self):
@@ -3034,6 +3127,12 @@ class RefreshGui(tk.Tk):
             self.spent_display.set('—')
 
     def _update_ev(self):
+        def display(text):
+            # Localize separators in the computed estimate without touching its values or templates.
+            if current_locale() == 'pt_BR':
+                return re.sub(r'(?<=\d)[,.](?=\d)', lambda match: '.' if match[0] == ',' else ',', text)
+            return text
+
         try:
             budget = int(self.budget.get())
             if budget < 3:
@@ -3043,7 +3142,7 @@ class RefreshGui(tk.Tk):
             lines = [t('budget.estimated_gold', amount=int(gold))]
             lines += [t('budget.estimated_covenant', count=budget * COVENANT_RATE)] if covenant else []
             lines += [t('budget.estimated_mystic', count=budget * MYSTIC_RATE)] if mystic else []
-            self.ev.set('\n'.join(lines))
+            self.ev.set(display('\n'.join(lines)))
             if self.buy_friendship.get():
                 self.ev.set(self.ev.get()+t('budget.friendship_extra_gold'))
             expected = [t('budget.summary_covenant', count=budget * COVENANT_RATE)] if covenant else []
@@ -3052,7 +3151,7 @@ class RefreshGui(tk.Tk):
             summary += t('budget.summary_expect') + t('budget.summary_and').join(expected) if expected else ''
             summary += t('budget.summary_gold', amount=int(gold)) if gold else ''
             if hasattr(self, 'budget_summary'):
-                self.budget_summary.set(summary)
+                self.budget_summary.set(display(summary))
         except (ValueError, OverflowError):
             self.ev.set(t('budget.invalid'))
             if hasattr(self, 'budget_summary'):
@@ -3215,8 +3314,11 @@ def main(argv=None):
         if not args.verify:  # the offline check never creates or migrates user data
             location = prepare_data_directory(APP_DIR)
             events = list(location.events)
+            preferences = location.directory / 'ShopRefreshGUI.ini'
+            set_locale(load_language(preferences))
             if needs_import_choice(location):
                 events += offer_older_settings(location.directory)
+                set_locale(load_language(preferences))
             configure_data_directory(location.directory, events)
         if args.verify:
             from e7_appearance import Image

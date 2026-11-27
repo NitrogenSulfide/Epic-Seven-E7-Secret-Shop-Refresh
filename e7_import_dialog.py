@@ -15,9 +15,6 @@ from tkinter import filedialog, messagebox, ttk
 from e7_user_data import describe_install
 from e7_i18n import t
 
-TITLE = t('import_settings.title')
-
-
 LIST_WIDTH_LIMIT = 110  # characters; longer paths are cut in the middle, not the dialog widened
 
 
@@ -58,7 +55,7 @@ class ImportDialog(tk.Toplevel):
         ratio = self.winfo_fpixels('1i') / 96.0
         dp = scale or (lambda value: max(1, round(value * ratio)))
         self.withdraw()  # shown once laid out and centred: no flicker in a corner
-        self.title(TITLE)
+        self.title(t('import_settings.title'))
         self.resizable(False, False)
         if master.winfo_viewable():
             self.transient(master)
@@ -147,7 +144,7 @@ class ImportDialog(tk.Toplevel):
             return
         install = describe_install(folder, require_gui_settings=False)
         if install is None:
-            messagebox.showwarning(TITLE, t('import_settings.no_data_found', folder=folder),
+            messagebox.showwarning(t('import_settings.title'), t('import_settings.no_data_found', folder=folder),
                                    parent=self)
             return
         self.choice = ('import', install)

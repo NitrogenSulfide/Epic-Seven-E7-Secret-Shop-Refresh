@@ -7,10 +7,6 @@ import webbrowser
 from e7_appearance import profile_avatar
 from e7_i18n import t
 
-TESTED_CLIENTS = t('about.tested_clients')
-QUICKSTART = t('about.quickstart') + TESTED_CLIENTS
-
-
 class AboutDialog(tk.Toplevel):
     def __init__(self, app, project, first_time=False):
         super().__init__(app)
@@ -44,9 +40,10 @@ class AboutDialog(tk.Toplevel):
         notebook = ttk.Notebook(self)
         notebook.grid(row=1, column=0, sticky='nsew', padx=dp(20))
         self.notebook = notebook
-        overview = t('about.overview', tested_clients=TESTED_CLIENTS)
+        tested_clients = t('about.tested_clients')
+        overview = t('about.overview', tested_clients=tested_clients)
         for title, contents in ((t('about.overview_tab'),overview),
-                                (t('about.quickstart_tab'),QUICKSTART),
+                                (t('about.quickstart_tab'),t('about.quickstart') + tested_clients),
                                 (t('about.release_notes_tab'),read_document(project/'CHANGELOG.txt')),
                                 (t('about.full_credits_tab'),read_document(project/'CREDITS.txt')),
                                 (t('about.licence_tab'),read_document(project/'LICENSE'))):

@@ -6,6 +6,23 @@ from pathlib import Path
 import re
 import sys
 
+LANGUAGES = {'en': 'English', 'pt_BR': 'Português (Brasil)'}
+_locale = 'en'
+
+
+def supported_locale(locale):
+    return locale if locale in LANGUAGES else 'en'
+
+
+def set_locale(locale):
+    """Select the language for this launch before constructing any windows."""
+    global _locale
+    _locale = supported_locale(locale)
+
+
+def current_locale():
+    return _locale
+
 
 def _locale_directory():
     app = Path(sys.executable) if getattr(sys, 'frozen', False) else Path(__file__)
@@ -33,8 +50,9 @@ def _load_catalog(locale):
     return data if isinstance(data, dict) else {}
 
 
-def t(key, locale='en', /, **values):
+def t(key, locale=None, /, **values):
     """Format text in the requested locale, falling back to English, then to the key."""
+    locale = _locale if locale is None else locale
     for language in (locale, 'en') if locale != 'en' else ('en',):
         template = _load_catalog(language).get(key)
         if template is not None:
