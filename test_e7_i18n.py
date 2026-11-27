@@ -1,3 +1,5 @@
+from contextlib import ExitStack, contextmanager
+import csv
 import json
 from pathlib import Path
 from collections import Counter
@@ -6,7 +8,10 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
+from xml.etree import ElementTree
+from zipfile import ZipFile
 
+import e7_history
 import e7_i18n
 from e7_i18n import t
 import e7_shop_refresh_gui as gui
@@ -17,8 +22,6 @@ class EnglishCatalogTests(unittest.TestCase):
     def test_original_english_text_and_number_format(self):
         self.assertEqual(t('session.start'), 'Start Refresh')
         self.assertEqual(t('budget.estimated_gold', amount=184000), 'Gold needed ≈ 184,000')
-        self.assertEqual(t('session.reported_spend', refreshes=1234, amount=3702),
-                         '1,234 refreshes · 3,702 skystone spent · engine reported')
 
     def test_catalog_also_loads_beside_packaged_executable(self):
         bundled_catalog = Path(__file__).resolve().parent / 'locales' / 'en.json'
@@ -182,6 +185,165 @@ class CatalogFallbackTests(unittest.TestCase):
     def test_unavailable_english_uses_the_key(self):
         (self.directory / 'en.json').unlink()
         self.assertEqual(t('session.start'), 'session.start')
+
+
+class LocalizationPolishTests(unittest.TestCase):
+    @contextmanager
+    def window(self, language):
+        with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
+            folder = Path(temporary)
+            for name, path in {'APP_DIR': folder, 'CONFIG_FILE': folder / 'engine.ini',
+                               'GUI_CONFIG_FILE': folder / 'gui.ini', 'HISTORY_FILE': folder / 'history.csv'}.items():
+                stack.enter_context(patch.object(gui, name, path))
+            for method in ('refresh_devices', '_change_control_mode', '_maybe_show_credits', '_play_session_sound'):
+                stack.enter_context(patch.object(gui.RefreshGui, method))
+            stack.callback(e7_i18n.set_locale, e7_i18n.current_locale())
+            e7_i18n.set_locale(language)
+            app = gui.RefreshGui()
+            stack.callback(app.destroy)
+            app.withdraw()
+            yield app, folder
+
+    def test_numeric_controls_estimates_and_live_progress(self):
+        for language, thousands in (('en', ','), ('pt_BR', '.')):
+            with self.subTest(language=language), self.window(language) as (app, _):
+                pt = language == 'pt_BR'
+                app.tap_jitter.set(.03)
+                app.random_offset.set(True)
+                app.tap_sleep.set('.01')
+                app._update_tap_jitter()
+                self.assertEqual(app.tap_jitter_text.get(), 'Variação do intervalo: ±0,005 s' if pt
+                                 else 'Timing variation: ±0.005s')
+                self.assertEqual(app.tap_jitter.get(), .03)
+                app.tap_sleep.set('.30')
+                self.assertEqual(app.tap_jitter_text.get(), 'Variação do intervalo: ±0,03 s' if pt
+                                 else 'Timing variation: ±0.03s')
+                delay_hint = ('De 0,30 a 2,00 segundos · valores menores são ajustados para 0,30' if pt
+                              else '0.30 to 2.00 seconds · lower values are raised to 0.30')
+                self.assertTrue(app.delay_hint.text().startswith(delay_hint))
+
+                for amount, button in zip(gui.BUDGET_PICKS[-2:], app.budget_picks[-2:]):
+                    self.assertEqual(button.cget('text'), f'{amount:,}'.replace(',', thousands))
+                    button.invoke()
+                    self.assertEqual(app.budget.get(), str(amount))
+
+                app.budget.set('750')
+                app.buy_mystic.set(True)
+                app.buy_covenant.set(False)
+                self.assertIn('cerca de 1,3 compras de Mystics' if pt else 'expect about 1.3 Mystic',
+                              app.budget_summary.get())
+                app.buy_covenant.set(True)
+                self.assertIn('5,0 compras de Bookmarks e 1,3 compras de Mystics' if pt
+                              else '5.0 Covenant and 1.3 Mystic', app.budget_summary.get())
+
+                app.buy_friendship.set(True)
+                app.run_settings = gui.validate_settings('fixture', '6000', '.3', '`', True, False,
+                                                         buy_friendship=True)
+                stats = dict(refreshes=1500, skystone_spent=4500, covenant=12, mystic=3, friendship=1200)
+                protocol = 'E7GUI_STATS ' + json.dumps(stats) + '\n'
+                app._handle_output_batch([(protocol, None)])
+                progress = ('1.500 atualizações · 4.500 Skystones gastas · dados da engine · Compras de amizade: 1.200'
+                            if pt else '1,500 refreshes · 4,500 skystone spent · engine reported · Friendship buys: 1,200')
+                self.assertEqual(app.progress_text.get(), progress)
+                self.assertEqual((app.progress['value'], app.spent.get(), app.friendship.get()), (75, '4,500', '1,200'))
+                self.assertEqual(app.raw_output, protocol)
+
+    def test_finish_details_preserve_status_activity_and_reports(self):
+        cases = (
+            (0, True, False, None, 'Finished', 'Session finished. Results are shown below.',
+             'Sessão concluída. Veja os resultados abaixo.'),
+            (0, False, True, None, 'Stopped', 'Session stopped. History contains only runs recorded by the engine.',
+             'Sessão interrompida. O histórico inclui apenas as sessões registradas pela engine.'),
+            (7, False, False, None, 'Needs attention', 'Engine exited (code 7). Check Diagnostics before retrying.',
+             'A engine foi encerrada (código 7). Consulte Diagnóstico antes de tentar novamente.'),
+            (0, True, False, 'Gold limit reached: 1,000', 'Stopped', 'Gold limit reached: 1,000', 'Gold limit reached: 1,000'),
+        )
+        for language in ('en', 'pt_BR'):
+            with self.window(language) as (app, _):
+                app._update_diagnostics_summary()
+                self.assertIn('Nenhuma sessão ativa' if language == 'pt_BR' else 'No active session',
+                              app.diagnostics_summary.get())
+                with patch.object(app, 'clipboard_clear'), patch.object(app, 'clipboard_append') as clipboard:
+                    app._copy_diagnostics()
+                    self.assertIn('Stop key: No active session', clipboard.call_args.args[0])
+                for code, finished, stopping, gold, status, english, portuguese in cases:
+                    with self.subTest(language=language, status=status, gold=gold):
+                        app.run_id += 1
+                        app.finished, app.stopping = finished, stopping
+                        app._gold_stop_reason = gold
+                        app.process = SimpleNamespace(returncode=code, poll=lambda: code)
+                        app._finish_process()
+                        self.assertEqual(app.status.get(), status)
+                        self.assertEqual(app.detail.get(), portuguese if language == 'pt_BR' else english)
+                        item = app.activity.get_children()[-1]
+                        self.assertEqual(app.activity.item(item, 'values')[1], english)
+                        if status == 'Needs attention':
+                            self.assertIn(english, app._report_text())
+
+    def test_history_headings_are_independent_of_csv_and_excel(self):
+        ids = ('mode', 'duration', 'skystone', 'gold', 'cov', 'mys', 'friend', 'started', 'control', 'outcome')
+        headers = ('Session ID', 'Started at', 'Control mode', 'Mode', 'Outcome', 'Reason', 'Duration',
+                   'Skystone spent', 'Gold spent', 'Covenant bookmark', 'Mystic medal', 'Friendship points',
+                   'Friendship bookmark', 'Legacy extra fields')
+        for language, labels in (
+            ('en', ('Mode', 'Duration', 'Skystone', 'Gold', 'Covenant buys', 'Mystic buys', 'Friendship buys',
+                    'Started (UTC)', 'Control', 'Outcome')),
+            ('pt_BR', ('Modo', 'Duração', 'Skystones', 'Ouro', 'Compras de Bookmarks', 'Compras de Mystics',
+                       'Compras de amizade', 'Início (UTC)', 'Controle', 'Resultado')),
+        ):
+            with self.subTest(language=language), self.window(language) as (app, folder):
+                self.assertEqual(app.history['columns'], ids)
+                self.assertEqual(tuple(app.history.heading(key, 'text') for key in ids), labels)
+                for key, label in zip(ids, labels):
+                    self.assertGreaterEqual(app.history.column(key, 'minwidth'), app.heading_font.measure(label))
+
+                legacy = (b'Duration,Skystone spent,Gold spent,Covenant bookmark,Mystic medal\n'
+                          b'10.25,2799,7656000,1500.25,\n')
+                gui.HISTORY_FILE.write_bytes(legacy)
+                app.refresh_history()
+                row, = app.history.get_children()
+                counts = ('2.799', '7.656.000', '1.500') if language == 'pt_BR' else ('2,799', '7,656,000', '1,500')
+                self.assertEqual(app.history.item(row, 'values'), (
+                    'Normal', '0m 10s', *counts, '—', '—', '', 'Unknown', 'Unknown (legacy)'))
+                self.assertEqual(gui.HISTORY_FILE.read_bytes(), legacy)
+                e7_history.append_session(gui.HISTORY_FILE, {'Session ID': 'fixture', 'Mode': 'Normal'})
+                with gui.HISTORY_FILE.open(newline='', encoding='utf-8') as source:
+                    reader = csv.DictReader(source)
+                    self.assertEqual(tuple(reader.fieldnames), headers)
+                    recorded = next(reader)
+                    self.assertEqual(tuple(recorded[field] for field in headers[6:12]),
+                                     ('10.25', '2799', '7656000', '1500.25', '', ''))
+
+                workbook = folder / 'history.xlsx'
+                with patch.object(gui.filedialog, 'asksaveasfilename', return_value=str(workbook)):
+                    app._export_history()
+                with ZipFile(workbook) as package:
+                    sheet = ElementTree.fromstring(package.read('xl/worksheets/sheet1.xml'))
+                self.assertEqual(tuple(node.text for node in sheet.findall('.//{*}row[@r="1"]/{*}c/{*}is/{*}t')), (
+                    'Session ID', 'Started at (UTC)', 'Control mode', 'Mode', 'Outcome', 'Reason', 'Duration (seconds)',
+                    'Skystone spent', 'Gold spent', 'Covenant buys', 'Mystic buys', 'Friendship buys',
+                    'Friendship points gained', 'Legacy Friendship bookmarks', 'Legacy extra fields',
+                ))
+                for column, value in zip('GHIJ', ('10.25', '2799.0', '7656000.0', '1500.25')):
+                    self.assertEqual(sheet.findtext(f'.//{{*}}c[@r="{column}2"][@t="n"]/{{*}}v'), value)
+
+    def test_recent_sessions_notice_for_empty_singular_and_plural_history(self):
+        for language, empty, singular, plural, suffix in (
+            ('en', 'No recorded sessions yet.', 'Showing the latest session', 'Showing latest {count} sessions',
+             ' · Excel exports all recorded sessions · select a row for its end reason'),
+            ('pt_BR', 'Nenhuma sessão registrada.', 'Última sessão', 'Últimas {count} sessões',
+             ' · O Excel inclui todas · Selecione uma linha para ver por que a sessão terminou'),
+        ):
+            with self.window(language) as (app, _):
+                app.refresh_history()
+                self.assertEqual(app.history_notice.get(), empty)
+                for count, notice in ((1, singular), (2, plural.format(count=2)), (5, plural.format(count=5))):
+                    with self.subTest(language=language, count=count):
+                        gui.HISTORY_FILE.write_text('Duration,Skystone spent,Gold spent,Covenant bookmark,Mystic medal\n'
+                                                    + '10,9,0,0,0\n' * count, encoding='utf-8')
+                        app.refresh_history()
+                        self.assertEqual(len(app.history.get_children()), count)
+                        self.assertEqual(app.history_notice.get(), notice + suffix)
 
 
 if __name__ == '__main__':

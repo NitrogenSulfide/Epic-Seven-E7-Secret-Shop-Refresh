@@ -433,12 +433,19 @@ def duration_text(value):
         return "—"
 
 
-def number_text(value):
+def localized_number(value, spec):
+    text = format(value, spec)
+    return text.translate(str.maketrans(',.', '.,')) if current_locale() == 'pt_BR' else text
+
+
+def number_text(value, *, localized=False):
     try:
         n = float(value)
-        return f"{n:,.0f}" if math.isfinite(n) else "—"
     except (ValueError, TypeError):
         return "—"
+    if not math.isfinite(n):
+        return "—"
+    return localized_number(n, ',.0f') if localized else f"{n:,.0f}"
 
 
 class RefreshGui(tk.Tk):
@@ -1231,7 +1238,7 @@ class RefreshGui(tk.Tk):
         self.budget_picks = []
         for column, amount in enumerate(BUDGET_PICKS):
             picks.columnconfigure(column, weight=1, uniform='picks')
-            pick = ttk.Button(picks, text=f'{amount:,}', style='Chip.TButton', cursor='hand2',
+            pick = ttk.Button(picks, text=localized_number(amount, ','), style='Chip.TButton', cursor='hand2',
                               command=lambda amount=amount: self.budget.set(str(amount)))
             pick.grid(row=0, column=column, sticky='ew', padx=(0 if column == 0 else dp(4), 0))
             self.budget_picks.append(pick)
@@ -1281,8 +1288,8 @@ class RefreshGui(tk.Tk):
         entry.grid(row=1, column=0, sticky='w', pady=(dp(3), 0))
         self.settings_widgets.append(entry)
         self.delay_hint = ThemeHint(entry, lambda: t('settings.delay_range_hint',
-            minimum=MIN_TAP_DELAY,
-            floor=MIN_TAP_DELAY))
+            minimum=localized_number(MIN_TAP_DELAY, '.2f'),
+            floor=localized_number(MIN_TAP_DELAY, '.2f')))
         self.random_check = ttk.Checkbutton(advanced, text=t('settings.randomize_taps'), variable=self.random_offset, style="Large.TCheckbutton")
         self.random_check.configure(command=self._update_tap_jitter)
         self.random_check.grid(row=2, column=0, sticky="w")
@@ -1558,12 +1565,23 @@ class RefreshGui(tk.Tk):
         history_frame.columnconfigure(0, weight=1)
         history_frame.rowconfigure(0, weight=1)
         self.history = ttk.Treeview(history_frame, columns=("mode", "duration", "skystone", "gold", "cov", "mys", "friend", "started", "control", "outcome"), show="headings", height=6)
-        for key, label, width in (("mode", "Mode", 80), ("duration", "Duration", 125), ("skystone", "Skystone", 95), ("gold", "Gold", 120), ("cov", "Covenant buys", 115), ("mys", "Mystic buys", 105), ('friend', 'Friendship buys', 120)):
+        for key, label, sample in (
+            ('mode', t('history.column_mode'), 'Unknown'),
+            ('duration', t('history.column_duration'), '12h 59m 59s'),
+            ('skystone', t('history.column_skystone'), '99,999'),
+            ('gold', t('history.column_gold'), '999,999,999'),
+            ('cov', t('history.column_covenant'), '9,999'),
+            ('mys', t('history.column_mystic'), '9,999'),
+            ('friend', t('history.column_friendship'), '9,999'),
+        ):
             self.history.heading(key, text=label, anchor=tk.W if key in ("mode", "duration") else tk.E)
-            samples = {"mode": "Unknown", "duration": "12h 59m 59s", "skystone": "99,999", "gold": "999,999,999", "cov": "9,999", "mys": "9,999", 'friend': '9,999'}
-            column_width = max(self.heading_font.measure(label), self.ui_font.measure(samples[key])) + dp(24)
+            column_width = max(self.heading_font.measure(label), self.ui_font.measure(sample)) + dp(24)
             self.history.column(key, width=column_width, minwidth=column_width, anchor=tk.W if key in ("mode", "duration") else tk.E, stretch=key != 'mode')
-        for key, label, sample in (('started', 'Started (UTC)', '2026-10-05 14:30:00'), ('control', 'Control', 'Unknown'), ('outcome', 'Outcome', 'Unknown (legacy)')):
+        for key, label, sample in (
+            ('started', t('history.column_started'), '2026-10-05 14:30:00'),
+            ('control', t('history.column_control'), 'Unknown'),
+            ('outcome', t('history.column_outcome'), 'Unknown (legacy)'),
+        ):
             width = max(self.heading_font.measure(label), self.ui_font.measure(sample)) + dp(24)
             self.history.heading(key, text=label, anchor=tk.W)
             self.history.column(key, width=width, minwidth=width, anchor=tk.W, stretch=False)
@@ -2288,6 +2306,7 @@ class RefreshGui(tk.Tk):
         self.stopping = self.finished = False
         self._mouse_failure = None
         self._gold_stop_reason = None
+        self._finish_report_reason = None
         self._report_since = time.time()-1
         self._show_report_actions()
         background = self.control_mode.get() == 'Background' and mouse_target is not None
@@ -2635,11 +2654,11 @@ class RefreshGui(tk.Tk):
             percent = min(100, stats['skystone_spent'] / self.run_settings.budget * 100)
             self.progress.configure(value=percent)
             self.progress_text.set(t('session.reported_spend',
-                refreshes=stats['refreshes'],
-                amount=stats['skystone_spent']))
+                refreshes=localized_number(stats['refreshes'], ','),
+                amount=localized_number(stats['skystone_spent'], ',')))
             if self.run_settings.buy_friendship:
                 self.progress_text.set(self.progress_text.get()+t('session.reported_friendship',
-                    count=stats['friendship']))
+                    count=localized_number(stats['friendship'], ',')))
             self.metric_captions[1].configure(text=t('session.skystone_spent'))
             return
         if "Shop refresh terminated!" in line:
@@ -2775,26 +2794,34 @@ class RefreshGui(tk.Tk):
         self._freeze_elapsed()
         if self.process_tree:
             self.process_tree.close()
+        reason = None
+        detail_key = None
+        detail_values = {}
         if self._mouse_failure and not self.stopping and not self.stop_key_pressed:
             self.status.set('Needs attention')
-            self.detail.set(self._mouse_failure)
+            reason = self._mouse_failure
             self.progress_text.set(t('session.stopped_reason_hint'))
         elif self.stopping or self.stop_key_pressed or (process.returncode == 0 and (
                 self._gold_stop_reason or (self.run_settings and self.run_settings.debug and self._session_started and not self.finished))):
             self.status.set("Stopped")
-            self.detail.set(self._gold_stop_reason or "Session stopped. History contains only runs recorded by the engine.")
+            reason = self._gold_stop_reason
+            detail_key = 'session.finish_stopped'
             self.progress_text.set(t('session.progress_stopped'))
             self._play_session_sound("stopped")
         elif process.returncode == 0 and self.finished:
             self.status.set("Finished")
-            self.detail.set("Session finished. Results are shown below.")
+            detail_key = 'session.finish_complete'
             self.progress_text.set(t('session.complete'))
             self._play_session_sound("finished")
         else:
             self.status.set("Needs attention")
-            self.detail.set(f"Engine exited (code {process.returncode}). Check Diagnostics before retrying.")
+            detail_key = 'session.finish_error'
+            detail_values = {'code': process.returncode}
             self.progress_text.set(t('session.engine_exited'))
-        self._event(self.detail.get())
+        # Activity tags and diagnostic reports use the original English or engine reason.
+        self._finish_report_reason = reason or t(detail_key, 'en', **detail_values)
+        self.detail.set(reason or t(detail_key, **detail_values))
+        self._event(self._finish_report_reason)
         self.remaining_time.set('Time remaining: Complete' if self.status.get() == 'Finished' else 'Time remaining: Session stopped')
         self.session_estimate.enabled = False
         self._set_controls(False)
@@ -2925,20 +2952,22 @@ class RefreshGui(tk.Tk):
             mystic_state=state_label('buy_mystic'),
             friendship=self.friendship.get(),
             friendship_state=state_label('buy_friendship'),
-            stop_key=getattr(self, '_stop_key_status', 'No active session')))
+            stop_key=self._stop_key_status if hasattr(self, '_stop_key_status') else t('diagnostics.no_active_session')))
 
     def _copy_diagnostics(self):
         self.clipboard_clear()
         settings=self.run_settings
         on=lambda name:'on' if (getattr(settings,name) if settings else getattr(self,name).get()) else 'off'
-        stop_status=getattr(self,'_stop_key_status','No active session')
+        stop_status=self._stop_key_status if hasattr(self, '_stop_key_status') else t('diagnostics.no_active_session', 'en')
         self.clipboard_append(anonymize(f"App: v{APP_VERSION}\nSystem: {system_name()}\nControl: {self.control_mode.get()}\nEngine: {ENGINE_EXE}\nState: {self.status.get()}\n"
             f"Stop key: {stop_status}\nBuying: Covenant {on('buy_covenant')} · Mystic {on('buy_mystic')} · Friendship Points {on('buy_friendship')}\n"
             f"Purchases: Covenant {self.covenant.get()} · Mystic {self.mystic.get()} · Friendship {self.friendship.get()}\n\n{self.raw_output}"))
 
     def _report_text(self):
         target = '' if self.control_mode.get() == 'ADB' else self.mouse_target.get()
-        reason = self._mouse_failure or (self.detail.get() if self.status.get() in ('Needs attention', 'Failed') else '')
+        reason = self._mouse_failure or ''
+        if not reason and self.status.get() in ('Needs attention', 'Failed'):
+            reason = getattr(self, '_finish_report_reason', None) or self.detail.get()
         return build_report(version=APP_VERSION, mode=self.control_mode.get(), target=target, state=self.status.get(),
                             reason=reason, log=self.raw_output, app_dir=APP_DIR, since=getattr(self, '_report_since', None))
 
@@ -3011,13 +3040,22 @@ class RefreshGui(tk.Tk):
         for i, row in enumerate(reversed(rows)):
             mode = row['Mode']
             tags = ('debug',) if mode == 'Debug' else ('even',) if i % 2 == 0 else ()
-            item = self.history.insert("", tk.END, tags=tags, values=(mode, duration_text(row.get("Duration")), *(number_text(row.get(key)) for key in ("Skystone spent", "Gold spent", "Covenant bookmark", "Mystic medal", 'Friendship points')),
-                                row.get('Started at', '').replace('T', ' ').replace('+00:00', ''), row.get('Control mode', 'Unknown'), row.get('Outcome', 'Unknown (legacy)')))
+            counts = (number_text(row.get(key), localized=True) for key in (
+                'Skystone spent', 'Gold spent', 'Covenant bookmark', 'Mystic medal', 'Friendship points'))
+            item = self.history.insert('', tk.END, tags=tags, values=(
+                mode, duration_text(row.get('Duration')), *counts,
+                row.get('Started at', '').replace('T', ' ').replace('+00:00', ''),
+                row.get('Control mode', 'Unknown'), row.get('Outcome', 'Unknown (legacy)')))
             if not hasattr(self, '_history_reasons'):
                 self._history_reasons = {}
             self._history_reasons[item] = row.get('Reason', '')
-        self.history_notice.set(t('history.recent_count',
-            count=len(rows)) if rows else t('history.empty'))
+        if len(rows) == 1:
+            notice = t('history.recent_single')
+        elif rows:
+            notice = t('history.recent_count', count=len(rows))
+        else:
+            notice = t('history.empty')
+        self.history_notice.set(notice)
         self._history_signature = self._get_history_signature()
 
     def _history_selected(self, _event=None):
@@ -3115,7 +3153,8 @@ class RefreshGui(tk.Tk):
         except ValueError:
             effective = selected
         digits = 3 if 0 < effective < .01 else 2
-        self.tap_jitter_text.set(f'Timing variation: ±{effective:.{digits}f}s' if enabled else t('settings.tap_variation_off'))
+        self.tap_jitter_text.set(t('settings.tap_variation', value=localized_number(effective, f'.{digits}f'))
+                                 if enabled else t('settings.tap_variation_off'))
 
     def _update_spent_display(self):
         try:
