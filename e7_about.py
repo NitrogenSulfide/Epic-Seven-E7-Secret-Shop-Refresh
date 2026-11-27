@@ -5,42 +5,10 @@ import tkinter as tk
 from tkinter import ttk
 import webbrowser
 from e7_appearance import profile_avatar
+from e7_i18n import t
 
-TESTED_CLIENTS = (
-    'Tested: Background on Steam (Windows 11 and Linux) and STOVE; Mouse on STOVE '
-    'and Google Play Games Developer Emulator; ADB on Google Play Games Developer '
-    'Emulator. Other clients and setups have not been tested.'
-)
-QUICKSTART = (
-    'Background mode (Epic Seven on Steam or STOVE)\n\n'
-    '1. Open English Epic Seven on Steam or STOVE at home or in Secret Shop. Close popups.\n'
-    '2. Background is selected by default. Press Start Refresh. You can keep using '
-    'your PC; keep the pointer off the game window. Two monitors work best; on one '
-    'monitor, cover the game if you like but never minimize it.\n'
-    'Playing on Google Play Games or an emulator? Background works only with Steam '
-    'and STOVE: the banner offers Switch to Mouse.\n\n'
-    'Mouse mode (emulators; takes over your pointer)\n\n'
-    '1. Open English Epic Seven at home or in Secret Shop. Close popups.\n'
-    '2. Choose Control mode → Mouse. Select your game window; use Scan if needed.\n'
-    '3. Press Start Refresh. The app opens the shop if needed. Leave the PC '
-    'alone; keep the game visible and its window still.\n\n'
-    'ADB mode\n\n'
-    '1. Enable/authorize emulator ADB debugging. Use English Epic Seven and a '
-    'landscape 16:9 game view of at least 640 × 360.\n'
-    '2. Choose ADB → select your device. Google Developer Emulator: '
-    'localhost:6520. Scan also lists open BlueStacks players by name and current port.\n'
-    '3. Start from home or Secret Shop. The app reveals idle home controls and opens the shop. '
-    'You can use your PC mouse while ADB runs.\n\n'
-    'Before Start: check budget, delay and stop key. Keep calibration off for '
-    'ordinary sessions. Both modes buy Covenant Bookmarks and Mystic Medals. '
-    'Optionally enable Also buy Friendship Points for the current heart item '
-    '(50 points for 18,000 gold per buy). Calibration excludes Friendship.\n'
-    'To stop: press your stop key or use Stop Session.\n\n'
-    'Mouse: resize before Start; game view must be at least 640 × 360.\n\n'
-    'Windows asks for administrator permission each time the app opens, because '
-    'Steam and STOVE run Epic Seven as administrator. Choose Yes.\n\n'
-    + TESTED_CLIENTS
-)
+TESTED_CLIENTS = t('about.tested_clients')
+QUICKSTART = t('about.quickstart') + TESTED_CLIENTS
 
 
 class AboutDialog(tk.Toplevel):
@@ -48,7 +16,7 @@ class AboutDialog(tk.Toplevel):
         super().__init__(app)
         self.app = app
         self.app_asset_dir = project/'e7_gui_assets'
-        self.title('Welcome · About & Credits' if first_time else 'About & Credits')
+        self.title(t('about.welcome_title') if first_time else t('about.title'))
         self.transient(app)
         self.protocol('WM_DELETE_WINDOW', self.close)
         self.bind('<Escape>', lambda _: self.close())
@@ -67,8 +35,8 @@ class AboutDialog(tk.Toplevel):
             avatar = tk.Label(header,image=self.avatar_image,borderwidth=0)
             avatar.grid(row=0,column=0,rowspan=3,padx=(0,dp(16)),sticky='n')
             self.colored.append(avatar)
-        for row, (text, font) in enumerate((('E7 Secret Shop Refresh', ('Segoe UI',18,'bold')),
-                           ('by NitrogenSulfide (Blue Natto)', app.heading_font),
+        for row, (text, font) in enumerate(((t('about.app_name'), ('Segoe UI',18,'bold')),
+                           (t('about.byline'), app.heading_font),
                            (f'{read_document(project / "VERSION").strip()} · {"Windows" if os.name == "nt" else "Linux"}', app.ui_font))):
             label = tk.Label(header, text=text, font=font, anchor='w')
             label.grid(row=row,column=text_column,sticky='ew',pady=(0,dp(3)))
@@ -76,25 +44,12 @@ class AboutDialog(tk.Toplevel):
         notebook = ttk.Notebook(self)
         notebook.grid(row=1, column=0, sticky='nsew', padx=dp(20))
         self.notebook = notebook
-        overview = (
-            'Welcome! Playing on Steam or STOVE? Keep Background (the default): it '
-            'clicks the game window directly, so you can keep using your PC. Check '
-            'the budget and stop key, then press Start Refresh.\n\n'
-            'Emulators and Google Play Games use Mouse or ADB instead. See Quickstart '
-            'for the steps.\n\n'
-            f'{TESTED_CLIENTS}\n\n'
-            'GUI and enhancements: NitrogenSulfide (Blue Natto)\n'
-            'Original refresh engine: Solunium\n'
-            'Epic Seven artwork: Smilegate and respective rights holders\n'
-            'Start/end sounds: Robin Lamb · CC0\n\n'
-            'Software licence: GNU GPL-3.0\n'
-            'Independent community tool.'
-        )
-        for title, contents in (('Overview',overview),
-                                ('Quickstart',QUICKSTART),
-                                ('Release notes',read_document(project/'CHANGELOG.txt')),
-                                ('Full credits',read_document(project/'CREDITS.txt')),
-                                ('Licence',read_document(project/'LICENSE'))):
+        overview = t('about.overview', tested_clients=TESTED_CLIENTS)
+        for title, contents in ((t('about.overview_tab'),overview),
+                                (t('about.quickstart_tab'),QUICKSTART),
+                                (t('about.release_notes_tab'),read_document(project/'CHANGELOG.txt')),
+                                (t('about.full_credits_tab'),read_document(project/'CREDITS.txt')),
+                                (t('about.licence_tab'),read_document(project/'LICENSE'))):
             panel = ttk.Frame(notebook, padding=dp(8))
             panel.columnconfigure(0, weight=1)
             panel.rowconfigure(0, weight=1)
@@ -112,15 +67,15 @@ class AboutDialog(tk.Toplevel):
         footer = ttk.Frame(self,padding=dp(20))
         footer.grid(row=2,column=0,sticky='ew')
         footer.columnconfigure(0,weight=1)
-        self.startup_check = ttk.Checkbutton(footer,text='Show this on startup',
+        self.startup_check = ttk.Checkbutton(footer,text=t('about.show_on_startup'),
                                              variable=app.credits_on_startup,
                                              command=app._save_credits_preference,
                                              style='Large.TCheckbutton')
         self.startup_check.grid(row=0,column=0,columnspan=3,sticky='w',pady=(0,dp(8)))
         links = ttk.Frame(footer)
         links.grid(row=1,column=0,sticky='w')
-        ttk.Button(links,text='Upstream project',command=lambda: webbrowser.open('https://github.com/Solunium/Epic-Seven-E7-Secret-Shop-Refresh')).pack(side='left')
-        self.continue_button = ttk.Button(footer,text='Continue' if first_time else 'Close',command=self.close,style='Accent.TButton')
+        ttk.Button(links,text=t('about.upstream_project'),command=lambda: webbrowser.open('https://github.com/Solunium/Epic-Seven-E7-Secret-Shop-Refresh')).pack(side='left')
+        self.continue_button = ttk.Button(footer,text=t('about.continue') if first_time else t('common.close'),command=self.close,style='Accent.TButton')
         self.continue_button.grid(row=1,column=2,sticky='e',padx=(dp(8),0))
         self.apply_theme(app.dark_mode.get())
         left,top,width,height = app._screen_work_area()
@@ -151,4 +106,4 @@ def read_document(path: Path):
     try:
         return path.read_text(encoding='utf-8-sig')
     except (OSError,UnicodeError):
-        return f'{path.name} is unavailable in this installation.'
+        return t('about.document_unavailable', name=path.name)

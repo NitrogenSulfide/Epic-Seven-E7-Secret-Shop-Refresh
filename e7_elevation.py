@@ -4,6 +4,7 @@ from ctypes import wintypes as w
 from pathlib import Path
 import subprocess
 import sys
+from e7_i18n import t
 
 
 class ElevationCancelled(OSError):
@@ -65,7 +66,7 @@ def restart_as_administrator(engine_directory, *, parent=None, shell=None, kerne
     if not shell.ShellExecuteExW(ctypes.byref(info)):
         error = last_error()
         if error == 1223:
-            raise ElevationCancelled('Administrator prompt cancelled. No Mouse input sent.')
-        raise OSError(error, 'Windows could not restart the app as administrator.')
+            raise ElevationCancelled(t('startup.elevation_cancelled'))
+        raise OSError(error, t('startup.elevation_restart_error'))
     if info.hProcess:
         kernel.CloseHandle(info.hProcess)

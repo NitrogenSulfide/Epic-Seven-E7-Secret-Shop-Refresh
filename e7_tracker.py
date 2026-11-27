@@ -12,6 +12,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from e7_appearance import ThemeHint, currency_icons
+from e7_i18n import t
 
 # Statuses that end compact view: the session is stopping, has ended or
 # needs the user. Paused and Waiting for game stay compact and show on the bar.
@@ -20,7 +21,7 @@ RESTORE_STATUSES = frozenset({'Stopping', 'Stopped', 'Finished', 'Needs attentio
 
 def short_remaining(text):
     value = text.removeprefix('Time remaining: ')
-    return f'{value[1:]} left' if value.startswith('~') else value
+    return t('tracker.time_left', remaining=value[1:]) if value.startswith('~') else value
 
 
 class CompactTracker:
@@ -37,8 +38,8 @@ class CompactTracker:
         status.grid(row=0, column=column, sticky='w', padx=(0, dp(10)))
         column += 1
         self.counters = {}
-        for key, var, text in (('covenant', root.covenant, 'Covenant'), ('mystic', root.mystic, 'Mystic'),
-                               ('friendship', root.friendship, 'Friendship'), ('spent', root.spent_display, 'Skystones')):
+        for key, var, text in (('covenant', root.covenant, t('item.covenant')), ('mystic', root.mystic, t('item.mystic')),
+                               ('friendship', root.friendship, t('item.friendship')), ('spent', root.spent_display, t('tracker.skystones'))):
             cell = ttk.Frame(frame)
             cell.grid(row=0, column=column, sticky='w', padx=(0, dp(14)))
             if key in self.icons:
@@ -54,12 +55,12 @@ class CompactTracker:
         ttk.Label(frame, textvariable=self.remaining, style='Muted.TLabel').grid(row=0, column=column, sticky='w', padx=(0, dp(14)))
         frame.columnconfigure(column, weight=1)
         column += 1
-        self.stop_button = ttk.Button(frame, text='Stop', command=root.stop_refresh, padding=(dp(10), dp(4)))
+        self.stop_button = ttk.Button(frame, text=t('tracker.stop'), command=root.stop_refresh, padding=(dp(10), dp(4)))
         self.stop_button.grid(row=0, column=column, sticky='e', padx=(0, dp(6)))
         column += 1
         self.expand_button = ttk.Button(frame, text='⤢', width=3, command=self.restore, padding=(dp(6), dp(4)))
         self.expand_button.grid(row=0, column=column, sticky='e')
-        ThemeHint(self.expand_button, lambda: 'Show the full window')
+        ThemeHint(self.expand_button, lambda: t('tracker.expand_hint'))
         # Red line under the bar while the pointer pauses a Background run.
         self.alert = ttk.Label(frame, textvariable=root.pointer_alert, style='Alert.TLabel', font=root.heading_font)
         self.alert.grid(row=1, column=0, columnspan=column+1, sticky='w', pady=(dp(4), 0))
