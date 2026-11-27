@@ -523,7 +523,26 @@ def list_view(rgb):
     return cv2.resize(grey,((right-left)//8,(bottom-top)//8),interpolation=cv2.INTER_AREA).astype(np.int16)
 
 
+class GoldLimitReached(MouseStopped):
+    """The next spending action would exceed the session's Gold allowance."""
+
+
 class ObservedShopFlow:
+    gold_cap = None
+
+    def _check_gold_limit(self, item=None):
+        """Check the next buy, or the cheapest selected buy before a refresh."""
+        if self.gold_cap is None or not self.loop_active:
+            return
+        spent = self.storage.getTotalCost()
+        price = item.price if item is not None else min(selected.price for selected in self.storage.inventory.values())
+        if spent + price <= self.gold_cap:
+            return
+        reason = (f'Gold limit reached: next buy would cost {price:,}' if item is not None else
+                  f'Gold limit reached: {spent:,} of {self.gold_cap:,} spent')
+        self.request_stop(reason)
+        raise GoldLimitReached(reason)
+
     # Mouse and Background capture the game cheaply, so their waits end as soon
     # as the screen shows the expected state, with the old fixed time as the
     # upper bound, and the tap delay becomes the minimum gap between clicks.

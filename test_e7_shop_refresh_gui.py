@@ -114,6 +114,14 @@ class ProtocolTests(unittest.TestCase):
         for jitter in (-.01,.11,float('nan'),float('inf')):
             with self.assertRaises(ValueError):gui.validate_settings('x','100','.3','esc',True,False,jitter)
 
+    def test_optional_gold_cap_validation(self):
+        for value, expected in ((None, None), ('', None), ('   ', None), ('0', 0), (184000, 184000)):
+            with self.subTest(value=value):
+                self.assertEqual(gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap=value).gold_cap, expected)
+        for value in (-1, '1.5', 3.0, '1,000', 'abc', True):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'Gold spending limit'):
+                gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap=value)
+
     def test_formatting(self):
         self.assertEqual(gui.duration_text("5536.52"), "1h 32m 16s")
         self.assertEqual(gui.number_text("7656000"), "7,656,000")
@@ -356,6 +364,65 @@ class GuiTests(unittest.TestCase):
         self.assertIn('Friendship purchases need',self.app.connection_warning)
         launch.assert_not_called()
         self.assertEqual(verify.call_args.args[0][-1],'--verify')
+
+    def test_gold_cap_persists_and_clears_without_changing_legacy_defaults(self):
+        self.assertIsNone(self.app._settings().gold_cap)
+        for value in ('1000000', '0', ''):
+            with self.subTest(value=value):
+                self.app.gold_cap.set(value)
+                self.app._flush_autosave()
+                self.app.gold_cap.set('123')
+                self.app._load_config()
+                self.assertEqual(self.app.gold_cap.get(), value)
+        self.app.gold_cap.set('100')
+        self.app.gold_cap_entry.insert('end', '.5')
+        self.assertEqual(self.app.gold_cap.get(), '100')
+        self.app._set_controls(True)
+        self.assertTrue(self.app.gold_cap_entry.instate(['disabled']))
+
+    def test_capped_adb_requires_capability_and_structured_session(self):
+        self.app.gold_cap.set('0')
+        settings = self.app._settings()
+        for capabilities, structured, warning in (('gui session v1; gold limit v10', True, 'gold limit v1'),
+                                                 ('gold limit v1', False, 'GUI session support')):
+            with self.subTest(capabilities=capabilities), patch.object(gui, 'launch_engine') as launch, \
+                 patch.object(gui.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=capabilities)):
+                self.app._structured_adb = structured
+                self.app._begin_refresh(settings)
+                self.assertIn(warning, self.app.connection_warning)
+                launch.assert_not_called()
+
+    def test_capped_adb_shows_engine_stop_reason_after_exit(self):
+        for reason, enabled in (('Gold limit reached: next buy would cost 184,000', True),
+                                ('Gold limit reached: 920,000 of 1,000,000 spent', False)):
+            with self.subTest(reason=reason, sound_enabled=enabled):
+                self.check_gold_stop(reason, enabled)
+        self.app.gold_cap.set('')
+        with patch.object(gui, 'launch_engine', side_effect=OSError('fake launch')) as launch:
+            self.app._begin_refresh(self.app._settings())
+        self.assertNotIn('gold_cap', json.loads(launch.call_args.args[0][-1]))
+
+    def check_gold_stop(self, reason, sound_enabled):
+        self.app._structured_adb = True
+        self.app.gold_cap.set('0')
+        self.app.sound_enabled.set(sound_enabled)
+        self.sound_mock.reset_mock()
+        self.fake.write_text(
+            'import sys, json\n'
+            'if sys.argv[1:] == ["--verify"]:\n'
+            '    print("E7 engine: gui session v1; gold limit v1"); sys.exit(0)\n'
+            'assert sys.argv[1] == "--gui-session" and json.loads(sys.argv[2])["gold_cap"] == 0\n'
+            'print("E7GUI_STARTED")\n'
+            f'print("E7GUI_GOLD_LIMIT_REACHED " + json.dumps({{"reason": {reason!r}}}))\n'
+            'print("---Result---")\n')
+        self.app._begin_refresh(self.app._settings())
+        self.pump_until(lambda: self.app._finalized_run_id == self.app.run_id)
+        self.assertEqual(self.app.status.get(), 'Stopped')
+        self.assertIsNone(self.app._mouse_failure)
+        self.assertEqual(self.app.detail.get(), reason)
+        self.assertFalse(self.app.stop_key_pressed)
+        sounds = [Path(call.args[0]).name for call in self.sound_mock.call_args_list]
+        self.assertEqual(sounds, ['start.wav', 'end.wav'] if sound_enabled else [])
 
     def _eta_stats(self, count):
         return 'E7GUI_STATS '+json.dumps(dict(refreshes=count, skystone_spent=count*3,
@@ -951,20 +1018,33 @@ class GuiTests(unittest.TestCase):
         self.assertIn('Mouse uses your pointer',self.app.home_ui_hint.get())
 
     def test_real_mouse_start_uses_native_cli_and_same_settings_without_adb(self):
+        for gold_cap in ('', '1000000'):
+            with self.subTest(gold_cap=gold_cap):
+                self.check_mouse_start(gold_cap)
+
+    def check_mouse_start(self, gold_cap):
         target = self.choose_mouse_fixture()
         self.app.control_mode.set('Mouse'); self.app._change_control_mode()
         self.app._apply_mouse_windows([target],'')
+        self.app.gold_cap.set(gold_cap)
         self.fake.write_text('print("E7GUI_STARTED",flush=True)\nprint(\'E7GUI_STATS {"refreshes":4,"skystone_spent":12,"covenant":0,"mystic":0,"friendship":0}\',flush=True)\nprint("---Result---\\nCovenant bookmark:0\\nMystic medal:0\\nSkystone spent:12",flush=True)\n')
         self.fake.with_suffix('.sha256').write_text(hashlib.sha256(self.fake.read_bytes()).hexdigest())
-        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='window mouse v9; tap timing v2; global stop key v2')), \
+        capabilities = 'window mouse v9; tap timing v2; global stop key v2'
+        if gold_cap:
+            capabilities += '; gold limit v1'
+        with patch.object(gui.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout=capabilities)), \
                 patch.object(gui,'activate_native_target',return_value=target) as activate, \
                 patch.object(gui,'check_connection') as adb,patch.object(gui,'launch_engine',wraps=gui.launch_engine) as launch:
             self.start_fake()
-            self.pump_until(lambda:self.app.status.get()=='Finished')
+            self.pump_until(lambda: self.app.status.get() == 'Finished' and self.app._finalized_run_id == self.app.run_id)
         args = launch.call_args.args[0]
         self.assertIn('--mouse-session',args)
         self.assertEqual(json.loads(args[args.index('--mouse-session')+1])['handle'],target.handle)
         self.assertEqual(args[args.index('--budget')+1],'12')
+        if gold_cap:
+            self.assertEqual(args[args.index('--gold-cap')+1], gold_cap)
+        else:
+            self.assertNotIn('--gold-cap', args)
         self.assertEqual(args[args.index('--stop-key')+1],'`')
         self.assertEqual(args[args.index('--random-offset')+1],'yes')
         self.assertEqual(args[args.index('--tap-jitter')+1],str(self.app.run_settings.tap_jitter))

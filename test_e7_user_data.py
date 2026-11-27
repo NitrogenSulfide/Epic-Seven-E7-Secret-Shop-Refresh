@@ -1003,6 +1003,7 @@ class GuiWiringTests(unittest.TestCase):
             if import_error is None:
                 window.start_refresh()  # must not start anything until the restart
                 window._write_sound_preference()  # must not write over the imported file
+                window._write_sound_preference(settings=SimpleNamespace(gold_cap=0))
                 self.assertIsNone(window.save_settings())
         return window, relaunched
 
@@ -1073,14 +1074,14 @@ class GuiWiringTests(unittest.TestCase):
         self.assertIsNone(self.gui.engine_environment())
 
 
-    def begin_with_engine(self, verify_output):
+    def begin_with_engine(self, verify_output, gold_cap=None):
         gui = self.gui
         fake = self.root / 'fake_engine.py'
         fake.write_text(f'print({verify_output!r})\n', encoding='utf-8')
         warnings = []
         window = type('FakeWindow', (), {'_set_connection_warning': lambda _, text, reveal=False: warnings.append(text),
-                                         'save_settings': lambda _, settings: None})()
-        settings = type('Settings', (), dict(buy_covenant=True, buy_mystic=True, buy_friendship=False, debug=False))()
+                                         'save_settings': lambda _, settings: None, '_structured_adb': True})()
+        settings = gui.validate_settings('fixture', 3, .3, 'esc', False, False, gold_cap=gold_cap)
         with patch.object(gui, 'engine_command', lambda: [sys.executable, str(fake)]), \
                 patch.multiple(gui, DATA_DIR=self.data, APP_DIR=self.engine):
             gui.RefreshGui._begin_refresh(window, settings)
@@ -1093,6 +1094,11 @@ class GuiWiringTests(unittest.TestCase):
 
     def test_matching_engine_is_accepted(self):
         self.assertEqual(self.begin_with_engine('E7 engine: background session v1; user data folder v1; imports OK'), [])
+
+    def test_capped_run_in_user_folder_requires_both_capabilities(self):
+        self.assertIn('older than the GUI', self.begin_with_engine('gold limit v1', gold_cap=0)[0])
+        self.assertIn('gold limit v1', self.begin_with_engine('user data folder v1', gold_cap=0)[0])
+        self.assertEqual(self.begin_with_engine('gold limit v1; user data folder v1', gold_cap=0), [])
 
     def test_shipped_engine_advertises_the_data_folder(self):
         text = (Path(__file__).parent / 'E7ADBShopRefresh.py').read_text(encoding='utf-8')

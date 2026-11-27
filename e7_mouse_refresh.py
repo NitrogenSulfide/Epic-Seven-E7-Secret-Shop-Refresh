@@ -18,6 +18,7 @@ from e7_frame import normalize_game_frame
 from e7_mouse_confirmation import read_confirmation_text, read_ui_text, confirmation_matches
 from e7_shop_navigation import create_navigator
 from e7_timing import validate_timing
+from e7_engine_protocol import validate_gold_cap
 from e7_session_control import listen_for_stop
 
 
@@ -107,6 +108,7 @@ def run_mouse_session(arguments):
     parser = argparse.ArgumentParser(description='Native STOVE Mouse refresh session; uses the real pointer.')
     parser.add_argument('--mouse-session',required=True,help='selected window JSON')
     parser.add_argument('--budget',type=int,required=True)
+    parser.add_argument('--gold-cap', type=validate_gold_cap)
     parser.add_argument('--delay',type=float,required=True)
     parser.add_argument('--stop-key',required=True)
     parser.add_argument('--random-offset',choices=('yes','no'),required=True)
@@ -129,7 +131,7 @@ def run_mouse_session(arguments):
         data = json.loads(args.mouse_session)
         target = GameWindow(int(data['handle']),int(data['pid']),str(data['title']),tuple(data['rectangle']),
                             int(data['render_handle']) if data.get('render_handle') is not None else None)
-        app = E7MouseShopRefresh(target,budget=args.budget,tap_sleep=args.delay,
+        app = E7MouseShopRefresh(target,budget=args.budget,tap_sleep=args.delay,gold_cap=args.gold_cap,
                                 stop_refresh_key=args.stop_key,random_offset=args.random_offset=='yes',debug=False,tap_jitter=args.tap_jitter,
                                 trace_input=data.get('trace_input', args.trace_input), buy_friendship=args.buy_friendship,
                                 buy_covenant=not args.skip_covenant, buy_mystic=not args.skip_mystic)

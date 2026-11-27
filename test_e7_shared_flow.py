@@ -1,5 +1,7 @@
 """Same action loop through fake ADB/Windows transports. Never access a game."""
 import contextlib,io,itertools,json,random,unittest
+import threading
+import tempfile
 from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import Mock,patch
@@ -12,6 +14,7 @@ from e7_shop_flow import ObservedShopFlow
 from e7_shop_navigation import create_navigator,REFERENCE_BOXES
 from e7_mouse_confirmation import confirmation_matches,read_confirmation_text
 from e7_frame import FrameGeometry,normalize_game_frame
+from e7_history import append_session, read_sessions
 from e7_native_mouse import MouseStopped,MouseRecheckRequired
 
 def base_image():
@@ -61,11 +64,15 @@ class SharedFlowTests(unittest.TestCase):
         app.refresh_count=0;app._rgb=None;app._item=app._item_name=None;app._scan_page=1
         app._adb_geometry=None;app._capture_resumed=False
         app.adb_path='NEVER-RUN-ADB';app.device_args=['-s','fake-device']
-        app.navigation=create_navigator('adb-assets');app.read_navigation_text=Mock(return_value=dict(text='',words=[]))
+        app.navigation=create_navigator('adb-assets')
         app.storage=E7Inventory()
         for name,filename,price,_ in ITEM_ROWS:
             if name=='Friendship points' and not buy_friendship:continue
             app.storage.inventory[name]=E7Item(cv2.imread('adb-assets/'+filename,cv2.IMREAD_GRAYSCALE) if filename else None,price)
+        return self.attach_fake_shop(app, mode, width, wallpaper, items, height, offered, home_control)
+
+    def attach_fake_shop(self, app, mode, width=1920, wallpaper=None, items=False, height=None, offered=None, home_control='epic-pass'):
+        app.read_navigation_text=Mock(return_value=dict(text='',words=[]))
         app.storage.writeToCSV=Mock();app._save_home_failure=Mock(return_value=False);app._save_confirmation_failure=Mock(return_value=False)
         wallpaper=base_image() if wallpaper is None else wallpaper
         state=dict(screen='hidden',bought=set(),refreshes=0,events=[],pending=None,page=1)
@@ -130,6 +137,12 @@ class SharedFlowTests(unittest.TestCase):
             app.mouse.click.side_effect=click;app.mouse.drag.side_effect=lambda *_args,**_kwargs:scroll()
         return app,state
 
+    def make_capped_adb_shop(self, gold_cap, offered, **buy_options):
+        with patch.object(E7ADBShopRefresh, 'checkScreenDimension'):
+            app = E7ADBShopRefresh(budget=6, gold_cap=gold_cap, adb_runner=Mock(), **buy_options)
+        app._stop_key_ready.set()  # run_capped_shop uses a fake keyboard monitor.
+        return self.attach_fake_shop(app, 'adb', items=True, offered=offered)
+
     def test_event_home_opens_observed_shop_in_adb_google_and_stove_without_refresh(self):
         for mode,width,height in (('adb',1920,1080),('mouse',1280,720),('mouse-stove',3840,2019)):
             with self.subTest(mode=mode):
@@ -142,6 +155,87 @@ class SharedFlowTests(unittest.TestCase):
                 _,x,y=state['events'][0];self.assertLess(abs(x-84)+abs(y-498),8)
                 app.read_navigation_text.assert_not_called()
                 app._save_home_failure.assert_not_called()
+
+    def run_capped_shop(self, app, state):
+        app._stop_requested = threading.Event()
+        app.keyboard_thread = Mock()
+        app.wait = Mock()
+        state['screen'] = 'shop'
+        del app.storage.writeToCSV  # Exercise the real history writer in the temporary directory.
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as folder:
+            history = Path(folder) / 'history.csv'
+            with patch('E7ADBShopRefresh.append_session', side_effect=lambda _, row: append_session(history, row)), \
+                 patch('e7_shop_flow.np.linspace', return_value=np.array([1.])), \
+                 patch('e7_shop_flow.read_ui_text', side_effect=lambda *a, **kw: app._fake_shop_ocr()), \
+                 contextlib.redirect_stdout(output):
+                app.start()
+            [session] = read_sessions(history)
+        self.assertEqual(session['Outcome'], 'stopped')
+        events = [json.loads(line.split(' ', 1)[1]) for line in output.getvalue().splitlines()
+                  if line.startswith('E7GUI_GOLD_LIMIT_REACHED ')]
+        self.assertEqual(events, [{'reason': session['Reason']}])
+        self.assertEqual(int(session['Gold spent']), app.storage.getTotalCost())
+        return session['Reason']
+
+    def test_gold_cap_leaves_over_budget_buy_on_its_page_and_stops(self):
+        covenant, mystic = 'Covenant bookmark', 'Mystic medal'
+        for mode, offered, page in (('adb', ((covenant, mystic), ()), 1),
+                                    ('mouse', ((covenant,), (mystic,)), 2)):
+            with self.subTest(mode=mode):
+                app, state = self.make_app(mode, items=True, offered=offered)
+                app.gold_cap = 184000 + 280000 - 1
+                self.assertEqual(self.run_capped_shop(app, state), 'Gold limit reached: next buy would cost 280,000')
+                self.assertEqual((state['screen'], state['page'], state['refreshes']), ('shop', page, 0))
+                self.assertEqual(state['bought'], {covenant})
+                self.assertEqual(app.storage.getTotalCost(), 184000)
+                self.assertEqual([event[0] for event in state['events']], ['shop', 'buy'] + ['drag'] * (page - 1))
+
+    def test_gold_cap_refresh_uses_only_selected_prices_and_allows_exactly_enough(self):
+        offered = (tuple(row[0] for row in ITEM_ROWS), ())
+        for name, _, price, _ in ITEM_ROWS:
+            for remaining in (price - 1, price):
+                with self.subTest(name=name, remaining=remaining):
+                    app, state = self.make_capped_adb_shop(
+                        price + remaining, offered, buy_covenant=name == 'Covenant bookmark',
+                        buy_mystic=name == 'Mystic medal', buy_friendship=name == 'Friendship points')
+                    self.assertEqual(list(app.storage.inventory), [name])
+                    reason = self.run_capped_shop(app, state)
+                    buys = 2 if remaining == price else 1
+                    spent = buys * price
+                    self.assertEqual((state['refreshes'], app.storage.getTotalCost()), (buys - 1, spent))
+                    self.assertEqual(state['bought'], {name})
+                    self.assertEqual(reason, f'Gold limit reached: {spent:,} of {app.gold_cap:,} spent')
+
+    def test_zero_gold_cap_stops_without_buying_or_refreshing(self):
+        for name, _, price, _ in ITEM_ROWS:
+            with self.subTest(name=name):
+                app, state = self.make_capped_adb_shop(0, ((name,), ()), buy_friendship=True)
+                reason = self.run_capped_shop(app, state)
+                self.assertEqual(reason, f'Gold limit reached: next buy would cost {price:,}')
+                self.assertEqual((state['screen'], state['events'], state['bought']), ('shop', [], set()))
+                self.assertEqual((state['refreshes'], app.storage.getTotalCost()), (0, 0))
+                self.assertTrue(app.end_of_refresh)
+                self.assertFalse(app.loop_active)
+                app.keyboard_thread.join.assert_called_once_with(timeout=1)
+
+    def test_gold_cap_blocks_buy_during_final_skystone_scan(self):
+        app, state = self.make_app('mouse', items=True, offered=(('Mystic medal',), ()))
+        app.budget, app.gold_cap = 3, 280000 + 184000
+        self.assertEqual(self.run_capped_shop(app, state), 'Gold limit reached: next buy would cost 280,000')
+        self.assertEqual((state['refreshes'], state['bought'], app.storage.getTotalCost()), (1, set(), 280000))
+
+    def test_affordable_buy_with_changed_confirmation_spends_nothing(self):
+        app, state = self.make_app('adb', items=True)
+        app.gold_cap = 184000
+        state['screen'] = 'shop'
+        app.read_confirmation_text.side_effect = ['Cancel Buy Covenant Bookmarks 184,000',
+                                                  'Cancel Buy Mystic Medals 280,000']
+        with patch('e7_shop_flow.read_ui_text', return_value=dict(words=[])), patch('e7_shop_flow.time.sleep'), \
+             contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(MouseStopped, 'confirmation changed'):
+            app.refreshShop()
+        self.assertEqual([event[0] for event in state['events']], ['shop'])
+        self.assertEqual((state['bought'], state['refreshes'], app.storage.getTotalCost()), (set(), 0, 0))
 
     def test_native_maximized_hidden_home_purchases_and_repeated_refreshes(self):
         for width,height in ((1920,1010),(3840,2019),(1920,1035)):

@@ -11,6 +11,7 @@ from e7_mouse_refresh import E7MouseShopRefresh
 from e7_native_mouse import MouseStopped
 from e7_session_control import listen_for_stop
 from e7_timing import validate_timing
+from e7_engine_protocol import validate_gold_cap
 
 
 # Clicks a dry run may send: navigation only, never anything that spends.
@@ -79,6 +80,7 @@ def run_background_session(arguments):
     parser = argparse.ArgumentParser(description='Background refresh session for Epic Seven on Steam (Windows, or Linux under Proton).')
     parser.add_argument('--background-session', action='store_true', required=True)
     parser.add_argument('--budget', type=int, required=True)
+    parser.add_argument('--gold-cap', type=validate_gold_cap)
     parser.add_argument('--delay', type=float, required=True)
     parser.add_argument('--stop-key', default='esc')
     parser.add_argument('--random-offset', choices=('yes', 'no'), required=True)
@@ -97,7 +99,7 @@ def run_background_session(arguments):
         parser.error(str(error))
     app = None
     try:
-        app = E7BackgroundShopRefresh(budget=args.budget, tap_sleep=args.delay, stop_refresh_key=args.stop_key,
+        app = E7BackgroundShopRefresh(budget=args.budget, gold_cap=args.gold_cap, tap_sleep=args.delay, stop_refresh_key=args.stop_key,
                                       random_offset=args.random_offset == 'yes', debug=False,
                                       tap_jitter=args.tap_jitter, trace_input=args.trace_input,
                                       buy_friendship=args.buy_friendship, buy_covenant=not args.skip_covenant,

@@ -37,16 +37,18 @@ class FriendshipSessionTests(unittest.TestCase):
         from e7_mouse_refresh import run_mouse_session
         from e7_background_refresh import run_background_session
         window=json.dumps(dict(handle=123,pid=456,title='fake',rectangle=[0,0,1920,1080]))
-        common=['--budget','3','--delay','.3','--stop-key','esc','--random-offset','no','--skip-covenant']
+        common=['--budget','3','--delay','.3','--stop-key','esc','--random-offset','no','--skip-covenant','--gold-cap','280000']
         with patch('e7_mouse_refresh.E7MouseShopRefresh') as engine,patch('e7_mouse_refresh.threading.Thread'),contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(run_mouse_session(['--mouse-session',window,*common]),0)
         self.assertFalse(engine.call_args.kwargs['buy_covenant'])
         self.assertTrue(engine.call_args.kwargs['buy_mystic'])
+        self.assertEqual(engine.call_args.kwargs['gold_cap'], 280000)
         with patch('e7_background_refresh.E7BackgroundShopRefresh') as engine,patch('e7_background_refresh.threading.Thread'),contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(run_background_session(['--background-session',*common,'--skip-mystic','--buy-friendship']),0)
         self.assertFalse(engine.call_args.kwargs['buy_covenant'])
         self.assertFalse(engine.call_args.kwargs['buy_mystic'])
         self.assertTrue(engine.call_args.kwargs['buy_friendship'])
+        self.assertEqual(engine.call_args.kwargs['gold_cap'], 280000)
 
 
 def shop():
