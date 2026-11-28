@@ -255,6 +255,7 @@ class LocalizationPolishTests(unittest.TestCase):
              'A engine foi encerrada (código 7). Consulte Diagnóstico antes de tentar novamente.'),
             (0, True, False, 'Gold limit reached: 1,000', 'Stopped', 'Gold limit reached: 1,000', 'Gold limit reached: 1,000'),
         )
+        tags = {}
         for language in ('en', 'pt_BR'):
             with self.window(language) as (app, _):
                 app._update_diagnostics_summary()
@@ -273,7 +274,11 @@ class LocalizationPolishTests(unittest.TestCase):
                         self.assertEqual(app.status.get(), status)
                         self.assertEqual(app.detail.get(), portuguese if language == 'pt_BR' else english)
                         item = app.activity.get_children()[-1]
-                        self.assertEqual(app.activity.item(item, 'values')[1], english)
+                        self.assertEqual(app.activity.item(item, 'values')[1],
+                                         portuguese if language == 'pt_BR' else english)
+                        # The colour is judged on the English wording, so it matches in both languages.
+                        tags.setdefault((code, status, gold), tuple(app.activity.item(item, 'tags')))
+                        self.assertEqual(tuple(app.activity.item(item, 'tags')), tags[(code, status, gold)])
                         if status == 'Needs attention':
                             self.assertIn(english, app._report_text())
 

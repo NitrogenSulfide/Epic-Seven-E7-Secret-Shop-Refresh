@@ -75,6 +75,10 @@ MATCHED_TEXT = [
     'Friendship purchases:', 'Not saved yet', 'to stop debug',
     'check image - find it in taskbar',
 ]
+# en.json keys whose English is the engine's exact output. e7_engine_text matches
+# engine lines against them and only shows the translation, so they may contain
+# matched wording such as 'Navigation: '.
+ENGINE_KEY_PREFIX = 'engine.'
 # The Activity log picks a colour by searching for these words (e7_shop_refresh_gui._event).
 COLOUR_WORDS = re.compile(r'failed|error|exception|traceback|not recognized|could not|'
                           r'cannot|stop|pause|waiting|cancel|needs help', re.I)
@@ -517,7 +521,8 @@ def check_extraction(repo, base, head, report):
     english = load_locale(en_text, ENGLISH, report) or {}
     for key, value in english.items():
         check_placeholders(key, value, ENGLISH, report)
-        for prefix in MATCHED_TEXT:
+        # engine.* text is the engine's own wording, matched against en.json (e7_engine_text).
+        for prefix in () if key.startswith(ENGINE_KEY_PREFIX) else MATCHED_TEXT:
             if prefix in value:
                 report.problem(f'{ENGLISH}: {key!r} contains {prefix!r}, which the app matches by '
                                'wording. It must stay hard-coded English.')

@@ -52,7 +52,8 @@ class ProtocolTests(unittest.TestCase):
 
     def test_navigation_evidence_is_shown_without_starting_a_gui(self):
         details, events = [], []
-        app = SimpleNamespace(detail=SimpleNamespace(set=details.append), _event=events.append, _set_compact_hint=lambda _: None,
+        app = SimpleNamespace(detail=SimpleNamespace(set=details.append), _event=lambda text, shown=None: events.append(text),
+                              _set_compact_hint=lambda _: None,
                               stopping=False, stop_key_pressed=False,
                               status=SimpleNamespace(get=lambda: 'Ready'))
         gui.RefreshGui._handle_line(app, 'Navigation: Secret Shop screen verified.')
