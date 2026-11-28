@@ -88,11 +88,11 @@ class EngineTextTests(unittest.TestCase):
 
     def test_placeholders_that_are_engine_words_are_translated(self):
         self.assertEqual(engine_text('The Mystic medal row is greyed out (already bought); skipping it.', 'pt_BR'),
-                         'A linha de Mystics está esmaecida (item já comprado); pulando.')
+                         'O item Mystics já foi comprado e está indisponível. Indo para o próximo.')
         message = ('A Confirm click for the last refresh may have reached the game just before stopping. '
                    'It is counted, but its result was not seen; check it in the game.')
         self.assertIn('última atualização', engine_text(message, 'pt_BR'))
-        self.assertIn('confirmação de Refresh', engine_text(
+        self.assertIn('confirmação da atualização', engine_text(
             'The refresh confirmation is open but still blank (the game may be waiting on the server); '
             'waiting up to 10 more seconds.', 'pt_BR'))
         # An unknown value is shown as the engine wrote it.
