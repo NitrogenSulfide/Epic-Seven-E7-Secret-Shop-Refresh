@@ -1,6 +1,9 @@
-"""Scenario tests for tools/check_translation_pr.py on the real 0.2.7 GUI file.
+"""Scenario tests for tools/check_translation_pr.py on the real 0.2.7-era GUI file.
 
-Usage: python tools/test_check_translation_pr.py [REPO] [--show]   (needs origin/main fetched)
+Usage: python tools/test_check_translation_pr.py [REPO] [--show]
+
+The fixture is the GUI as it was just before the English text moved to
+locales/en.json (FIXTURE), so the scenarios can do that move themselves.
 """
 import json, os, shutil, stat, subprocess, sys, tempfile
 
@@ -8,6 +11,8 @@ SRC = os.path.abspath(next((a for a in sys.argv[1:] if not a.startswith('--')), 
 TOOL = os.path.join(SRC, 'tools', 'check_translation_pr.py')
 work = tempfile.mkdtemp()
 results = []
+# Last main commit before the PT-BR extraction (0f6970f); the checker was last extended here.
+FIXTURE = '8d7397443436fec07a39b1b1177a206f869e9885'
 
 
 def _force(func, path, _exc):
@@ -53,11 +58,11 @@ i18n = 'def t(key, **values):\n    return key\n'
 
 def body():
     git('init', '-q')
-    gui = git('show', 'origin/main:e7_shop_refresh_gui.py', cwd=SRC)
-    engine = git('show', 'origin/main:E7ADBShopRefresh.py', cwd=SRC)
+    gui = git('show', f'{FIXTURE}:e7_shop_refresh_gui.py', cwd=SRC)
+    engine = git('show', f'{FIXTURE}:E7ADBShopRefresh.py', cwd=SRC)
     write('e7_shop_refresh_gui.py', gui); write('E7ADBShopRefresh.py', engine)
-    build = git('show', 'origin/main:build_release.ps1', cwd=SRC)
-    dialog = git('show', 'origin/main:e7_import_dialog.py', cwd=SRC)
+    build = git('show', f'{FIXTURE}:build_release.ps1', cwd=SRC)
+    dialog = git('show', f'{FIXTURE}:e7_import_dialog.py', cwd=SRC)
     write('e7_about.py', 'TEXT = "hello"\n'); write('build_release.ps1', build)
     write('e7_import_dialog.py', dialog)
     base = commit('base')
@@ -98,6 +103,9 @@ def body():
                                    'E7ADBShopRefresh.py': engine + '\n# hi\n'}, ['not a GUI-only file'])
     scenario('matched-text', 1, {'e7_shop_refresh_gui.py': good,
                                  'locales/en.json': json.dumps({**EN, 'x': 'Not saved yet'})}, ['matches by'])
+    scenario('engine-key-matched-text', 0, {'e7_shop_refresh_gui.py': good, 'e7_i18n.py': i18n,
+                                            'locales/en.json': json.dumps({**EN, 'engine.nav.x': 'Navigation: opening'})},
+             ['4 text moves, nothing else changed'])
     scenario('compare', 1, {'e7_shop_refresh_gui.py': good.replace(
         "if self.setting_notice.get().startswith('Not saved yet'):",
         "if self.setting_notice.get().startswith(t('budget.label')):"), **std}, ['used in .startswith()'])
