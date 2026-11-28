@@ -1,8 +1,10 @@
 import ast
+import json
 from pathlib import Path
 from string import Formatter
 from types import SimpleNamespace
 import unittest
+import unittest.mock
 
 import e7_i18n
 from e7_engine_text import MESSAGE_KEYS, engine_text, navigation_text
@@ -49,15 +51,30 @@ class EngineTextTests(unittest.TestCase):
                                     'Add an engine.nav.* key to locales/en.json and pt_BR.json')
 
     def test_english_templates_are_still_what_the_engine_prints(self):
-        sources = ''.join((REPO/name).read_text(encoding='utf-8') for name in ENGINE_FILES)
+        # Every whole string the engine source contains (adjacent literals are already
+        # joined by the parser; f-string parts become 'X'), without a Navigation prefix.
+        strings = set()
+        for name in ENGINE_FILES:
+            for node in ast.walk(ast.parse((REPO/name).read_text(encoding='utf-8'))):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    text = node.value
+                elif isinstance(node, ast.JoinedStr):
+                    text = ''.join(p.value if isinstance(p, ast.Constant) else 'X' for p in node.values)
+                else:
+                    continue
+                strings.add(text.removeprefix('Navigation: '))
         for key in MESSAGE_KEYS:
             with self.subTest(key=key):
                 template = english_template(key)
                 self.assertIsNotNone(template)
-                for literal, *_ in Formatter().parse(template):
-                    # Long messages are split across source lines; check each sentence piece.
-                    for piece in filter(None, (p.strip() for p in literal.replace('(', ';').split(';'))):
-                        self.assertIn(piece[:40], sources)
+                sample = t(key, 'en', **{f: 'X' for _l, f, *_ in Formatter().parse(template) if f})
+                self.assertIn(sample, strings, 'The engine no longer prints this exact English text')
+        values = {t(k, 'en') for k in json.loads((REPO/'locales'/'en.json').read_text(encoding='utf-8'))
+                  if k.startswith('engine.value.')}
+        for value in values:
+            with self.subTest(value=value):
+                self.assertTrue(value in strings or value.removesuffix(' purchase') in strings
+                                or value.lower() in strings, value)
 
     def test_round_trip_in_both_languages(self):
         for key in MESSAGE_KEYS:
@@ -71,7 +88,7 @@ class EngineTextTests(unittest.TestCase):
 
     def test_placeholders_that_are_engine_words_are_translated(self):
         self.assertEqual(engine_text('The Mystic medal row is greyed out (already bought); skipping it.', 'pt_BR'),
-                         'A linha de Mystics está esmaecida (já comprada); pulando.')
+                         'A linha de Mystics está esmaecida (item já comprado); pulando.')
         message = ('A Confirm click for the last refresh may have reached the game just before stopping. '
                    'It is counted, but its result was not seen; check it in the game.')
         self.assertIn('última atualização', engine_text(message, 'pt_BR'))
@@ -86,6 +103,17 @@ class EngineTextTests(unittest.TestCase):
             self.assertEqual(engine_text(message, 'pt_BR'), message)
         self.assertEqual(navigation_text('Something new.', 'pt_BR'), 'Navegação: Something new.')
         self.assertEqual(navigation_text('Something new.', 'en'), 'Navigation: Something new.')
+
+    def test_a_broken_template_leaves_its_message_in_english(self):
+        import e7_engine_text
+        real = e7_engine_text.english_template
+        broken = {'engine.nav.shop_verified': 'Secret Shop {screen verified.',
+                  'engine.nav.opening_shop': '{item} and {item}'}
+        e7_engine_text._patterns.cache_clear()
+        self.addCleanup(e7_engine_text._patterns.cache_clear)
+        with unittest.mock.patch.object(e7_engine_text, 'english_template', lambda k: broken.get(k, real(k))):
+            self.assertEqual(engine_text('Secret Shop screen verified.', 'pt_BR'), 'Secret Shop screen verified.')
+            self.assertEqual(engine_text('The game window closed.', 'pt_BR'), 'A janela do jogo foi fechada.')
 
     def test_pointer_pauses_are_told_apart(self):
         linux = 'Move your mouse off the game window; background input pauses while the pointer is over it.'

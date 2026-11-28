@@ -521,9 +521,8 @@ def check_extraction(repo, base, head, report):
     english = load_locale(en_text, ENGLISH, report) or {}
     for key, value in english.items():
         check_placeholders(key, value, ENGLISH, report)
-        if key.startswith(ENGINE_KEY_PREFIX):
-            continue  # the engine's own wording, matched against en.json (e7_engine_text)
-        for prefix in MATCHED_TEXT:
+        # engine.* text is the engine's own wording, matched against en.json (e7_engine_text).
+        for prefix in () if key.startswith(ENGINE_KEY_PREFIX) else MATCHED_TEXT:
             if prefix in value:
                 report.problem(f'{ENGLISH}: {key!r} contains {prefix!r}, which the app matches by '
                                'wording. It must stay hard-coded English.')

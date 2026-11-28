@@ -2677,8 +2677,9 @@ class RefreshGui(tk.Tk):
                     self._clear_pointer_alert()
                     self.progress_text.set(t('tracker.pause_reason_hint') if self._background_run else
                                            t('tracker.covered_pause_detail'))
-            self.detail.set(engine_text(reason))
-            self._event(reason, engine_text(reason))
+            shown = engine_text(reason)
+            self.detail.set(shown)
+            self._event(reason, shown)
             return
         if line == 'E7GUI_MOUSE_RESUMED':
             if not self.stopping and not self.stop_key_pressed:

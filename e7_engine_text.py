@@ -64,14 +64,15 @@ def _patterns():
     patterns = []
     for key in MESSAGE_KEYS:
         template = english_template(key)
-        if template is None:
-            continue
-        regex = ''
-        for literal, field, _spec, _conversion in Formatter().parse(template):
-            regex += re.escape(literal)
-            if field is not None:
-                regex += f'(?P<{field}>.+?)'
-        patterns.append((key, re.compile(regex)))
+        try:
+            regex = ''
+            for literal, field, _spec, _conversion in Formatter().parse(template):
+                regex += re.escape(literal)
+                if field is not None:
+                    regex += f'(?P<{field}>.+?)'
+            patterns.append((key, re.compile(regex)))
+        except (TypeError, ValueError, re.error):
+            continue  # a missing or malformed template leaves that message in English
     return tuple(patterns)
 
 
@@ -98,4 +99,5 @@ def engine_text(message, locale=None):
 
 def navigation_text(message, locale=None):
     """An Activity row for a Navigation line (message without its prefix)."""
-    return t('engine.navigation_line', locale, message=engine_text(message, locale))
+    text = t('engine.navigation_line', locale, message=engine_text(message, locale))
+    return 'Navigation: ' + message if text == 'engine.navigation_line' else text
