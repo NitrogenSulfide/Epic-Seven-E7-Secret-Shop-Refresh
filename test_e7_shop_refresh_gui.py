@@ -119,7 +119,7 @@ class ProtocolTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertEqual(gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap=value).gold_cap, expected)
         for value in (-1, '1.5', 3.0, '1,000', 'abc', True):
-            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'Gold spending limit'):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'Gold budget'):
                 gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap=value)
 
     def test_formatting(self):
@@ -235,21 +235,37 @@ class GuiTests(unittest.TestCase):
         self.assertTrue(self.app.sound_mystic.get())
         self.assertFalse(self.app.sound_enabled.get())
 
-    def test_budget_slider_and_picks_follow_the_budget(self):
-        self.assertEqual([gui.budget_from_slider(p) for p in (0, 1)], list(gui.BUDGET_SLIDER_RANGE))
-        for amount in (30, 150, 300, 1000, 3000, 6000):
-            self.assertEqual(gui.budget_from_slider(gui.slider_from_budget(amount)), amount)
-        self.app.budget_picks[-1].invoke()
-        self.assertEqual(self.app.budget.get(), '3000')
-        self.assertAlmostEqual(self.app.budget_position.get(), gui.slider_from_budget(3000))
+    def test_budget_boxes_take_whole_numbers_up_to_their_limits(self):
+        self.assertFalse(any(hasattr(self.app, name) for name in ('budget_slider', 'budget_picks', 'budget_position')))
+        for entry, var, maximum in ((self.app.budget_entry, self.app.budget, gui.MAX_BUDGET),
+                                    (self.app.gold_cap_entry, self.app.gold_cap, gui.MAX_GOLD_CAP)):
+            with self.subTest(maximum=maximum):
+                var.set('')
+                entry.insert('end', str(maximum))
+                self.assertEqual(var.get(), str(maximum))
+                entry.insert('end', '9')  # one digit too many is refused
+                self.assertEqual(var.get(), str(maximum))
+                var.set(''); entry.insert('end', '1.5'); entry.insert('end', '-')
+                self.assertEqual(var.get(), '')
+        self.app.budget.set('3000')
         self.assertIn('1,000 refreshes', self.app.budget_summary.get())
-        self.app.budget_position.set(gui.slider_from_budget(300)); self.app._slide_budget()
-        self.assertEqual(self.app.budget.get(), '300')
         self.app.budget.set('')
         self.assertIn('at least 3', self.app.budget_summary.get())
         self.app._set_controls(True)
-        self.assertTrue(all(w.instate(['disabled']) for w in (self.app.budget_slider, *self.app.budget_picks, *self.app.mode_cards.values())))
+        self.assertTrue(all(w.instate(['disabled']) for w in (self.app.budget_entry, self.app.gold_cap_entry, *self.app.mode_cards.values())))
         self.app._set_controls(False)
+
+    def test_budgets_above_the_limits_are_refused_or_lowered_on_load(self):
+        self.assertEqual(gui.validate_settings('x', gui.MAX_BUDGET, .3, 'esc', False, False, gold_cap=gui.MAX_GOLD_CAP).budget, 99_999)
+        with self.assertRaisesRegex(ValueError, 'at most 99,999'):
+            gui.validate_settings('x', gui.MAX_BUDGET + 1, .3, 'esc', False, False)
+        with self.assertRaisesRegex(ValueError, '999,999,999'):
+            gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap=gui.MAX_GOLD_CAP + 1)
+        gui.CONFIG_FILE.write_text('[Settings]\nbudget = 250000\n', encoding='utf-8')
+        gui.GUI_CONFIG_FILE.write_text('[GUI]\ngold_cap = 12345678901\n', encoding='utf-8')
+        self.app._load_config()
+        self.assertEqual((self.app.budget.get(), self.app.gold_cap.get()), ('99999', '999999999'))
+        self.assertEqual([gui.clamp_saved_amount(v, 100) for v in ('', '7', ' 100 ', 'abc', '101')], ['', '7', '100', 'abc', '100'])
 
     def test_settings_save_themselves_after_an_edit(self):
         def settle():

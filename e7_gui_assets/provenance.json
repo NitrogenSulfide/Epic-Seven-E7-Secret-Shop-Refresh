@@ -178,7 +178,7 @@
     ],
     "source": "Owner-supplied Epic Seven Gold coin crop, pasted 2026-11-26",
     "edit": "Background removed with a colour mask (HSV saturation > 140 and value > 100, largest region, holes filled), rim smoothed by a fitted ellipse drawn anti-aliased at 4x, cropped to the coin (142 x 143). Coin pixels unchanged; no generative tool.",
-    "ui_render": "Shown left of 'Gold spending limit' at the same size as the Skystone budget icon; resized in memory",
+    "ui_render": "Shown left of 'Gold budget' at the same size as the Skystone budget icon; resized in memory",
     "rights": "Derivative game artwork; respective rightsholders retain rights. Project GPL does not relicense artwork."
   }
 }

@@ -35,7 +35,7 @@ class EnglishCatalogTests(unittest.TestCase):
             with patch.object(e7_i18n.sys, 'frozen', True, create=True), \
                     patch.object(e7_i18n.sys, 'executable', str(folder / 'E7 Secret Shop Refresh.exe')):
                 self.assertEqual(e7_i18n._locale_directory(), locales)
-                self.assertEqual(t('budget.gold_limit'), 'Gold spending limit')
+                self.assertEqual(t('budget.gold_limit'), 'Gold budget')
 
 
 class BrazilianPortugueseTests(unittest.TestCase):
@@ -222,11 +222,8 @@ class LocalizationPolishTests(unittest.TestCase):
                               else '0.30 to 2.00 seconds · lower values are raised to 0.30')
                 self.assertTrue(app.delay_hint.text().startswith(delay_hint))
 
-                for amount, button in zip(gui.BUDGET_PICKS[-2:], app.budget_picks[-2:]):
-                    self.assertEqual(button.cget('text'), f'{amount:,}'.replace(',', thousands))
-                    button.invoke()
-                    self.assertEqual(app.budget.get(), str(amount))
-
+                app.budget.set('3000')
+                self.assertIn(f'1{thousands}000 ', app.budget_summary.get())
                 app.budget.set('750')
                 app.buy_mystic.set(True)
                 app.buy_covenant.set(False)

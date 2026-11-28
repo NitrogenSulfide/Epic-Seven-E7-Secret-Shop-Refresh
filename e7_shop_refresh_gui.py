@@ -21,7 +21,7 @@ from tkinter import font as tkfont, messagebox, ttk, filedialog
 from e7_process import launch_engine
 from e7_i18n import LANGUAGES, current_locale, set_locale, supported_locale, t
 from e7_timing import MIN_TAP_DELAY
-from e7_engine_protocol import RunSettings, validate_settings, EngineProtocol
+from e7_engine_protocol import MAX_BUDGET, MAX_GOLD_CAP, RunSettings, validate_settings, EngineProtocol
 from e7_history import history_mode, read_sessions, export_sessions
 from e7_input_trace import BoundedSessionLog, format_trace_line
 from e7_session_estimate import SessionEstimate
@@ -121,25 +121,21 @@ STATUS_LABELS = {
     'Waiting for game': 'status.waiting_for_game', 'Waiting for game window': 'status.waiting_for_game_window',
     'Stopping': 'status.stopping', 'Finished': 'status.finished',
 }
-# Quick budget picks under the slider, in skystones.
-BUDGET_PICKS = (150, 300, 1000, 3000)
-BUDGET_SLIDER_RANGE = (30, 6000)
 # Expected buys of each item per skystone spent, for the budget estimates.
 COVENANT_RATE, MYSTIC_RATE = 0.006602509, 0.001700646
 AUTOSAVE_DELAY_MS = 700
 
 
-def budget_from_slider(position):
-    """Slider position 0..1 to a round budget on a log scale."""
-    low, high = BUDGET_SLIDER_RANGE
-    raw = low * (high / low) ** max(0.0, min(1.0, float(position)))
-    step = 30 if raw < 300 else 50 if raw < 1500 else 100
-    return int(max(low, min(high, round(raw / step) * step)))
+def whole_number_up_to(maximum):
+    """Key validator: blank or digits, at most as many as the maximum has."""
+    pattern = re.compile(r'[0-9]{0,%d}' % len(str(maximum)))
+    return lambda value: pattern.fullmatch(value) is not None
 
 
-def slider_from_budget(budget):
-    low, high = BUDGET_SLIDER_RANGE
-    return max(0.0, min(1.0, math.log(max(low, min(high, budget)) / low) / math.log(high / low)))
+def clamp_saved_amount(text, maximum):
+    """Lower an over-limit whole number read from a settings file; keep anything else."""
+    text = str(text).strip()
+    return str(maximum) if re.fullmatch(r'[0-9]+', text) and int(text) > maximum else text
 
 
 ENGINE_LOCATION_FILE = PROJECT_DIR / "engine-location.ini"
@@ -747,7 +743,6 @@ class RefreshGui(tk.Tk):
                       foreground=[('disabled', muted)], relief=[('pressed', 'raised')])
         style.configure('Tile.Pill.TCheckbutton', padding=(self._dp(6), self._dp(7)))
         style.configure('Section.TLabel', font=self.heading_font)
-        style.configure('Chip.TButton', padding=(self._dp(2), self._dp(3)))
         style.configure('Keycap.TEntry', padding=(self._dp(6), self._dp(6)))
         style.configure('Start.Accent.TButton', font=self.heading_font, padding=(self._dp(10), self._dp(12)))
         style.configure('Stop.TButton', padding=(self._dp(8), self._dp(12)))
@@ -1208,44 +1203,29 @@ class RefreshGui(tk.Tk):
         self.buy_icons = currency_icons(self, ASSET_DIR, dp(30))
         amounts = ttk.Frame(controls)
         amounts.grid(row=4, column=0, sticky='ew', pady=(0, dp(10)))
-        amounts.columnconfigure(1, weight=1)
+        for column in (0, 1):
+            amounts.columnconfigure(column, weight=1, uniform='amounts')
         ttk.Label(amounts, text=t('budget.skystone_budget'), image=self.buy_icons.get('spent', ''), compound='left',
-                  style='Section.TLabel').grid(row=0, column=0, columnspan=2, sticky='w')
-        self.budget_entry = entry = ttk.Entry(amounts, textvariable=self.budget, font=self.heading_font, width=7, justify='center')
-        whole_number = (self.register(lambda value: not value or re.fullmatch(r'[0-9]+', value) is not None), '%P')
-        entry.configure(validate='key', validatecommand=whole_number)
-        entry.grid(row=1, column=0, sticky='w', pady=(dp(4), 0))
+                  style='Section.TLabel').grid(row=0, column=0, sticky='w')
+        self.budget_entry = entry = ttk.Entry(amounts, textvariable=self.budget, font=self.heading_font, width=7, justify='center',
+                                              validate='key', validatecommand=(self.register(whole_number_up_to(MAX_BUDGET)), '%P'))
+        entry.grid(row=1, column=0, sticky='ew', pady=(dp(4), 0))
         self.settings_widgets.append(entry)
-        self.budget_position = tk.DoubleVar(value=0)
-        self.budget_slider = ttk.Scale(amounts, from_=0, to=1, variable=self.budget_position,
-                                       command=self._slide_budget, style='TapTiming.Horizontal.TScale')
-        self.budget_slider.grid(row=1, column=1, sticky='ew', padx=(dp(10), 0), pady=(dp(4), 0))
-        self.settings_widgets.append(self.budget_slider)
         # The round coin fills its icon tile, so it gets a small gap of its own
         # before the text (the narrow Skystone gem has that space built in).
         gold_heading = ttk.Frame(amounts)
-        gold_heading.grid(row=0, column=2, sticky='w', padx=(dp(10), 0))
+        gold_heading.grid(row=0, column=1, sticky='w', padx=(dp(10), 0))
         if self.buy_icons.get('gold'):
             ttk.Label(gold_heading, image=self.buy_icons['gold'], style='Section.TLabel').pack(side='left', padx=(0, dp(5)))
         ttk.Label(gold_heading, text=t('budget.gold_limit'), style='Section.TLabel').pack(side='left')
-        self.gold_cap_entry = ttk.Entry(amounts, textvariable=self.gold_cap, font=self.heading_font, width=10,
-                                       justify='center', validate='key', validatecommand=whole_number)
-        self.gold_cap_entry.grid(row=1, column=2, sticky='ew', padx=(dp(10), 0), pady=(dp(4), 0))
+        self.gold_cap_entry = ttk.Entry(amounts, textvariable=self.gold_cap, font=self.heading_font, width=7, justify='center',
+                                        validate='key', validatecommand=(self.register(whole_number_up_to(MAX_GOLD_CAP)), '%P'))
+        self.gold_cap_entry.grid(row=1, column=1, sticky='ew', padx=(dp(10), 0), pady=(dp(4), 0))
         ThemeHint(self.gold_cap_entry, lambda: t('budget.gold_limit_hint'))
         self.settings_widgets.append(self.gold_cap_entry)
-        picks = ttk.Frame(amounts)
-        picks.grid(row=2, column=0, columnspan=3, sticky='ew', pady=(dp(6), 0))
-        self.budget_picks = []
-        for column, amount in enumerate(BUDGET_PICKS):
-            picks.columnconfigure(column, weight=1, uniform='picks')
-            pick = ttk.Button(picks, text=localized_number(amount, ','), style='Chip.TButton', cursor='hand2',
-                              command=lambda amount=amount: self.budget.set(str(amount)))
-            pick.grid(row=0, column=column, sticky='ew', padx=(0 if column == 0 else dp(4), 0))
-            self.budget_picks.append(pick)
-        self.settings_widgets.extend(self.budget_picks)
         self.budget_summary = tk.StringVar()
         ttk.Label(amounts, textvariable=self.budget_summary, style='Muted.TLabel', wraplength=dp(350)).grid(
-            row=3, column=0, columnspan=3, sticky='w', pady=(dp(6), 0))
+            row=2, column=0, columnspan=2, sticky='w', pady=(dp(6), 0))
         buys = ttk.Frame(controls)
         buys.grid(row=5, column=0, sticky='ew', pady=(0, dp(10)))
         ttk.Label(buys, text=t('item.buy'), style='Section.TLabel').grid(row=0, column=0, columnspan=3, sticky='w', pady=(0, dp(4)))
@@ -1355,8 +1335,6 @@ class RefreshGui(tk.Tk):
         self.debug_mode.trace_add('write', lambda *_: self._update_tap_jitter())
         self._update_ev()
         self._update_tap_jitter()
-        self.budget.trace_add('write', lambda *_: self._sync_budget_slider())
-        self._sync_budget_slider()
         for var in (self.budget, self.gold_cap, self.stop_key, self.buy_covenant, self.buy_mystic, self.buy_friendship,
                     self.tap_sleep, self.random_offset, self.tap_jitter, self.control_mode):
             var.trace_add('write', lambda *_: self._schedule_autosave())
@@ -1641,13 +1619,14 @@ class RefreshGui(tk.Tk):
                 legacy_budget = float(self.budget.get())
                 if math.isfinite(legacy_budget) and legacy_budget.is_integer():
                     self.budget.set(str(int(legacy_budget)))
+                self.budget.set(clamp_saved_amount(self.budget.get(), MAX_BUDGET))
                 self.random_offset.set(settings.get("random_offset", str(self.random_offset.get())).lower() == "true")
         except (OSError, ValueError, configparser.Error) as exc:
             self.setting_notice.set(t('settings.read_error', error=exc))
         try:
             parser = configparser.ConfigParser()
             parser.read(GUI_CONFIG_FILE)
-            self.gold_cap.set(parser.get('GUI', 'gold_cap', raw=True, fallback=''))
+            self.gold_cap.set(clamp_saved_amount(parser.get('GUI', 'gold_cap', raw=True, fallback=''), MAX_GOLD_CAP))
             self.sound_enabled.set(parser.getboolean("GUI", "sound_enabled", fallback=True))
             self.trace_input.set(parser.getboolean('GUI', 'trace_input', fallback=False))
             self.compact_tracker.set(parser.getboolean('GUI', 'compact_tracker', fallback=True))
@@ -3195,25 +3174,6 @@ class RefreshGui(tk.Tk):
             if hasattr(self, 'budget_summary'):
                 self.budget_summary.set(t('budget.minimum'))
         self._update_spent_display()
-
-    def _slide_budget(self, _value=None):
-        if self.budget_slider.instate(['disabled']):
-            return
-        amount = str(budget_from_slider(self.budget_position.get()))
-        if amount != self.budget.get():
-            self._budget_sliding = True
-            try:
-                self.budget.set(amount)
-            finally:
-                self._budget_sliding = False
-
-    def _sync_budget_slider(self):
-        if getattr(self, '_budget_sliding', False) or not hasattr(self, 'budget_position'):
-            return
-        try:
-            self.budget_position.set(slider_from_budget(int(self.budget.get())))
-        except (ValueError, OverflowError):
-            pass
 
     def _schedule_autosave(self):
         """Save shortly after the last settings change; there is no Save button."""
