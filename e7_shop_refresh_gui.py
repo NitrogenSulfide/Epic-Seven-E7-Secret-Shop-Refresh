@@ -766,6 +766,8 @@ class RefreshGui(tk.Tk):
         for name in ('TFrame', 'TLabel', 'TLabelframe', 'TLabelframe.Label', 'Large.TCheckbutton'):
             style.configure(name, background=bg, foreground=fg, bordercolor=border)
         style.configure('Muted.TLabel', foreground=muted)
+        style.configure('Placeholder.TLabel', background=field, foreground=muted, font=self.ui_font)
+        style.map('Placeholder.TLabel', background=[('disabled', bg)])
         style.configure('Alert.TLabel', foreground='#fca5a5' if dark else '#b91c1c')
         style.configure('Status.TLabel', foreground=('#fbbf24' if dark else '#92400e') if self.status.get() in ('Waiting for game','Waiting for game window') else ('#60a5fa' if dark else '#2563eb'))
         self._style_home_ui_banner()
@@ -1230,7 +1232,16 @@ class RefreshGui(tk.Tk):
                                         validate='key', validatecommand=(self.register(whole_number_up_to(MAX_GOLD_CAP)), '%P'))
         self.gold_cap_entry.grid(row=1, column=1, sticky='ew', padx=(dp(10), 0), pady=(dp(4), 0))
         ThemeHint(self.gold_cap_entry, lambda: t('budget.gold_limit_hint'))
-        self.settings_widgets.append(self.gold_cap_entry)
+        # Grey "No limit" inside the empty box; the box itself stays empty.
+        self.gold_placeholder = ttk.Label(self.gold_cap_entry, text=t('budget.gold_no_limit'),
+                                          style='Placeholder.TLabel', cursor='xterm')
+        self.gold_placeholder.bind('<Button-1>', lambda _event: self.gold_cap_entry.focus_set())
+        ThemeHint(self.gold_placeholder, lambda: t('budget.gold_limit_hint'))
+        self.gold_cap_entry.bind('<FocusIn>', self._update_gold_placeholder, add='+')
+        self.gold_cap_entry.bind('<FocusOut>', self._update_gold_placeholder, add='+')
+        self.gold_cap.trace_add('write', self._update_gold_placeholder)
+        self._update_gold_placeholder()
+        self.settings_widgets.extend([self.gold_cap_entry, self.gold_placeholder])
         self.budget_summary = tk.StringVar()
         ttk.Label(amounts, textvariable=self.budget_summary, style='Muted.TLabel', wraplength=dp(350)).grid(
             row=2, column=0, columnspan=2, sticky='w', pady=(dp(6), 0))
@@ -1584,6 +1595,19 @@ class RefreshGui(tk.Tk):
         self.history_label.grid(row=7, column=0, sticky="w", pady=(dp(6), 0))
         right.bind("<Configure>", self._schedule_layout)
         self._event(t('diagnostics.ready'))
+
+    def _update_gold_placeholder(self, *_):
+        label = getattr(self, 'gold_placeholder', None)
+        if label is None:
+            return
+        try:
+            focused = self.focus_get() is self.gold_cap_entry
+        except (KeyError, tk.TclError):  # focus on a widget Tk cannot name, e.g. a menu
+            focused = False
+        if self.gold_cap.get() or focused:
+            label.place_forget()
+        else:
+            label.place(relx=0.5, rely=0.5, anchor='center')
 
     def _save_language_choice(self, _event=None):
         languages = tuple(LANGUAGES)

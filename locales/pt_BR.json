@@ -36,6 +36,7 @@
   "budget.gold_limit_engine_required": "O limite de ouro requer uma engine com suporte a gold limit v1.",
   "budget.gold_limit_hint": "Máximo de ouro que pode ser gasto nesta sessão. Deixe em branco para usar sem limite.",
   "budget.gold_limit_protocol_required": "Use uma engine compatível com sessões pela interface para definir um limite de ouro.",
+  "budget.gold_no_limit": "Sem limite",
   "budget.invalid": "Informe um orçamento válido para ver a estimativa.",
   "budget.minimum": "O orçamento mínimo é de 3 Skystones.",
   "budget.skystone_budget": "Limite de Skystones",

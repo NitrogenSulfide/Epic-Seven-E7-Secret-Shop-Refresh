@@ -182,6 +182,22 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(gui.load_language(self.gui_config), 'en')
         self.assertEqual(self.app.language_notice.get(), '')
 
+    def test_gold_placeholder_shows_only_while_the_box_is_empty(self):
+        label = self.app.gold_placeholder
+        self.assertEqual(label.cget('text'), 'No limit')
+        self.app.gold_cap.set('')
+        self.app.update_idletasks()
+        self.assertTrue(label.winfo_manager())
+        self.app.gold_cap.set('500000')
+        self.assertFalse(label.winfo_manager())
+        self.app.gold_cap.set('')
+        self.assertTrue(label.winfo_manager())
+        self.assertEqual(self.app.gold_cap.get(), '')
+        self.app._set_controls(True)
+        self.assertTrue(label.instate(['disabled']))
+        self.app._set_controls(False)
+        self.assertFalse(label.instate(['disabled']))
+
     def test_purchase_callouts_follow_counts_and_toggles(self):
         for name in ('purchase-covenant.wav', 'purchase-mystic.wav'):
             shutil.copyfile(PACKAGED_ASSETS / name, self.assets / name)

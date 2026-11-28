@@ -36,6 +36,7 @@
   "budget.gold_limit_engine_required": "The Gold budget requires an engine with gold limit v1 support.",
   "budget.gold_limit_hint": "Maximum gold to spend this session. Leave blank for no limit.",
   "budget.gold_limit_protocol_required": "The Gold budget requires GUI session support from the matching engine.",
+  "budget.gold_no_limit": "No limit",
   "budget.invalid": "Enter a valid budget to see the estimate.",
   "budget.minimum": "Enter a budget of at least 3 skystones.",
   "budget.skystone_budget": "Skystone budget",
