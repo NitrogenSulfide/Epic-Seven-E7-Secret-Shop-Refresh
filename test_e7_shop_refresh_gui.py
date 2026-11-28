@@ -197,18 +197,24 @@ class GuiTests(unittest.TestCase):
 
     def test_language_restart_saves_the_choice_and_relaunches(self):
         destroyed = []
-        with patch.object(gui, 'relaunch_app') as relaunch,                 patch.object(self.app, 'destroy', side_effect=lambda: destroyed.append(True)):
+        with patch.object(gui, 'relaunch_app') as relaunch, \
+                patch.object(self.app, 'destroy', side_effect=lambda: destroyed.append(True)):
             self._answer_language_dialog('restart')
         relaunch.assert_called_once_with()
         self.assertEqual(destroyed, [True])
         self.assertEqual(gui.load_language(self.gui_config), 'pt_BR')
 
     def test_language_restart_that_fails_keeps_the_window_open(self):
-        with patch.object(gui, 'relaunch_app', side_effect=OSError('blocked')),                 patch.object(gui.messagebox, 'showinfo') as info,                 patch.object(self.app, 'destroy') as destroy:
+        with patch.object(gui, 'relaunch_app', side_effect=OSError('blocked')), \
+                patch.object(gui.messagebox, 'showinfo') as info, \
+                patch.object(self.app, 'destroy') as destroy:
             self._answer_language_dialog('restart')
         destroy.assert_not_called()
         info.assert_called_once()
         self.assertEqual(gui.load_language(self.gui_config), 'pt_BR')
+        # Picking the open language again puts it back in the file.
+        self.app._choose_language('en')
+        self.assertEqual(gui.load_language(self.gui_config), 'en')
 
     def test_gold_placeholder_shows_only_while_the_box_is_empty(self):
         label = self.app.gold_placeholder
@@ -221,8 +227,13 @@ class GuiTests(unittest.TestCase):
         self.app.gold_cap.set('')
         self.assertTrue(label.winfo_manager())
         self.assertEqual(self.app.gold_cap.get(), '')
+        self.app.gold_cap_entry.focus_force()
+        self.app.update()
+        self.app._update_gold_placeholder()
         self.app._set_controls(True)
         self.assertTrue(label.instate(['disabled']))
+        self.assertTrue(label.winfo_manager())  # a disabled box shows "No limit" even with focus
+        self.assertTrue(self.app.language_button.instate(['disabled']))
         self.app._set_controls(False)
         self.assertFalse(label.instate(['disabled']))
 
@@ -314,6 +325,8 @@ class GuiTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Gold budget'):
             gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap='9' * 5000)
         self.assertEqual(gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap='0000000000012').gold_cap, 12)
+        self.assertEqual(gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap='0' * 5000 + '1').gold_cap, 1)
+        self.assertEqual(gui.clamp_saved_amount('0' * 5000 + '1', 100), '1')
         check = gui.whole_number_up_to(50_000)
         self.assertEqual([check(v) for v in ('', '50000', '50001', '99999', '1.5')], [True, True, False, False, False])
 

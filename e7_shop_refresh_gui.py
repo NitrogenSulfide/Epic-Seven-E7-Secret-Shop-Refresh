@@ -141,9 +141,10 @@ def clamp_saved_amount(text, maximum):
     text = str(text).strip()
     if not re.fullmatch(r'[0-9]+', text):
         return text
-    if len(text.lstrip('0')) > len(str(maximum)):  # also avoids int() on huge strings
+    digits = text.lstrip('0') or '0'
+    if len(digits) > len(str(maximum)):  # also avoids int() on huge strings
         return str(maximum)
-    return str(min(int(text), maximum))
+    return str(min(int(digits), maximum))
 
 
 ENGINE_LOCATION_FILE = PROJECT_DIR / "engine-location.ini"
@@ -350,6 +351,7 @@ class LanguageRestartDialog(tk.Toplevel):
                                          padding=(dp(12), dp(6)), cursor='hand2', default='active')
         self.restart_button.grid(row=0, column=1)
         self.bind('<Return>', self._on_return)
+        self.bind('<KP_Enter>', self._on_return)
         self.bind('<Escape>', lambda _event: self.destroy())
         self.protocol('WM_DELETE_WINDOW', self.destroy)
         self.update_idletasks()
@@ -363,6 +365,8 @@ class LanguageRestartDialog(tk.Toplevel):
         self.deiconify()
         self.lift()
         try:
+            if self.tk.call('tk', 'windowingsystem') == 'x11':
+                self.wait_visibility()  # X11 maps windows asynchronously; a grab needs a viewable window
             self.grab_set()  # modal: the main window waits for the answer
         except tk.TclError:
             pass
@@ -1311,7 +1315,8 @@ class RefreshGui(tk.Tk):
         # Grey "No limit" inside the empty box; the box itself stays empty.
         self.gold_placeholder = ttk.Label(self.gold_cap_entry, text=t('budget.gold_no_limit'),
                                           style='Placeholder.TLabel', cursor='xterm')
-        self.gold_placeholder.bind('<Button-1>', lambda _event: self.gold_cap_entry.focus_set())
+        self.gold_placeholder.bind('<Button-1>', lambda _event: None if self.gold_cap_entry.instate(['disabled'])
+                                   else self.gold_cap_entry.focus_set())
         ThemeHint(self.gold_placeholder, lambda: t('budget.gold_limit_hint'))
         self.gold_cap_entry.bind('<FocusIn>', self._update_gold_placeholder, add='+')
         self.gold_cap_entry.bind('<FocusOut>', self._update_gold_placeholder, add='+')
@@ -1664,7 +1669,8 @@ class RefreshGui(tk.Tk):
         if label is None:
             return
         try:
-            focused = self.focus_get() is self.gold_cap_entry
+            focused = (self.focus_get() is self.gold_cap_entry
+                       and not self.gold_cap_entry.instate(['disabled']))
         except (KeyError, tk.TclError):  # focus on a widget Tk cannot name, e.g. a menu
             focused = False
         if self.gold_cap.get() or focused:
@@ -1684,19 +1690,24 @@ class RefreshGui(tk.Tk):
         """Ask, in the chosen language, to restart; only Restart saves the choice."""
         self.language_choice.set(current_locale())
         if locale == current_locale():
+            if load_language(GUI_CONFIG_FILE) != locale:  # a restart that failed left another choice saved
+                try:
+                    save_language(GUI_CONFIG_FILE, locale)
+                except (OSError, UnicodeError, configparser.Error) as error:
+                    messagebox.showerror(t('settings.save_error_title'), t('settings.save_error', error=error), parent=self)
             return
-        if self._restart_pending():
+        if self._restart_pending() or (self.process and self.process.poll() is None):
             return
         dialog = LanguageRestartDialog(self, locale, scale=self._dp)
         self.wait_window(dialog)
         if dialog.choice != 'restart':
             return
+        self._flush_autosave()
         try:
             save_language(GUI_CONFIG_FILE, locale)
         except (OSError, UnicodeError, configparser.Error) as error:
             messagebox.showerror(t('settings.save_error_title'), t('settings.save_error', error=error), parent=self)
             return
-        self._flush_autosave()
         try:
             relaunch_app()
         except OSError as error:
@@ -2924,6 +2935,7 @@ class RefreshGui(tk.Tk):
     def _set_controls(self, running):
         for widget in self.settings_widgets:
             widget.state(["disabled"] if running else ["!disabled"])
+        self._update_gold_placeholder()  # a disabled box shows "No limit" even if it had focus
         self._update_debug_availability(running)
         self._update_tap_jitter(running=running)
         self.clear_history_button.state(['disabled'] if running else ['!disabled'])

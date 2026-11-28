@@ -31,10 +31,10 @@ def validate_gold_cap(value):
     if value is None or (isinstance(value, str) and not value.strip()):
         return None
     text = str(value).strip()
-    if (not re.fullmatch(r'[0-9]+', text) or len(text.lstrip('0')) > len(str(MAX_GOLD_CAP))
-            or int(text) > MAX_GOLD_CAP):
+    digits = text.lstrip('0') or '0'
+    if not re.fullmatch(r'[0-9]+', text) or len(digits) > len(str(MAX_GOLD_CAP)) or int(digits) > MAX_GOLD_CAP:
         raise ValueError(f'The Gold budget must be a whole number from 0 to {MAX_GOLD_CAP:,}, or blank for no limit.')
-    return int(value)
+    return int(digits)
 
 
 def validate_item_choice(buy_covenant, buy_mystic, buy_friendship):
