@@ -1,5 +1,7 @@
 # E7 Shop Refresh — NitrogenSulfide (Blue Natto)
 
+Version **0.2.8** moves settings and session history into your user folder, with a first-start prompt to import from 0.2.7 or older. It adds an optional Gold budget and a Brazilian Portuguese (PT-BR) translation by Gabriel (Fish7w7), plus a language button in the window header. Skystone and Gold budgets are now plain number boxes instead of presets and a slider. This release also fixes a Python error that could happen when restarting the app twice in a row.
+
 Version **0.2.7** reworks the settings panel (control-mode cards, a budget slider,
 Buy tiles, toggle pills) and saves settings by itself. Version 0.2.6, released only
 as part of 0.2.7, lets you choose which items to buy (Covenant, Mystic,
@@ -24,7 +26,7 @@ are faster (about 5–6.5 seconds per refresh on Steam at 2560 × 1440, down fro
 8.5). It also includes the 0.1.4 trial changes: the global Stop key, optional
 Friendship Points purchases, remaining-time estimates, BlueStacks fixes and warm
 display tint handling. See CHANGELOG.txt or About & Credits → Release notes.
-Players need only **E7ShopRefresh-0.2.7.zip**; extract it into a fresh folder.
+Players need only **E7ShopRefresh-0.2.8.zip**; extract it into a fresh folder.
 New settings start in Background mode. Your existing saved mode is preserved; the
 app offers a one-click switch when another mode suits the game it finds.
 

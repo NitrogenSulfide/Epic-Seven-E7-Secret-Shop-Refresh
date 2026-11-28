@@ -16,7 +16,7 @@ players, based on Solunium's GPL-3.0 engine. Feedback and bug reports are welcom
 
 ## EZ Mode · download, extract, start
 
-**[Download the Windows app — v0.2.7](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.2.7/E7ShopRefresh-0.2.7.zip)**
+**[Download the Windows app — v0.2.8](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/download/v0.2.8/E7ShopRefresh-0.2.8.zip)**
 
 > **Ban risk:** This is unofficial automation. [Smilegate's terms](https://common.game.onstove.com/terms/index?gameType=MOBILE&langCode=en&termsType=1) prohibit unauthorized scripts and macros. Account penalties, including bans, are possible; use at your own risk.
 
@@ -35,7 +35,7 @@ players, based on Solunium's GPL-3.0 engine. Feedback and bug reports are welcom
 window, or click **Stop Session**.
 
 **[Detailed setup / troubleshooting](release/SETUP.md)** ·
-**[What's new in v0.2.7](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.2.7)**
+**[What's new in v0.2.8](https://github.com/NitrogenSulfide/Epic-Seven-E7-Secret-Shop-Refresh/releases/tag/v0.2.8)**
 
 **Tips for a smooth run**
 
@@ -55,11 +55,15 @@ window, or click **Stop Session**.
 
 ## What it looks like
 
-The main window in v0.2.7 (dark theme), ready to start a Background run on Steam.
+The main window in v0.2.8 (dark theme), ready to start a Background run.
 Settings sit on the left and save themselves; the current session, activity log
 and run history are on the right. A light theme is one click away.
 
-<img src="docs/media/v0.2.7-main-window.png" alt="v0.2.7 main window in the dark theme, ready to start a Background run" width="800">
+<img src="docs/media/v0.2.8-main-window.png" alt="v0.2.8 main window in the dark theme, ready to start a Background run" width="800">
+
+The globe button in the header switches the app to Brazilian Portuguese (PT-BR):
+
+<img src="docs/media/v0.2.8-main-window-pt-br.png" alt="v0.2.8 main window in Brazilian Portuguese" width="800">
 
 While it runs, the app can shrink to a small always-on-top bar with purchases,
 Skystones spent, time left and a Stop button:
@@ -145,7 +149,7 @@ new one before the first start; they are then moved over automatically. Set
 
 ## Source and credits
 
-**E7Source-0.2.7.zip** on the release page has the source and rebuild steps. See
+**E7Source-0.2.8.zip** on the release page has the source and rebuild steps. See
 [build instructions](release/BUILDING.md) and [engine notes](ENGINE.md).
 
 Software is GPL-3.0; see [LICENSE](LICENSE), [CREDITS.txt](CREDITS.txt) and
