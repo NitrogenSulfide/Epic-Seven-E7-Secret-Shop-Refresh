@@ -1033,6 +1033,8 @@ class GuiWiringTests(unittest.TestCase):
         command = popen.call_args.args[0]
         self.assertIn('--engine-dir', command if isinstance(command, str) else ' '.join(command))
         self.assertIn(str(self.engine.resolve()), command if isinstance(command, str) else ' '.join(command))
+        # A one-file build must unpack afresh, not reuse the closing copy's temporary folder.
+        self.assertEqual(popen.call_args.kwargs['env']['PYINSTALLER_RESET_ENVIRONMENT'], '1')
 
     def test_apply_choice_import_copies(self):
         older = self.root / 'E7 0.2.7' / 'runtime'

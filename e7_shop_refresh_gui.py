@@ -386,14 +386,17 @@ class LanguageRestartDialog(tk.Toplevel):
 
 def relaunch_app():
     """Start this app again with the same engine folder (not elevated); raises OSError."""
+    # A one-file build unpacks itself to a temporary folder and deletes it on exit.
+    # Without this the new copy reuses this copy's folder and fails once it is gone.
+    environment = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT='1')
     if os.name == 'nt':
         executable, arguments, directory = restart_command(APP_DIR)
-        subprocess.Popen(f'"{executable}" {arguments}', cwd=directory, close_fds=True)
+        subprocess.Popen(f'"{executable}" {arguments}', cwd=directory, close_fds=True, env=environment)
         return
     script = Path(__file__).resolve()
     command = [sys.executable] if getattr(sys, 'frozen', False) else [sys.executable, str(script)]
     subprocess.Popen([*command, '--engine-dir', str(Path(APP_DIR).resolve())], cwd=str(script.parent),
-                     start_new_session=True, close_fds=True)
+                     start_new_session=True, close_fds=True, env=environment)
 
 
 def offer_older_settings(data_dir):
