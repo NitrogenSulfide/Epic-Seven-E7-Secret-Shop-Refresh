@@ -390,6 +390,9 @@ def relaunch_app():
     # A one-file build unpacks itself to a temporary folder and deletes it on exit.
     # Without this the new copy reuses this copy's folder and fails once it is gone.
     environment = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT='1')
+    # A relative E7_DATA_DIR would resolve against the new copy's working folder.
+    if DATA_DIR is not None and (os.environ.get('E7_DATA_DIR') or '').strip():
+        environment['E7_DATA_DIR'] = str(Path(DATA_DIR).absolute())
     if os.name == 'nt':
         executable, arguments, directory = restart_command(APP_DIR)
         subprocess.Popen(f'"{executable}" {arguments}', cwd=directory, close_fds=True, env=environment)

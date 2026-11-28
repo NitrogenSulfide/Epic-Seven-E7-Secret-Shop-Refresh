@@ -1036,6 +1036,16 @@ class GuiWiringTests(unittest.TestCase):
         # A one-file build must unpack afresh, not reuse the closing copy's temporary folder.
         self.assertEqual(popen.call_args.kwargs['env']['PYINSTALLER_RESET_ENVIRONMENT'], '1')
 
+    def test_relaunch_keeps_a_relative_data_folder_in_place(self):
+        with patch.object(self.gui.subprocess, 'Popen') as popen, patch.object(self.gui, 'APP_DIR', self.engine),                 patch.object(self.gui, 'DATA_DIR', self.data), patch.dict(self.gui.os.environ, {'E7_DATA_DIR': 'state'}):
+            self.gui.relaunch_app()
+        self.assertEqual(popen.call_args.kwargs['env']['E7_DATA_DIR'], str(self.data.absolute()))
+
+    def test_relaunch_leaves_the_default_data_folder_alone(self):
+        with patch.object(self.gui.subprocess, 'Popen') as popen, patch.object(self.gui, 'APP_DIR', self.engine),                 patch.object(self.gui, 'DATA_DIR', self.data), patch.dict(self.gui.os.environ, {'E7_DATA_DIR': ''}):
+            self.gui.relaunch_app()
+        self.assertEqual(popen.call_args.kwargs['env'].get('E7_DATA_DIR', ''), '')
+
     def test_apply_choice_import_copies(self):
         older = self.root / 'E7 0.2.7' / 'runtime'
         older.mkdir(parents=True)

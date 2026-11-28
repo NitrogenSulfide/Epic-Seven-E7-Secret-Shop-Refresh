@@ -3,7 +3,8 @@
 Usage: python tools/test_check_translation_pr.py [REPO] [--show]
 
 The fixture is the GUI as it was just before the English text moved to
-locales/en.json (FIXTURE), so the scenarios can do that move themselves.
+locales/en.json (FIXTURE), so the scenarios can do that move themselves. It needs
+full Git history (not a shallow clone or the source zip).
 """
 import json, os, shutil, stat, subprocess, sys, tempfile
 
@@ -106,6 +107,9 @@ def body():
     scenario('engine-key-matched-text', 0, {'e7_shop_refresh_gui.py': good, 'e7_i18n.py': i18n,
                                             'locales/en.json': json.dumps({**EN, 'engine.nav.x': 'Navigation: opening'})},
              ['4 text moves, nothing else changed'])
+    scenario('nav-text-outside-engine-keys', 1, {'e7_shop_refresh_gui.py': good, 'e7_i18n.py': i18n,
+                                                 'locales/en.json': json.dumps({**EN, 'nav.x': 'Navigation: opening'})},
+             ['matches by'])
     scenario('compare', 1, {'e7_shop_refresh_gui.py': good.replace(
         "if self.setting_notice.get().startswith('Not saved yet'):",
         "if self.setting_notice.get().startswith(t('budget.label')):"), **std}, ['used in .startswith()'])

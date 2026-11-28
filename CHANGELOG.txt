@@ -11,19 +11,23 @@
   settings and history. You can also choose the old folder yourself, start
   fresh, or import later in Settings > Advanced > "Import settings from an
   older version". The old folder is only read, never changed. A backup is
-  kept under "legacy-backup" and the import is noted in the Activity log.
+  kept in the "legacy-backup" folder inside the new user folder. The import
+  is noted in the Activity log.
 • Gold budget (contributed by Gabriel, Fish7w7). An optional box with a gold
   coin icon sets the most gold to spend in one session. Leave it blank (it
-  shows a grey "No limit") for no limit. The app stops before a buy or
-  refresh that would go over it, as a normal "Stopped" with the end sound.
-• Brazilian Portuguese (PT-BR), translated by Gabriel (Fish7w7). The whole
-  app can now run in Brazilian Portuguese, including progress and pause
-  messages in the Activity log and status line. Pick the language with the
-  globe button in the window header (moved from Advanced); the app asks in
-  that language to restart, keeps your settings, and Windows may ask for
-  administrator permission again. Logs, Copy report, Diagnostics, and history
-  exports stay in English for readable bug reports. Epic Seven itself must
-  still be set to English so the app can read the game text.
+  shows a grey "No limit") for no limit. The app stops before a purchase that
+  would go over the budget. Before each refresh, it also checks that the
+  cheapest item you chose to buy still fits in what is left. If not, it stops
+  instead of refreshing. Either stop is a normal "Stopped" with the end sound.
+• Brazilian Portuguese (PT-BR), translated by Gabriel (Fish7w7). The screens,
+  buttons, settings, and messages are now in Brazilian Portuguese. So are the
+  progress and pause messages in the Activity log and status line. Some stop
+  and error messages are still in English for now. Pick the language with the
+  globe button in the window header. The app asks in that language to restart
+  and keeps your settings. Windows may ask for administrator permission again.
+  Logs, Copy report, Diagnostics, and history exports stay in English for
+  readable bug reports. Epic Seven itself must still be set to English so the
+  app can read the game text.
 • Simpler budget boxes. Skystone budget and Gold budget are now plain number
   boxes, with limits of 99,999 Skystones and 999,999,999 gold. The
   150/300/1,000/3,000 presets and the slider from 0.2.7 are gone. The line
