@@ -22,7 +22,7 @@ class RunSettings:
     gold_cap: int | None = None
 
 
-# Largest budgets the GUI accepts: five Skystone digits, nine Gold digits.
+# Largest budgets accepted by the GUI and, for Gold, by the engines' --gold-cap.
 MAX_BUDGET = 99_999
 MAX_GOLD_CAP = 999_999_999
 
@@ -30,7 +30,9 @@ MAX_GOLD_CAP = 999_999_999
 def validate_gold_cap(value):
     if value is None or (isinstance(value, str) and not value.strip()):
         return None
-    if not re.fullmatch(r'[0-9]+', str(value).strip()) or int(value) > MAX_GOLD_CAP:
+    text = str(value).strip()
+    if (not re.fullmatch(r'[0-9]+', text) or len(text.lstrip('0')) > len(str(MAX_GOLD_CAP))
+            or int(text) > MAX_GOLD_CAP):
         raise ValueError(f'The Gold budget must be a whole number from 0 to {MAX_GOLD_CAP:,}, or blank for no limit.')
     return int(value)
 

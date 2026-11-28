@@ -127,15 +127,23 @@ AUTOSAVE_DELAY_MS = 700
 
 
 def whole_number_up_to(maximum):
-    """Key validator: blank or digits, at most as many as the maximum has."""
-    pattern = re.compile(r'[0-9]{0,%d}' % len(str(maximum)))
-    return lambda value: pattern.fullmatch(value) is not None
+    """Key validator: blank, or digits no longer than the maximum and no larger."""
+    digits = len(str(maximum))
+    return lambda value: not value or (re.fullmatch(r'[0-9]+', value) is not None and len(value) <= digits
+                                       and int(value) <= maximum)
 
 
 def clamp_saved_amount(text, maximum):
-    """Lower an over-limit whole number read from a settings file; keep anything else."""
+    """Normalize a whole number read from a settings file, lowered to the limit; keep anything else.
+
+    Leading zeros go too, so the box never holds more digits than it lets you type.
+    """
     text = str(text).strip()
-    return str(maximum) if re.fullmatch(r'[0-9]+', text) and int(text) > maximum else text
+    if not re.fullmatch(r'[0-9]+', text):
+        return text
+    if len(text.lstrip('0')) > len(str(maximum)):  # also avoids int() on huge strings
+        return str(maximum)
+    return str(min(int(text), maximum))
 
 
 ENGINE_LOCATION_FILE = PROJECT_DIR / "engine-location.ini"

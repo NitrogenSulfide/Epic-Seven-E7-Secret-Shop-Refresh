@@ -265,7 +265,13 @@ class GuiTests(unittest.TestCase):
         gui.GUI_CONFIG_FILE.write_text('[GUI]\ngold_cap = 12345678901\n', encoding='utf-8')
         self.app._load_config()
         self.assertEqual((self.app.budget.get(), self.app.gold_cap.get()), ('99999', '999999999'))
-        self.assertEqual([gui.clamp_saved_amount(v, 100) for v in ('', '7', ' 100 ', 'abc', '101')], ['', '7', '100', 'abc', '100'])
+        self.assertEqual([gui.clamp_saved_amount(v, 100) for v in ('', '7', ' 100 ', 'abc', '101', '0007', '9' * 5000)],
+                         ['', '7', '100', 'abc', '100', '7', '100'])
+        with self.assertRaisesRegex(ValueError, 'Gold budget'):
+            gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap='9' * 5000)
+        self.assertEqual(gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap='0000000000012').gold_cap, 12)
+        check = gui.whole_number_up_to(50_000)
+        self.assertEqual([check(v) for v in ('', '50000', '50001', '99999', '1.5')], [True, True, False, False, False])
 
     def test_settings_save_themselves_after_an_edit(self):
         def settle():
