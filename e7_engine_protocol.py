@@ -22,12 +22,19 @@ class RunSettings:
     gold_cap: int | None = None
 
 
+# Largest budgets accepted by the GUI and, for Gold, by the engines' --gold-cap.
+MAX_BUDGET = 99_999
+MAX_GOLD_CAP = 999_999_999
+
+
 def validate_gold_cap(value):
     if value is None or (isinstance(value, str) and not value.strip()):
         return None
-    if not re.fullmatch(r'[0-9]+', str(value).strip()):
-        raise ValueError('The Gold spending limit must be a whole number of 0 or more, or blank for no limit.')
-    return int(value)
+    text = str(value).strip()
+    digits = text.lstrip('0') or '0'
+    if not re.fullmatch(r'[0-9]+', text) or len(digits) > len(str(MAX_GOLD_CAP)) or int(digits) > MAX_GOLD_CAP:
+        raise ValueError(f'The Gold budget must be a whole number from 0 to {MAX_GOLD_CAP:,}, or blank for no limit.')
+    return int(digits)
 
 
 def validate_item_choice(buy_covenant, buy_mystic, buy_friendship):
@@ -48,6 +55,8 @@ def validate_settings(device, budget, delay, stop_key, random_offset, debug, tap
         raise ValueError("Enter numbers for the skystone budget and tap delay.") from None
     if amount < 3:
         raise ValueError("The skystone budget must be a whole number of at least 3.")
+    if amount > MAX_BUDGET:
+        raise ValueError(f"The skystone budget can be at most {MAX_BUDGET:,}.")
     sleep, jitter = validate_timing(sleep, jitter)
     device = device.strip() or "localhost:5555"
     key = stop_key.strip().lower() or "esc"

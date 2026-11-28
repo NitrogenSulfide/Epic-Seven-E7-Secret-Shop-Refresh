@@ -21,7 +21,7 @@ from tkinter import font as tkfont, messagebox, ttk, filedialog
 from e7_process import launch_engine
 from e7_i18n import LANGUAGES, current_locale, set_locale, supported_locale, t
 from e7_timing import MIN_TAP_DELAY
-from e7_engine_protocol import RunSettings, validate_settings, EngineProtocol
+from e7_engine_protocol import MAX_BUDGET, MAX_GOLD_CAP, RunSettings, validate_settings, EngineProtocol
 from e7_history import history_mode, read_sessions, export_sessions
 from e7_input_trace import BoundedSessionLog, format_trace_line
 from e7_session_estimate import SessionEstimate
@@ -121,25 +121,30 @@ STATUS_LABELS = {
     'Waiting for game': 'status.waiting_for_game', 'Waiting for game window': 'status.waiting_for_game_window',
     'Stopping': 'status.stopping', 'Finished': 'status.finished',
 }
-# Quick budget picks under the slider, in skystones.
-BUDGET_PICKS = (150, 300, 1000, 3000)
-BUDGET_SLIDER_RANGE = (30, 6000)
 # Expected buys of each item per skystone spent, for the budget estimates.
 COVENANT_RATE, MYSTIC_RATE = 0.006602509, 0.001700646
 AUTOSAVE_DELAY_MS = 700
 
 
-def budget_from_slider(position):
-    """Slider position 0..1 to a round budget on a log scale."""
-    low, high = BUDGET_SLIDER_RANGE
-    raw = low * (high / low) ** max(0.0, min(1.0, float(position)))
-    step = 30 if raw < 300 else 50 if raw < 1500 else 100
-    return int(max(low, min(high, round(raw / step) * step)))
+def whole_number_up_to(maximum):
+    """Key validator: blank, or digits no longer than the maximum and no larger."""
+    digits = len(str(maximum))
+    return lambda value: not value or (re.fullmatch(r'[0-9]+', value) is not None and len(value) <= digits
+                                       and int(value) <= maximum)
 
 
-def slider_from_budget(budget):
-    low, high = BUDGET_SLIDER_RANGE
-    return max(0.0, min(1.0, math.log(max(low, min(high, budget)) / low) / math.log(high / low)))
+def clamp_saved_amount(text, maximum):
+    """Normalize a whole number read from a settings file, lowered to the limit; keep anything else.
+
+    Leading zeros go too, so the box never holds more digits than it lets you type.
+    """
+    text = str(text).strip()
+    if not re.fullmatch(r'[0-9]+', text):
+        return text
+    digits = text.lstrip('0') or '0'
+    if len(digits) > len(str(maximum)):  # also avoids int() on huge strings
+        return str(maximum)
+    return str(min(int(digits), maximum))
 
 
 ENGINE_LOCATION_FILE = PROJECT_DIR / "engine-location.ini"
@@ -312,16 +317,86 @@ def apply_import_choice(choice, data_dir):
                 f'{install.folder} was not changed.']
 
 
+def language_code(locale):
+    """Short label for the header button: 'EN', 'PT'."""
+    return locale.split('_')[0].upper()
+
+
+class LanguageRestartDialog(tk.Toplevel):
+    """Modal question written in the language being switched to."""
+
+    def __init__(self, master, locale, *, scale):
+        super().__init__(master)
+        self.choice = None
+        dp = scale
+        self.withdraw()  # shown once laid out and centred
+        self.title(t('settings.language_restart_title', locale))
+        self.resizable(False, False)
+        self.configure(bg=ttk.Style(self).lookup('TFrame', 'background') or None)
+        if master.winfo_viewable():
+            self.transient(master)
+        body = ttk.Frame(self, padding=dp(18))
+        body.grid(sticky='nsew')
+        ttk.Label(body, text=t('settings.language_restart_title', locale), wraplength=dp(420),
+                  font=('Segoe UI', 11, 'bold')).grid(row=0, column=0, sticky='w')
+        ttk.Label(body, text=t('settings.language_restart_prompt', locale, language=LANGUAGES[locale]),
+                  wraplength=dp(420)).grid(row=1, column=0, sticky='w', pady=(dp(6), 0))
+        buttons = ttk.Frame(body)
+        buttons.grid(row=2, column=0, sticky='e', pady=(dp(16), 0))
+        self.cancel_button = ttk.Button(buttons, text=t('common.cancel', locale), command=self.destroy,
+                                        padding=(dp(12), dp(6)), cursor='hand2')
+        self.cancel_button.grid(row=0, column=0, padx=(0, dp(8)))
+        self.restart_button = ttk.Button(buttons, text=t('settings.language_restart_action', locale),
+                                         command=self._restart, style='Accent.TButton',
+                                         padding=(dp(12), dp(6)), cursor='hand2', default='active')
+        self.restart_button.grid(row=0, column=1)
+        self.bind('<Return>', self._on_return)
+        self.bind('<KP_Enter>', self._on_return)
+        self.bind('<Escape>', lambda _event: self.destroy())
+        self.protocol('WM_DELETE_WINDOW', self.destroy)
+        self.update_idletasks()
+        if master.winfo_viewable():
+            x = master.winfo_rootx() + (master.winfo_width() - self.winfo_reqwidth()) // 2
+            y = master.winfo_rooty() + (master.winfo_height() - self.winfo_reqheight()) // 3
+        else:
+            x = (self.winfo_screenwidth() - self.winfo_reqwidth()) // 2
+            y = (self.winfo_screenheight() - self.winfo_reqheight()) // 3
+        self.geometry(f'+{max(x, 0)}+{max(y, 0)}')
+        self.deiconify()
+        self.lift()
+        try:
+            if self.tk.call('tk', 'windowingsystem') == 'x11':
+                self.wait_visibility()  # X11 maps windows asynchronously; a grab needs a viewable window
+            self.grab_set()  # modal: the main window waits for the answer
+        except tk.TclError:
+            pass
+        self.restart_button.focus_set()
+
+    def _on_return(self, event):
+        """Enter presses the focused button (Restart has focus at first)."""
+        if isinstance(event.widget, ttk.Button):
+            event.widget.invoke()
+        else:
+            self._restart()
+
+    def _restart(self):
+        self.choice = 'restart'
+        self.destroy()
+
+
 def relaunch_app():
     """Start this app again with the same engine folder (not elevated); raises OSError."""
+    # A one-file build unpacks itself to a temporary folder and deletes it on exit.
+    # Without this the new copy reuses this copy's folder and fails once it is gone.
+    environment = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT='1')
     if os.name == 'nt':
         executable, arguments, directory = restart_command(APP_DIR)
-        subprocess.Popen(f'"{executable}" {arguments}', cwd=directory, close_fds=True)
+        subprocess.Popen(f'"{executable}" {arguments}', cwd=directory, close_fds=True, env=environment)
         return
     script = Path(__file__).resolve()
     command = [sys.executable] if getattr(sys, 'frozen', False) else [sys.executable, str(script)]
     subprocess.Popen([*command, '--engine-dir', str(Path(APP_DIR).resolve())], cwd=str(script.parent),
-                     start_new_session=True, close_fds=True)
+                     start_new_session=True, close_fds=True, env=environment)
 
 
 def offer_older_settings(data_dir):
@@ -747,7 +822,6 @@ class RefreshGui(tk.Tk):
                       foreground=[('disabled', muted)], relief=[('pressed', 'raised')])
         style.configure('Tile.Pill.TCheckbutton', padding=(self._dp(6), self._dp(7)))
         style.configure('Section.TLabel', font=self.heading_font)
-        style.configure('Chip.TButton', padding=(self._dp(2), self._dp(3)))
         style.configure('Keycap.TEntry', padding=(self._dp(6), self._dp(6)))
         style.configure('Start.Accent.TButton', font=self.heading_font, padding=(self._dp(10), self._dp(12)))
         style.configure('Stop.TButton', padding=(self._dp(8), self._dp(12)))
@@ -763,6 +837,8 @@ class RefreshGui(tk.Tk):
         for name in ('TFrame', 'TLabel', 'TLabelframe', 'TLabelframe.Label', 'Large.TCheckbutton'):
             style.configure(name, background=bg, foreground=fg, bordercolor=border)
         style.configure('Muted.TLabel', foreground=muted)
+        style.configure('Placeholder.TLabel', background=field, foreground=muted, font=self.ui_font)
+        style.map('Placeholder.TLabel', background=[('disabled', bg)])
         style.configure('Alert.TLabel', foreground='#fca5a5' if dark else '#b91c1c')
         style.configure('Status.TLabel', foreground=('#fbbf24' if dark else '#92400e') if self.status.get() in ('Waiting for game','Waiting for game window') else ('#60a5fa' if dark else '#2563eb'))
         self._style_home_ui_banner()
@@ -1153,6 +1229,17 @@ class RefreshGui(tk.Tk):
         self.about_button = ttk.Button(header_actions, image=self.about_image, text='' if self.about_image else t('about.credits'), command=self._show_about, padding=dp(6), cursor='hand2', takefocus=True)
         self.about_button.pack(side='left',padx=(0,dp(6)))
         self.about_hint = ThemeHint(self.about_button, lambda: t('about.title'))
+        # Language: a short code by the theme toggle; the menu lists each language in its own name.
+        self.language_button = ttk.Button(header_actions, text=f'🌐 {language_code(current_locale())}',
+                                          command=self._show_language_menu, width=0, padding=(dp(10), dp(8)),
+                                          cursor='hand2', takefocus=True)
+        self.language_button.pack(side='left', padx=(0, dp(6)))
+        self.language_hint = ThemeHint(self.language_button, lambda: t('settings.language'))
+        self.language_menu = tk.Menu(self, tearoff=0)
+        self.language_choice = tk.StringVar(value=current_locale())
+        for code, name in LANGUAGES.items():
+            self.language_menu.add_radiobutton(label=name, value=code, variable=self.language_choice,
+                                               command=lambda code=code: self._choose_language(code))
         self.theme_button = ttk.Button(header_actions, command=self._toggle_dark_mode, width=3, padding=dp(8), cursor='hand2', takefocus=True)
         self.theme_button.pack(side='left')
         self.theme_hint = ThemeHint(self.theme_button, lambda: t('theme.switch_light') if self.dark_mode.get() else t('theme.switch_dark'))
@@ -1188,6 +1275,7 @@ class RefreshGui(tk.Tk):
         settings_canvas.bind("<Configure>", resize_settings)
         controls.columnconfigure(0, weight=1)
         self.settings_widgets = []
+        self.settings_widgets.append(self.language_button)  # built in the header above
         ttk.Label(controls, text=t('settings.session_heading'), style="Muted.TLabel").grid(row=0, column=0, sticky="w", pady=(0, dp(8)))
         self.target_label = ttk.Label(controls, text=t('connection.adb_target'))
         self.target_label.grid(row=1, column=0, sticky="w")
@@ -1208,44 +1296,39 @@ class RefreshGui(tk.Tk):
         self.buy_icons = currency_icons(self, ASSET_DIR, dp(30))
         amounts = ttk.Frame(controls)
         amounts.grid(row=4, column=0, sticky='ew', pady=(0, dp(10)))
-        amounts.columnconfigure(1, weight=1)
+        for column in (0, 1):
+            amounts.columnconfigure(column, weight=1, uniform='amounts')
         ttk.Label(amounts, text=t('budget.skystone_budget'), image=self.buy_icons.get('spent', ''), compound='left',
-                  style='Section.TLabel').grid(row=0, column=0, columnspan=2, sticky='w')
-        self.budget_entry = entry = ttk.Entry(amounts, textvariable=self.budget, font=self.heading_font, width=7, justify='center')
-        whole_number = (self.register(lambda value: not value or re.fullmatch(r'[0-9]+', value) is not None), '%P')
-        entry.configure(validate='key', validatecommand=whole_number)
-        entry.grid(row=1, column=0, sticky='w', pady=(dp(4), 0))
+                  style='Section.TLabel').grid(row=0, column=0, sticky='w')
+        self.budget_entry = entry = ttk.Entry(amounts, textvariable=self.budget, font=self.heading_font, width=7, justify='center',
+                                              validate='key', validatecommand=(self.register(whole_number_up_to(MAX_BUDGET)), '%P'))
+        entry.grid(row=1, column=0, sticky='ew', pady=(dp(4), 0))
         self.settings_widgets.append(entry)
-        self.budget_position = tk.DoubleVar(value=0)
-        self.budget_slider = ttk.Scale(amounts, from_=0, to=1, variable=self.budget_position,
-                                       command=self._slide_budget, style='TapTiming.Horizontal.TScale')
-        self.budget_slider.grid(row=1, column=1, sticky='ew', padx=(dp(10), 0), pady=(dp(4), 0))
-        self.settings_widgets.append(self.budget_slider)
         # The round coin fills its icon tile, so it gets a small gap of its own
         # before the text (the narrow Skystone gem has that space built in).
         gold_heading = ttk.Frame(amounts)
-        gold_heading.grid(row=0, column=2, sticky='w', padx=(dp(10), 0))
+        gold_heading.grid(row=0, column=1, sticky='w', padx=(dp(10), 0))
         if self.buy_icons.get('gold'):
             ttk.Label(gold_heading, image=self.buy_icons['gold'], style='Section.TLabel').pack(side='left', padx=(0, dp(5)))
         ttk.Label(gold_heading, text=t('budget.gold_limit'), style='Section.TLabel').pack(side='left')
-        self.gold_cap_entry = ttk.Entry(amounts, textvariable=self.gold_cap, font=self.heading_font, width=10,
-                                       justify='center', validate='key', validatecommand=whole_number)
-        self.gold_cap_entry.grid(row=1, column=2, sticky='ew', padx=(dp(10), 0), pady=(dp(4), 0))
+        self.gold_cap_entry = ttk.Entry(amounts, textvariable=self.gold_cap, font=self.heading_font, width=7, justify='center',
+                                        validate='key', validatecommand=(self.register(whole_number_up_to(MAX_GOLD_CAP)), '%P'))
+        self.gold_cap_entry.grid(row=1, column=1, sticky='ew', padx=(dp(10), 0), pady=(dp(4), 0))
         ThemeHint(self.gold_cap_entry, lambda: t('budget.gold_limit_hint'))
-        self.settings_widgets.append(self.gold_cap_entry)
-        picks = ttk.Frame(amounts)
-        picks.grid(row=2, column=0, columnspan=3, sticky='ew', pady=(dp(6), 0))
-        self.budget_picks = []
-        for column, amount in enumerate(BUDGET_PICKS):
-            picks.columnconfigure(column, weight=1, uniform='picks')
-            pick = ttk.Button(picks, text=localized_number(amount, ','), style='Chip.TButton', cursor='hand2',
-                              command=lambda amount=amount: self.budget.set(str(amount)))
-            pick.grid(row=0, column=column, sticky='ew', padx=(0 if column == 0 else dp(4), 0))
-            self.budget_picks.append(pick)
-        self.settings_widgets.extend(self.budget_picks)
+        # Grey "No limit" inside the empty box; the box itself stays empty.
+        self.gold_placeholder = ttk.Label(self.gold_cap_entry, text=t('budget.gold_no_limit'),
+                                          style='Placeholder.TLabel', cursor='xterm')
+        self.gold_placeholder.bind('<Button-1>', lambda _event: None if self.gold_cap_entry.instate(['disabled'])
+                                   else self.gold_cap_entry.focus_set())
+        ThemeHint(self.gold_placeholder, lambda: t('budget.gold_limit_hint'))
+        self.gold_cap_entry.bind('<FocusIn>', self._update_gold_placeholder, add='+')
+        self.gold_cap_entry.bind('<FocusOut>', self._update_gold_placeholder, add='+')
+        self.gold_cap.trace_add('write', self._update_gold_placeholder)
+        self._update_gold_placeholder()
+        self.settings_widgets.extend([self.gold_cap_entry, self.gold_placeholder])
         self.budget_summary = tk.StringVar()
         ttk.Label(amounts, textvariable=self.budget_summary, style='Muted.TLabel', wraplength=dp(350)).grid(
-            row=3, column=0, columnspan=3, sticky='w', pady=(dp(6), 0))
+            row=2, column=0, columnspan=2, sticky='w', pady=(dp(6), 0))
         buys = ttk.Frame(controls)
         buys.grid(row=5, column=0, sticky='ew', pady=(0, dp(10)))
         ttk.Label(buys, text=t('item.buy'), style='Section.TLabel').grid(row=0, column=0, columnspan=3, sticky='w', pady=(0, dp(4)))
@@ -1355,8 +1438,6 @@ class RefreshGui(tk.Tk):
         self.debug_mode.trace_add('write', lambda *_: self._update_tap_jitter())
         self._update_ev()
         self._update_tap_jitter()
-        self.budget.trace_add('write', lambda *_: self._sync_budget_slider())
-        self._sync_budget_slider()
         for var in (self.budget, self.gold_cap, self.stop_key, self.buy_covenant, self.buy_mystic, self.buy_friendship,
                     self.tap_sleep, self.random_offset, self.tap_jitter, self.control_mode):
             var.trace_add('write', lambda *_: self._schedule_autosave())
@@ -1391,19 +1472,6 @@ class RefreshGui(tk.Tk):
             ThemeHint(card, lambda mode=mode: mode_label(mode))
             self.mode_cards[mode] = card
         self.settings_widgets.extend([self.mode_box, *self.mode_cards.values()])
-        language = ttk.Frame(advanced)
-        language.grid(row=8, column=0, sticky='ew', pady=(dp(8), 0))
-        ttk.Label(language, text=t('settings.language')).grid(row=0, column=0, sticky='w')
-        self.language_box = ttk.Combobox(language, values=tuple(LANGUAGES.values()),
-                                         state='readonly', width=18, font=self.ui_font)
-        self._saved_language = current_locale()
-        self.language_box.current(tuple(LANGUAGES).index(self._saved_language))
-        self.language_box.grid(row=1, column=0, sticky='w', pady=(dp(3), 0))
-        self.language_notice = tk.StringVar(value='')
-        ttk.Label(language, textvariable=self.language_notice, style='Muted.TLabel',
-                  wraplength=dp(325)).grid(row=2, column=0, sticky='w')
-        self.language_box.bind('<<ComboboxSelected>>', self._save_language_choice)
-        self.settings_widgets.append(self.language_box)
         self.settings_details.grid_remove()
         def bind_wheel(widget):
             def scroll_settings(event):
@@ -1599,25 +1667,57 @@ class RefreshGui(tk.Tk):
         right.bind("<Configure>", self._schedule_layout)
         self._event(t('diagnostics.ready'))
 
-    def _save_language_choice(self, _event=None):
-        languages = tuple(LANGUAGES)
-        selection = self.language_box.current()
-        if selection < 0:
+    def _update_gold_placeholder(self, *_):
+        label = getattr(self, 'gold_placeholder', None)
+        if label is None:
             return
-        locale = languages[selection]
-        if locale != self._saved_language:
-            try:
-                if getattr(self, '_restart_required', False):
-                    self.language_notice.set(t('import_settings.restart_needed'))
-                    self.language_box.current(languages.index(self._saved_language))
-                    return
-                save_language(GUI_CONFIG_FILE, locale)
-            except (OSError, UnicodeError, configparser.Error) as error:
-                self.language_box.current(languages.index(self._saved_language))
-                self.language_notice.set(t('settings.save_error', error=error))
-                return
-            self._saved_language = locale
-        self.language_notice.set(t('settings.language_restart') if locale != current_locale() else '')
+        try:
+            focused = (self.focus_get() is self.gold_cap_entry
+                       and not self.gold_cap_entry.instate(['disabled']))
+        except (KeyError, tk.TclError):  # focus on a widget Tk cannot name, e.g. a menu
+            focused = False
+        if self.gold_cap.get() or focused:
+            label.place_forget()
+        else:
+            label.place(relx=0.5, rely=0.5, anchor='center')
+
+    def _show_language_menu(self):
+        self.language_choice.set(current_locale())
+        button = self.language_button
+        try:
+            self.language_menu.tk_popup(button.winfo_rootx(), button.winfo_rooty() + button.winfo_height())
+        finally:
+            self.language_menu.grab_release()
+
+    def _choose_language(self, locale):
+        """Ask, in the chosen language, to restart; only Restart saves the choice."""
+        self.language_choice.set(current_locale())
+        if locale == current_locale():
+            if load_language(GUI_CONFIG_FILE) != locale:  # a restart that failed left another choice saved
+                try:
+                    save_language(GUI_CONFIG_FILE, locale)
+                except (OSError, UnicodeError, configparser.Error) as error:
+                    messagebox.showerror(t('settings.save_error_title'), t('settings.save_error', error=error), parent=self)
+            return
+        if self._restart_pending() or (self.process and self.process.poll() is None):
+            return
+        dialog = LanguageRestartDialog(self, locale, scale=self._dp)
+        self.wait_window(dialog)
+        if dialog.choice != 'restart':
+            return
+        self._flush_autosave()
+        try:
+            save_language(GUI_CONFIG_FILE, locale)
+        except (OSError, UnicodeError, configparser.Error) as error:
+            messagebox.showerror(t('settings.save_error_title'), t('settings.save_error', error=error), parent=self)
+            return
+        try:
+            relaunch_app()
+        except OSError as error:
+            self._event(f'The app could not restart itself ({error}). Close and reopen it to change the language.')
+            messagebox.showinfo(t('settings.language'), t('settings.language_restart'), parent=self)
+            return
+        self.destroy()
 
     def _load_config(self):
         # Loading is not an edit: keep autosave quiet while values arrive.
@@ -1641,13 +1741,14 @@ class RefreshGui(tk.Tk):
                 legacy_budget = float(self.budget.get())
                 if math.isfinite(legacy_budget) and legacy_budget.is_integer():
                     self.budget.set(str(int(legacy_budget)))
+                self.budget.set(clamp_saved_amount(self.budget.get(), MAX_BUDGET))
                 self.random_offset.set(settings.get("random_offset", str(self.random_offset.get())).lower() == "true")
         except (OSError, ValueError, configparser.Error) as exc:
             self.setting_notice.set(t('settings.read_error', error=exc))
         try:
             parser = configparser.ConfigParser()
             parser.read(GUI_CONFIG_FILE)
-            self.gold_cap.set(parser.get('GUI', 'gold_cap', raw=True, fallback=''))
+            self.gold_cap.set(clamp_saved_amount(parser.get('GUI', 'gold_cap', raw=True, fallback=''), MAX_GOLD_CAP))
             self.sound_enabled.set(parser.getboolean("GUI", "sound_enabled", fallback=True))
             self.trace_input.set(parser.getboolean('GUI', 'trace_input', fallback=False))
             self.compact_tracker.set(parser.getboolean('GUI', 'compact_tracker', fallback=True))
@@ -2837,6 +2938,7 @@ class RefreshGui(tk.Tk):
     def _set_controls(self, running):
         for widget in self.settings_widgets:
             widget.state(["disabled"] if running else ["!disabled"])
+        self._update_gold_placeholder()  # a disabled box shows "No limit" even if it had focus
         self._update_debug_availability(running)
         self._update_tap_jitter(running=running)
         self.clear_history_button.state(['disabled'] if running else ['!disabled'])
@@ -3195,25 +3297,6 @@ class RefreshGui(tk.Tk):
             if hasattr(self, 'budget_summary'):
                 self.budget_summary.set(t('budget.minimum'))
         self._update_spent_display()
-
-    def _slide_budget(self, _value=None):
-        if self.budget_slider.instate(['disabled']):
-            return
-        amount = str(budget_from_slider(self.budget_position.get()))
-        if amount != self.budget.get():
-            self._budget_sliding = True
-            try:
-                self.budget.set(amount)
-            finally:
-                self._budget_sliding = False
-
-    def _sync_budget_slider(self):
-        if getattr(self, '_budget_sliding', False) or not hasattr(self, 'budget_position'):
-            return
-        try:
-            self.budget_position.set(slider_from_budget(int(self.budget.get())))
-        except (ValueError, OverflowError):
-            pass
 
     def _schedule_autosave(self):
         """Save shortly after the last settings change; there is no Save button."""

@@ -119,7 +119,7 @@ class ProtocolTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertEqual(gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap=value).gold_cap, expected)
         for value in (-1, '1.5', 3.0, '1,000', 'abc', True):
-            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'Gold spending limit'):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'Gold budget'):
                 gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap=value)
 
     def test_formatting(self):
@@ -167,20 +167,75 @@ prompt("press enter to exit...", "")
 
 
 class GuiTests(unittest.TestCase):
-    def test_language_choice_saves_without_changing_the_open_window(self):
-        self.assertEqual(self.app.language_box.get(), 'English')
-        self.app.language_box.current(1)
-        self.app.language_box.event_generate('<<ComboboxSelected>>')
-        self.app.update()
-        self.assertEqual(gui.load_language(self.gui_config), 'pt_BR')
-        self.assertEqual(self.app.start_button.cget('text'), 'Start Refresh')
-        self.assertIn('Restart', self.app.language_notice.get())
+    def _answer_language_dialog(self, answer):
+        """Run _choose_language('pt_BR') and answer the dialog it opens."""
+        seen = {}
+        def answer_when_open():
+            dialogs = [w for w in self.app.winfo_children() if isinstance(w, gui.LanguageRestartDialog)]
+            if not dialogs:
+                self.app.after(20, answer_when_open)
+                return
+            dialog = dialogs[0]
+            seen['texts'] = [dialog.cancel_button.cget('text'), dialog.restart_button.cget('text'),
+                             str(dialog.restart_button.cget('style')), dialog.title()]
+            (dialog.restart_button if answer == 'restart' else dialog.cancel_button).invoke()
+        self.app.after(20, answer_when_open)
+        self.app._choose_language('pt_BR')
+        return seen
 
-        self.app.language_box.current(0)
-        self.app.language_box.event_generate('<<ComboboxSelected>>')
-        self.app.update()
+    def test_language_button_asks_in_the_new_language_and_cancel_keeps_everything(self):
+        self.assertEqual(self.app.language_button.cget('text'), '🌐 EN')
+        self.assertIn(self.app.language_button, self.app.settings_widgets)
+        with patch.object(gui, 'relaunch_app') as relaunch:
+            seen = self._answer_language_dialog('cancel')
+        relaunch.assert_not_called()
+        self.assertEqual(seen['texts'][:3], ['Cancelar', 'Reiniciar agora', 'Accent.TButton'])
         self.assertEqual(gui.load_language(self.gui_config), 'en')
-        self.assertEqual(self.app.language_notice.get(), '')
+        self.assertTrue(self.app.winfo_exists())
+        self.assertEqual(self.app.start_button.cget('text'), 'Start Refresh')
+        self.assertEqual(self.app.language_choice.get(), 'en')
+
+    def test_language_restart_saves_the_choice_and_relaunches(self):
+        destroyed = []
+        with patch.object(gui, 'relaunch_app') as relaunch, \
+                patch.object(self.app, 'destroy', side_effect=lambda: destroyed.append(True)):
+            self._answer_language_dialog('restart')
+        relaunch.assert_called_once_with()
+        self.assertEqual(destroyed, [True])
+        self.assertEqual(gui.load_language(self.gui_config), 'pt_BR')
+
+    def test_language_restart_that_fails_keeps_the_window_open(self):
+        with patch.object(gui, 'relaunch_app', side_effect=OSError('blocked')), \
+                patch.object(gui.messagebox, 'showinfo') as info, \
+                patch.object(self.app, 'destroy') as destroy:
+            self._answer_language_dialog('restart')
+        destroy.assert_not_called()
+        info.assert_called_once()
+        self.assertEqual(gui.load_language(self.gui_config), 'pt_BR')
+        # Picking the open language again puts it back in the file.
+        self.app._choose_language('en')
+        self.assertEqual(gui.load_language(self.gui_config), 'en')
+
+    def test_gold_placeholder_shows_only_while_the_box_is_empty(self):
+        label = self.app.gold_placeholder
+        self.assertEqual(label.cget('text'), 'No limit')
+        self.app.gold_cap.set('')
+        self.app.update_idletasks()
+        self.assertTrue(label.winfo_manager())
+        self.app.gold_cap.set('500000')
+        self.assertFalse(label.winfo_manager())
+        self.app.gold_cap.set('')
+        self.assertTrue(label.winfo_manager())
+        self.assertEqual(self.app.gold_cap.get(), '')
+        self.app.gold_cap_entry.focus_force()
+        self.app.update()
+        self.app._update_gold_placeholder()
+        self.app._set_controls(True)
+        self.assertTrue(label.instate(['disabled']))
+        self.assertTrue(label.winfo_manager())  # a disabled box shows "No limit" even with focus
+        self.assertTrue(self.app.language_button.instate(['disabled']))
+        self.app._set_controls(False)
+        self.assertFalse(label.instate(['disabled']))
 
     def test_purchase_callouts_follow_counts_and_toggles(self):
         for name in ('purchase-covenant.wav', 'purchase-mystic.wav'):
@@ -235,21 +290,45 @@ class GuiTests(unittest.TestCase):
         self.assertTrue(self.app.sound_mystic.get())
         self.assertFalse(self.app.sound_enabled.get())
 
-    def test_budget_slider_and_picks_follow_the_budget(self):
-        self.assertEqual([gui.budget_from_slider(p) for p in (0, 1)], list(gui.BUDGET_SLIDER_RANGE))
-        for amount in (30, 150, 300, 1000, 3000, 6000):
-            self.assertEqual(gui.budget_from_slider(gui.slider_from_budget(amount)), amount)
-        self.app.budget_picks[-1].invoke()
-        self.assertEqual(self.app.budget.get(), '3000')
-        self.assertAlmostEqual(self.app.budget_position.get(), gui.slider_from_budget(3000))
+    def test_budget_boxes_take_whole_numbers_up_to_their_limits(self):
+        self.assertFalse(any(hasattr(self.app, name) for name in ('budget_slider', 'budget_picks', 'budget_position')))
+        for entry, var, maximum in ((self.app.budget_entry, self.app.budget, gui.MAX_BUDGET),
+                                    (self.app.gold_cap_entry, self.app.gold_cap, gui.MAX_GOLD_CAP)):
+            with self.subTest(maximum=maximum):
+                var.set('')
+                entry.insert('end', str(maximum))
+                self.assertEqual(var.get(), str(maximum))
+                entry.insert('end', '9')  # one digit too many is refused
+                self.assertEqual(var.get(), str(maximum))
+                var.set(''); entry.insert('end', '1.5'); entry.insert('end', '-')
+                self.assertEqual(var.get(), '')
+        self.app.budget.set('3000')
         self.assertIn('1,000 refreshes', self.app.budget_summary.get())
-        self.app.budget_position.set(gui.slider_from_budget(300)); self.app._slide_budget()
-        self.assertEqual(self.app.budget.get(), '300')
         self.app.budget.set('')
         self.assertIn('at least 3', self.app.budget_summary.get())
         self.app._set_controls(True)
-        self.assertTrue(all(w.instate(['disabled']) for w in (self.app.budget_slider, *self.app.budget_picks, *self.app.mode_cards.values())))
+        self.assertTrue(all(w.instate(['disabled']) for w in (self.app.budget_entry, self.app.gold_cap_entry, *self.app.mode_cards.values())))
         self.app._set_controls(False)
+
+    def test_budgets_above_the_limits_are_refused_or_lowered_on_load(self):
+        self.assertEqual(gui.validate_settings('x', gui.MAX_BUDGET, .3, 'esc', False, False, gold_cap=gui.MAX_GOLD_CAP).budget, 99_999)
+        with self.assertRaisesRegex(ValueError, 'at most 99,999'):
+            gui.validate_settings('x', gui.MAX_BUDGET + 1, .3, 'esc', False, False)
+        with self.assertRaisesRegex(ValueError, '999,999,999'):
+            gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap=gui.MAX_GOLD_CAP + 1)
+        gui.CONFIG_FILE.write_text('[Settings]\nbudget = 250000\n', encoding='utf-8')
+        gui.GUI_CONFIG_FILE.write_text('[GUI]\ngold_cap = 12345678901\n', encoding='utf-8')
+        self.app._load_config()
+        self.assertEqual((self.app.budget.get(), self.app.gold_cap.get()), ('99999', '999999999'))
+        self.assertEqual([gui.clamp_saved_amount(v, 100) for v in ('', '7', ' 100 ', 'abc', '101', '0007', '9' * 5000)],
+                         ['', '7', '100', 'abc', '100', '7', '100'])
+        with self.assertRaisesRegex(ValueError, 'Gold budget'):
+            gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap='9' * 5000)
+        self.assertEqual(gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap='0000000000012').gold_cap, 12)
+        self.assertEqual(gui.validate_settings('x', 3, .3, 'esc', False, False, gold_cap='0' * 5000 + '1').gold_cap, 1)
+        self.assertEqual(gui.clamp_saved_amount('0' * 5000 + '1', 100), '1')
+        check = gui.whole_number_up_to(50_000)
+        self.assertEqual([check(v) for v in ('', '50000', '50001', '99999', '1.5')], [True, True, False, False, False])
 
     def test_settings_save_themselves_after_an_edit(self):
         def settle():
