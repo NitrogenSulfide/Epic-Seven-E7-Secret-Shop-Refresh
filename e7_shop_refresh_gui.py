@@ -316,6 +316,70 @@ def apply_import_choice(choice, data_dir):
                 f'{install.folder} was not changed.']
 
 
+def language_code(locale):
+    """Short label for the header button: 'EN', 'PT'."""
+    return locale.split('_')[0].upper()
+
+
+class LanguageRestartDialog(tk.Toplevel):
+    """Modal question written in the language being switched to."""
+
+    def __init__(self, master, locale, *, scale):
+        super().__init__(master)
+        self.choice = None
+        dp = scale
+        self.withdraw()  # shown once laid out and centred
+        self.title(t('settings.language_restart_title', locale))
+        self.resizable(False, False)
+        self.configure(bg=ttk.Style(self).lookup('TFrame', 'background') or None)
+        if master.winfo_viewable():
+            self.transient(master)
+        body = ttk.Frame(self, padding=dp(18))
+        body.grid(sticky='nsew')
+        ttk.Label(body, text=t('settings.language_restart_title', locale), wraplength=dp(420),
+                  font=('Segoe UI', 11, 'bold')).grid(row=0, column=0, sticky='w')
+        ttk.Label(body, text=t('settings.language_restart_prompt', locale, language=LANGUAGES[locale]),
+                  wraplength=dp(420)).grid(row=1, column=0, sticky='w', pady=(dp(6), 0))
+        buttons = ttk.Frame(body)
+        buttons.grid(row=2, column=0, sticky='e', pady=(dp(16), 0))
+        self.cancel_button = ttk.Button(buttons, text=t('common.cancel', locale), command=self.destroy,
+                                        padding=(dp(12), dp(6)), cursor='hand2')
+        self.cancel_button.grid(row=0, column=0, padx=(0, dp(8)))
+        self.restart_button = ttk.Button(buttons, text=t('settings.language_restart_action', locale),
+                                         command=self._restart, style='Accent.TButton',
+                                         padding=(dp(12), dp(6)), cursor='hand2', default='active')
+        self.restart_button.grid(row=0, column=1)
+        self.bind('<Return>', self._on_return)
+        self.bind('<Escape>', lambda _event: self.destroy())
+        self.protocol('WM_DELETE_WINDOW', self.destroy)
+        self.update_idletasks()
+        if master.winfo_viewable():
+            x = master.winfo_rootx() + (master.winfo_width() - self.winfo_reqwidth()) // 2
+            y = master.winfo_rooty() + (master.winfo_height() - self.winfo_reqheight()) // 3
+        else:
+            x = (self.winfo_screenwidth() - self.winfo_reqwidth()) // 2
+            y = (self.winfo_screenheight() - self.winfo_reqheight()) // 3
+        self.geometry(f'+{max(x, 0)}+{max(y, 0)}')
+        self.deiconify()
+        self.lift()
+        try:
+            self.grab_set()  # modal: the main window waits for the answer
+        except tk.TclError:
+            pass
+        self.restart_button.focus_set()
+
+    def _on_return(self, event):
+        """Enter presses the focused button (Restart has focus at first)."""
+        if isinstance(event.widget, ttk.Button):
+            event.widget.invoke()
+        else:
+            self._restart()
+
+    def _restart(self):
+        self.choice = 'restart'
+        self.destroy()
+
+
 def relaunch_app():
     """Start this app again with the same engine folder (not elevated); raises OSError."""
     if os.name == 'nt':
@@ -1158,6 +1222,17 @@ class RefreshGui(tk.Tk):
         self.about_button = ttk.Button(header_actions, image=self.about_image, text='' if self.about_image else t('about.credits'), command=self._show_about, padding=dp(6), cursor='hand2', takefocus=True)
         self.about_button.pack(side='left',padx=(0,dp(6)))
         self.about_hint = ThemeHint(self.about_button, lambda: t('about.title'))
+        # Language: a short code by the theme toggle; the menu lists each language in its own name.
+        self.language_button = ttk.Button(header_actions, text=f'🌐 {language_code(current_locale())}',
+                                          command=self._show_language_menu, width=0, padding=(dp(10), dp(8)),
+                                          cursor='hand2', takefocus=True)
+        self.language_button.pack(side='left', padx=(0, dp(6)))
+        self.language_hint = ThemeHint(self.language_button, lambda: t('settings.language'))
+        self.language_menu = tk.Menu(self, tearoff=0)
+        self.language_choice = tk.StringVar(value=current_locale())
+        for code, name in LANGUAGES.items():
+            self.language_menu.add_radiobutton(label=name, value=code, variable=self.language_choice,
+                                               command=lambda code=code: self._choose_language(code))
         self.theme_button = ttk.Button(header_actions, command=self._toggle_dark_mode, width=3, padding=dp(8), cursor='hand2', takefocus=True)
         self.theme_button.pack(side='left')
         self.theme_hint = ThemeHint(self.theme_button, lambda: t('theme.switch_light') if self.dark_mode.get() else t('theme.switch_dark'))
@@ -1193,6 +1268,7 @@ class RefreshGui(tk.Tk):
         settings_canvas.bind("<Configure>", resize_settings)
         controls.columnconfigure(0, weight=1)
         self.settings_widgets = []
+        self.settings_widgets.append(self.language_button)  # built in the header above
         ttk.Label(controls, text=t('settings.session_heading'), style="Muted.TLabel").grid(row=0, column=0, sticky="w", pady=(0, dp(8)))
         self.target_label = ttk.Label(controls, text=t('connection.adb_target'))
         self.target_label.grid(row=1, column=0, sticky="w")
@@ -1388,19 +1464,6 @@ class RefreshGui(tk.Tk):
             ThemeHint(card, lambda mode=mode: mode_label(mode))
             self.mode_cards[mode] = card
         self.settings_widgets.extend([self.mode_box, *self.mode_cards.values()])
-        language = ttk.Frame(advanced)
-        language.grid(row=8, column=0, sticky='ew', pady=(dp(8), 0))
-        ttk.Label(language, text=t('settings.language')).grid(row=0, column=0, sticky='w')
-        self.language_box = ttk.Combobox(language, values=tuple(LANGUAGES.values()),
-                                         state='readonly', width=18, font=self.ui_font)
-        self._saved_language = current_locale()
-        self.language_box.current(tuple(LANGUAGES).index(self._saved_language))
-        self.language_box.grid(row=1, column=0, sticky='w', pady=(dp(3), 0))
-        self.language_notice = tk.StringVar(value='')
-        ttk.Label(language, textvariable=self.language_notice, style='Muted.TLabel',
-                  wraplength=dp(325)).grid(row=2, column=0, sticky='w')
-        self.language_box.bind('<<ComboboxSelected>>', self._save_language_choice)
-        self.settings_widgets.append(self.language_box)
         self.settings_details.grid_remove()
         def bind_wheel(widget):
             def scroll_settings(event):
@@ -1609,25 +1672,38 @@ class RefreshGui(tk.Tk):
         else:
             label.place(relx=0.5, rely=0.5, anchor='center')
 
-    def _save_language_choice(self, _event=None):
-        languages = tuple(LANGUAGES)
-        selection = self.language_box.current()
-        if selection < 0:
+    def _show_language_menu(self):
+        self.language_choice.set(current_locale())
+        button = self.language_button
+        try:
+            self.language_menu.tk_popup(button.winfo_rootx(), button.winfo_rooty() + button.winfo_height())
+        finally:
+            self.language_menu.grab_release()
+
+    def _choose_language(self, locale):
+        """Ask, in the chosen language, to restart; only Restart saves the choice."""
+        self.language_choice.set(current_locale())
+        if locale == current_locale():
             return
-        locale = languages[selection]
-        if locale != self._saved_language:
-            try:
-                if getattr(self, '_restart_required', False):
-                    self.language_notice.set(t('import_settings.restart_needed'))
-                    self.language_box.current(languages.index(self._saved_language))
-                    return
-                save_language(GUI_CONFIG_FILE, locale)
-            except (OSError, UnicodeError, configparser.Error) as error:
-                self.language_box.current(languages.index(self._saved_language))
-                self.language_notice.set(t('settings.save_error', error=error))
-                return
-            self._saved_language = locale
-        self.language_notice.set(t('settings.language_restart') if locale != current_locale() else '')
+        if self._restart_pending():
+            return
+        dialog = LanguageRestartDialog(self, locale, scale=self._dp)
+        self.wait_window(dialog)
+        if dialog.choice != 'restart':
+            return
+        try:
+            save_language(GUI_CONFIG_FILE, locale)
+        except (OSError, UnicodeError, configparser.Error) as error:
+            messagebox.showerror(t('settings.save_error_title'), t('settings.save_error', error=error), parent=self)
+            return
+        self._flush_autosave()
+        try:
+            relaunch_app()
+        except OSError as error:
+            self._event(f'The app could not restart itself ({error}). Close and reopen it to change the language.')
+            messagebox.showinfo(t('settings.language'), t('settings.language_restart'), parent=self)
+            return
+        self.destroy()
 
     def _load_config(self):
         # Loading is not an edit: keep autosave quiet while values arrive.

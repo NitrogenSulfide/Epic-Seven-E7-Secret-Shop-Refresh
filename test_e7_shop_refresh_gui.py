@@ -167,20 +167,48 @@ prompt("press enter to exit...", "")
 
 
 class GuiTests(unittest.TestCase):
-    def test_language_choice_saves_without_changing_the_open_window(self):
-        self.assertEqual(self.app.language_box.get(), 'English')
-        self.app.language_box.current(1)
-        self.app.language_box.event_generate('<<ComboboxSelected>>')
-        self.app.update()
-        self.assertEqual(gui.load_language(self.gui_config), 'pt_BR')
-        self.assertEqual(self.app.start_button.cget('text'), 'Start Refresh')
-        self.assertIn('Restart', self.app.language_notice.get())
+    def _answer_language_dialog(self, answer):
+        """Run _choose_language('pt_BR') and answer the dialog it opens."""
+        seen = {}
+        def answer_when_open():
+            dialogs = [w for w in self.app.winfo_children() if isinstance(w, gui.LanguageRestartDialog)]
+            if not dialogs:
+                self.app.after(20, answer_when_open)
+                return
+            dialog = dialogs[0]
+            seen['texts'] = [dialog.cancel_button.cget('text'), dialog.restart_button.cget('text'),
+                             str(dialog.restart_button.cget('style')), dialog.title()]
+            (dialog.restart_button if answer == 'restart' else dialog.cancel_button).invoke()
+        self.app.after(20, answer_when_open)
+        self.app._choose_language('pt_BR')
+        return seen
 
-        self.app.language_box.current(0)
-        self.app.language_box.event_generate('<<ComboboxSelected>>')
-        self.app.update()
+    def test_language_button_asks_in_the_new_language_and_cancel_keeps_everything(self):
+        self.assertEqual(self.app.language_button.cget('text'), '🌐 EN')
+        self.assertIn(self.app.language_button, self.app.settings_widgets)
+        with patch.object(gui, 'relaunch_app') as relaunch:
+            seen = self._answer_language_dialog('cancel')
+        relaunch.assert_not_called()
+        self.assertEqual(seen['texts'][:3], ['Cancelar', 'Reiniciar agora', 'Accent.TButton'])
         self.assertEqual(gui.load_language(self.gui_config), 'en')
-        self.assertEqual(self.app.language_notice.get(), '')
+        self.assertTrue(self.app.winfo_exists())
+        self.assertEqual(self.app.start_button.cget('text'), 'Start Refresh')
+        self.assertEqual(self.app.language_choice.get(), 'en')
+
+    def test_language_restart_saves_the_choice_and_relaunches(self):
+        destroyed = []
+        with patch.object(gui, 'relaunch_app') as relaunch,                 patch.object(self.app, 'destroy', side_effect=lambda: destroyed.append(True)):
+            self._answer_language_dialog('restart')
+        relaunch.assert_called_once_with()
+        self.assertEqual(destroyed, [True])
+        self.assertEqual(gui.load_language(self.gui_config), 'pt_BR')
+
+    def test_language_restart_that_fails_keeps_the_window_open(self):
+        with patch.object(gui, 'relaunch_app', side_effect=OSError('blocked')),                 patch.object(gui.messagebox, 'showinfo') as info,                 patch.object(self.app, 'destroy') as destroy:
+            self._answer_language_dialog('restart')
+        destroy.assert_not_called()
+        info.assert_called_once()
+        self.assertEqual(gui.load_language(self.gui_config), 'pt_BR')
 
     def test_gold_placeholder_shows_only_while_the_box_is_empty(self):
         label = self.app.gold_placeholder
