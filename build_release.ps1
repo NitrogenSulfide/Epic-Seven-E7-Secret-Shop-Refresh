@@ -32,6 +32,7 @@ New-Item -ItemType Directory -Path $staging | Out-Null
 $mapping = [ordered]@{
     'e7_shop_refresh_gui.py' = 'e7_shop_refresh_gui.py'
     'e7_i18n.py' = 'e7_i18n.py'
+    'e7_engine_text.py' = 'e7_engine_text.py'
     'locales/en.json' = 'locales/en.json'
     'locales/pt_BR.json' = 'locales/pt_BR.json'
     'e7_process.py' = 'e7_process.py'

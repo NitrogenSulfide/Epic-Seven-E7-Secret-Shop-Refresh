@@ -20,6 +20,7 @@ from pathlib import Path
 from tkinter import font as tkfont, messagebox, ttk, filedialog
 from e7_process import launch_engine
 from e7_i18n import LANGUAGES, current_locale, set_locale, supported_locale, t
+from e7_engine_text import engine_text, navigation_text
 from e7_timing import MIN_TAP_DELAY
 from e7_engine_protocol import MAX_BUDGET, MAX_GOLD_CAP, RunSettings, validate_settings, EngineProtocol
 from e7_history import history_mode, read_sessions, export_sessions
@@ -2676,8 +2677,8 @@ class RefreshGui(tk.Tk):
                     self._clear_pointer_alert()
                     self.progress_text.set(t('tracker.pause_reason_hint') if self._background_run else
                                            t('tracker.covered_pause_detail'))
-            self.detail.set(reason)
-            self._event(reason)
+            self.detail.set(engine_text(reason))
+            self._event(reason, engine_text(reason))
             return
         if line == 'E7GUI_MOUSE_RESUMED':
             if not self.stopping and not self.stop_key_pressed:
@@ -2697,7 +2698,7 @@ class RefreshGui(tk.Tk):
             return
         if line.startswith('Navigation: '):
             message = line[len('Navigation: '):]
-            self.detail.set(message)
+            self.detail.set(engine_text(message))
             if not self.stopping and not self.stop_key_pressed:
                 if message.startswith('Waiting for visible game controls.'):
                     self.status.set('Waiting for game')
@@ -2710,7 +2711,7 @@ class RefreshGui(tk.Tk):
                 hint = navigation_hint(message)
                 if hint is not None:
                     self._set_compact_hint(hint)
-            self._event(line)
+            self._event(line, navigation_text(message))
             return
         if line.startswith('E7GUI_STOP_KEY '):
             try:
@@ -2921,8 +2922,8 @@ class RefreshGui(tk.Tk):
             self.progress_text.set(t('session.engine_exited'))
         # Activity tags and diagnostic reports use the original English or engine reason.
         self._finish_report_reason = reason or t(detail_key, 'en', **detail_values)
-        self.detail.set(reason or t(detail_key, **detail_values))
-        self._event(self._finish_report_reason)
+        self.detail.set(engine_text(reason) if reason else t(detail_key, **detail_values))
+        self._event(self._finish_report_reason, self.detail.get())
         self.remaining_time.set('Time remaining: Complete' if self.status.get() == 'Finished' else 'Time remaining: Session stopped')
         self.session_estimate.enabled = False
         self._set_controls(False)
@@ -3024,8 +3025,11 @@ class RefreshGui(tk.Tk):
             self.log.see(tk.END)
         self.log.configure(state=tk.DISABLED)
 
-    def _event(self, text):
-        required = self.ui_font.measure(text) + self._dp(24)
+    def _event(self, text, shown=None):
+        """Add an Activity row. text is the English or engine wording the row's colour is
+        judged on; shown, when given, is what the row displays (the GUI-language version)."""
+        shown = text if shown is None else shown
+        required = self.ui_font.measure(shown) + self._dp(24)
         if required > self.activity.column("event", "minwidth"):
             self.activity.column("event", minwidth=required, width=required)
         tag = ('covenant' if text.startswith('Covenant purchases:') else
@@ -3034,7 +3038,7 @@ class RefreshGui(tk.Tk):
                'error' if re.search(r'failed|error|exception|traceback|not recognized|could not|cannot', text, re.I) else
                'warning' if re.search(r'stop|pause|waiting|cancel|needs help', text, re.I) else
                'success' if re.search(r'completed|finished|refresh ended|resumed', text, re.I) else '')
-        item = self.activity.insert("", tk.END, tags=(tag,) if tag else (), values=(time.strftime("%H:%M:%S"), text))
+        item = self.activity.insert("", tk.END, tags=(tag,) if tag else (), values=(time.strftime("%H:%M:%S"), shown))
         items = self.activity.get_children()
         if len(items) > 100:
             self.activity.delete(items[0])

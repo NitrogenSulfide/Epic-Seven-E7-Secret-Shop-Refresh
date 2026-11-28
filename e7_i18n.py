@@ -50,6 +50,11 @@ def _load_catalog(locale):
     return data if isinstance(data, dict) else {}
 
 
+def english_template(key):
+    """The unformatted English text for key, or None."""
+    return _load_catalog('en').get(key)
+
+
 def t(key, locale=None, /, **values):
     """Format text in the requested locale, falling back to English, then to the key."""
     locale = _locale if locale is None else locale
